@@ -4,6 +4,39 @@
 let _pendingPortalAppId = '';
 let _resendTimer = null;
 
+// HTML-escape any value that gets pasted into innerHTML. Anything from
+// URL params (?email=, ?redirect=, etc.) MUST go through this — without it
+// a crafted link like ?email=<img src=x onerror=…> would execute on the
+// login page and could steal the session that the tenant is about to create.
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Validates a "?redirect=" or "?next=" param so we don't get used as an
+// open-redirect (e.g. /tenant/login.html?redirect=//evil.com phishing).
+// Only same-origin tenant paths are allowed; everything else falls back
+// to the portal home so the tenant always lands somewhere safe.
+function sanitizeNext(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  // Must start with a single slash and not be a protocol-relative URL
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '';
+  if (raw.includes('\\')) return '';
+  // Only allow paths inside /tenant/. Reject /admin/, /landlord/, etc.
+  if (!/^\/tenant\//.test(raw)) return '';
+  return raw;
+}
+
+// Reads `?redirect=` first, then `?next=`, returns a sanitized path or ''.
+function readNextParam() {
+  const params = new URLSearchParams(window.location.search);
+  return sanitizeNext(params.get('redirect') || params.get('next') || '');
+}
+
 async function waitForSB(maxMs) {
   const end = Date.now() + (maxMs || 8000);
   while (Date.now() < end) {
@@ -140,6 +173,11 @@ async function sendMagicLink(emailOverride) {
 
     const redirectUrl = new URL('/tenant/portal.html', window.location.origin);
     if (appId) redirectUrl.searchParams.set('app_id', appId);
+    // Pass any "?redirect=/tenant/deposit.html" or "?next=…" through to the
+    // magic-link callback so portal.html can re-route the tenant to the page
+    // they were originally trying to use (deposit, inspection, etc.).
+    const nextPath = readNextParam();
+    if (nextPath) redirectUrl.searchParams.set('next', nextPath);
 
     // Try our branded magic-link sender first (sends through Choice Properties
     // Gmail SMTP, not Supabase's default unbranded template). Falls back to
@@ -205,6 +243,15 @@ async function signOutAndReset(prefillEmail) {
 }
 
 function goToPortal() {
+  // If the tenant landed here via /tenant/login.html?redirect=/tenant/deposit.html
+  // (or ?next=) — e.g. they were trying to use deposit.html or inspection.html
+  // and got bounced because their session was missing — send them straight to
+  // the page they were trying to reach instead of the portal home.
+  const next = readNextParam();
+  if (next) {
+    window.location.href = next;
+    return;
+  }
   const portalUrl = new URL('/tenant/portal.html', window.location.origin);
   if (_pendingPortalAppId) portalUrl.searchParams.set('app_id', _pendingPortalAppId);
   window.location.href = portalUrl.pathname + portalUrl.search;
@@ -249,8 +296,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (emailParam) document.getElementById('email').value = emailParam;
 
   if (needEmail) {
+    // SECURITY: emailParam comes from the URL query string, so it must be
+    // HTML-escaped before it's pasted into innerHTML. Without esc() a link
+    // like ?email=<img src=x onerror=…> would run script on the login page.
     const infoMsg = emailParam
-      ? `Sign in with <strong>${emailParam}</strong> — the email on your rental application.`
+      ? `Sign in with <strong>${esc(emailParam)}</strong> — the email on your rental application.`
       : 'Please sign in with the email address you used on your rental application.';
     const fe = document.getElementById('field-error');
     fe.classList.remove('error');
@@ -286,9 +336,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (requestedEmail && signedInEmail !== requestedEmail) {
     const notice = document.getElementById('wrong-account-notice');
+    // SECURITY: requestedEmail comes from the URL ?email= param. signedInEmail
+    // comes from Supabase auth (trusted), but escape both for consistency.
     document.getElementById('wrong-account-msg').innerHTML =
-      'You are currently signed in as <strong>' + signedInEmail + '</strong>. ' +
-      'This application requires sign-in with <strong>' + requestedEmail + '</strong>.';
+      'You are currently signed in as <strong>' + esc(signedInEmail) + '</strong>. ' +
+      'This application requires sign-in with <strong>' + esc(requestedEmail) + '</strong>.';
     notice.classList.add('visible');
     document.getElementById('login-form').style.display = 'none';
     document.getElementById('heading').textContent = 'Wrong Account';

@@ -1270,6 +1270,22 @@ document.addEventListener('DOMContentLoaded',async()=>{
   const emailEl=document.getElementById('user-email');
   if(emailEl)emailEl.textContent=userEmail;
 
+  // Magic-link callback redirect: when the tenant tried to use deposit.html
+  // or inspection.html while signed out, those pages bounce them to login
+  // with ?redirect=…; login.js forwards that as ?next=… on the magic link.
+  // Now that the session is live, send them to that page instead of the
+  // portal home. Same-origin tenant paths only — anything else is ignored.
+  const nextRaw = new URLSearchParams(window.location.search).get('next') || '';
+  const nextOk = typeof nextRaw === 'string'
+    && nextRaw.startsWith('/')
+    && !nextRaw.startsWith('//')
+    && !nextRaw.includes('\\')
+    && /^\/tenant\//.test(nextRaw);
+  if (nextOk) {
+    location.replace(nextRaw);
+    return;
+  }
+
   const loading=document.getElementById('portal-loading');
   const content=document.getElementById('portal-content');
   const errorEl=document.getElementById('portal-error');
