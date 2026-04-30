@@ -21,10 +21,11 @@ const supabase = createClient(
 // TOKEN_REVOKED, TOKEN_ALREADY_USED, TOKEN_NOT_FOUND, TOKEN_WRONG_ROLE,
 // TOKEN_IP_MISMATCH) and a human-readable DETAIL.  postgres-js surfaces
 // both as `error.message` ("MESSAGE: DETAIL").
-function mapTokenError(message: string): { status: number; body: string } {
+function mapTokenError(message: string): { status: number; body: string; already_signed?: boolean } {
   if (/TOKEN_EXPIRED/.test(message))       return { status: 410, body: message.replace(/^TOKEN_EXPIRED:?\s*/, '') || 'This signing link has expired.' };
   if (/TOKEN_REVOKED/.test(message))       return { status: 410, body: message.replace(/^TOKEN_REVOKED:?\s*/, '') || 'This signing link has been revoked.' };
-  if (/TOKEN_ALREADY_USED/.test(message))  return { status: 410, body: 'This signing link has already been used.' };
+  // 409 = already_signed — client treats this as success (idempotent double-click / network retry)
+  if (/TOKEN_ALREADY_USED/.test(message))  return { status: 409, body: 'This lease has already been signed.', already_signed: true };
   if (/TOKEN_NOT_FOUND/.test(message))     return { status: 404, body: 'This signing link is not recognized.' };
   if (/TOKEN_WRONG_ROLE/.test(message))    return { status: 400, body: 'This signing link is for a different signer.' };
   if (/TOKEN_IP_MISMATCH/.test(message))   return { status: 403, body: 'This signing link can only be used from the original network.' };
@@ -96,6 +97,13 @@ Deno.serve(async (req: Request) => {
   });
   if (signErr) {
     const m = mapTokenError(signErr.message || '');
+    // 409 = already_signed: return extra flag so the client can show success
+    // instead of an error on network-retry or accidental double-click.
+    if (m.already_signed) {
+      const corsH = handleCors(req);
+      const headers = { 'Content-Type': 'application/json', ...(corsH ? Object.fromEntries(corsH.headers) : {}) };
+      return new Response(JSON.stringify({ error: m.body, already_signed: true }), { status: 409, headers });
+    }
     return jsonErr(m.status, m.body);
   }
 

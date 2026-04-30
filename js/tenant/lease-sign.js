@@ -683,19 +683,47 @@
   const ctx = canvas.getContext('2d');
   let _drawing = false, _hasInk = false;
   let _lastX = 0, _lastY = 0;
+  let _resizeTimer = null;
+
+  function applyCtxStyle() {
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1e293b';
+  }
 
   function resizeCanvas() {
     const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width) return;
-    canvas.width = Math.round(rect.width * ratio);
-    canvas.height = Math.round(rect.height * ratio);
+    const newW = Math.round(rect.width * ratio);
+    const newH = Math.round(rect.height * ratio);
+    // Skip if dimensions genuinely haven't changed (e.g. iOS address-bar hide).
+    if (canvas.width === newW && canvas.height === newH) {
+      applyCtxStyle();
+      return;
+    }
+    // Snapshot existing ink before canvas.width assignment wipes pixels.
+    const snapshot = _hasInk ? canvas.toDataURL('image/png') : null;
+    canvas.width = newW;
+    canvas.height = newH;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#1e293b';
+    applyCtxStyle();
+    // Restore ink after resize (async because Image load is async).
+    if (snapshot) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      };
+      img.src = snapshot;
+    }
+  }
+
+  // Debounce resize so mobile keyboard show/hide doesn't flicker the canvas.
+  function onWindowResize() {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(resizeCanvas, 150);
   }
 
   function evtPos(e) {
@@ -737,7 +765,11 @@
   });
 
   document.getElementById('pad-clear').addEventListener('click', clearPad);
-  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('resize', onWindowResize);
+  // Also handle visibility changes (tab switch, browser minimize/restore).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resizeCanvas();
+  });
   setTimeout(resizeCanvas, 60);
 
   // ----- Form state -----
@@ -796,35 +828,58 @@
       acknowledged_addenda: Array.from(_addendaAcked),
     };
 
-    let resp, json;
+    function resetBtn() {
+      btnSign.disabled = false;
+      btnSign.setAttribute('aria-disabled', 'false');
+      document.getElementById('btn-sign-text').textContent =
+        _mode === 'co_applicant' ? T('btn_sign_coapp')
+        : _mode === 'amendment'  ? T('btn_sign_amend')
+        : T('btn_sign');
+    }
+
+    let resp;
+    // Step 1: network — real connection error if this throws.
     try {
       resp = await fetch(SERVER_BASE + endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
         body: JSON.stringify(body),
       });
-      json = await resp.json();
     } catch {
       errEl.textContent = T('err_conn');
       errEl.style.display = 'block';
-      btnSign.disabled = false;
-      btnSign.setAttribute('aria-disabled', 'false');
-      document.getElementById('btn-sign-text').textContent =
-        _mode === 'co_applicant' ? T('btn_sign_coapp')
-        : _mode === 'amendment'  ? T('btn_sign_amend')
-        : T('btn_sign');
+      resetBtn();
+      return;
+    }
+
+    // Step 2: parse JSON — but if the server already succeeded (2xx) and the
+    // body is truncated / non-JSON, treat it as success to avoid showing a
+    // false "Connection error" to the tenant after the lease was actually saved.
+    let json = {};
+    try {
+      json = await resp.json();
+    } catch {
+      if (resp.ok) {
+        // Server accepted the request — show success and move on.
+        showState('success');
+        return;
+      }
+      errEl.textContent = T('err_conn');
+      errEl.style.display = 'block';
+      resetBtn();
+      return;
+    }
+
+    // 409 = already signed — treat as success so double-click doesn't confuse.
+    if (resp.status === 409 || json.already_signed) {
+      showState('success');
       return;
     }
 
     if (!resp.ok || !json.success) {
       errEl.textContent = json.error || 'Signing failed. Please try again or contact support.';
       errEl.style.display = 'block';
-      btnSign.disabled = false;
-      btnSign.setAttribute('aria-disabled', 'false');
-      document.getElementById('btn-sign-text').textContent =
-        _mode === 'co_applicant' ? T('btn_sign_coapp')
-        : _mode === 'amendment'  ? T('btn_sign_amend')
-        : T('btn_sign');
+      resetBtn();
       return;
     }
 

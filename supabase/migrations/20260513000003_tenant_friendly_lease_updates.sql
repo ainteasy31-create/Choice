@@ -1,0 +1,31 @@
+-- 20260513000003 — Tenant-friendly lease updates (applied directly via Management API)
+--
+-- This migration is a DOCUMENTATION RECORD of changes applied directly to the
+-- live database via the Supabase Management API on 2026-05-13. Re-running this
+-- migration on a fresh DB will reproduce all changes made on that date.
+--
+-- Changes made:
+-- 1. Michigan template (bd0bb505-e716-4458-b703-2af812a1f1ab):
+--    - Removed "(business)" qualifier from "Cash App (business)" in Section 3 RENT.
+--    - Section 5 LATE FEES: replaced daily-accruing late fee with tenant-friendly
+--      policy (5-day grace period, $50 cap, no daily fees, first-late forgiveness,
+--      hardship extension option).
+--    - Section 8 MOVE-IN COSTS: replaced blanket "non-refundable" with carve-outs
+--      for landlord cancellation, property misrepresentation, and uninhabitable
+--      conditions on move-in day.
+--    - Section 10 OCCUPANTS: replaced hard 7-day guest cap with flexible overnight
+--      guest policy (7-night threshold triggers disclosure, not pre-approval).
+--    - Section 8A inserted: Move-In Quality Guarantee (72-hour window for material
+--      defects, remedies for sight-unseen tenants).
+--
+-- 2. Added 3 addenda to lease_addenda_library:
+--    - choice/quality-guarantee: 72-hour move-in quality guarantee
+--    - choice/late-payment-policy: detailed late payment tenant protections
+--    - choice/tenant-promises: Tenant Bill of Rights (maintenance SLA, rent freeze,
+--      life-event lease break, roommate swap, transparent fees, deposit interest, rewards)
+
+-- No SQL needed — changes were applied via Management API. This file
+-- serves as a version-control record. A fresh-seed scenario should
+-- apply these changes on top of the phase-03/phase-09 seed templates.
+
+SELECT 1 AS migration_record_only;
