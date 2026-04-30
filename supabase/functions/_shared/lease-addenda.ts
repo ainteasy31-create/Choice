@@ -153,6 +153,13 @@
     hardRequired.add('common/mold');
     hardRequired.add('common/smoke-co');
 
+    // ---- Choice Properties platform addenda (auto-attach on every lease) -
+    // These are NOT hardRequired — a missing library entry skips them
+    // gracefully rather than blocking lease generation.
+    candidates.add('choice/quality-guarantee');
+    candidates.add('choice/late-payment-policy');
+    candidates.add('choice/tenant-promises');
+
     const hasPets = !!app.has_pets || /allow|yes|with deposit/i.test(app.lease_pets_policy || '');
     if (hasPets) {
       candidates.add('common/pet-addendum');
