@@ -123,3 +123,20 @@ verify_jwt = false
 
 [functions.record-esign-consent]
 verify_jwt = false
+
+# proxy-image: fetches ImageKit CDN images server-side so the watermark-review
+# canvas can call getImageData() without a CORS SecurityError. Does its own
+# admin auth internally via ?token= (Supabase JWT), so the gateway must be open.
+[functions.proxy-image]
+verify_jwt = false
+
+# cleanup-expired-drafts: nightly cron via pg_cron + manual admin POST.
+# Accepts either x-cron-secret header OR a valid admin JWT internally.
+# verify_jwt must be false so the cron header path reaches the function.
+[functions.cleanup-expired-drafts]
+verify_jwt = false
+
+# nudge-expiring-drafts: daily cron + manual admin POST.
+# Same dual-auth pattern as cleanup-expired-drafts.
+[functions.nudge-expiring-drafts]
+verify_jwt = false
