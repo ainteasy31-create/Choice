@@ -1510,6 +1510,426 @@ function preloadLightboxAdjacentImages(idx) {
     }
   });
 
+  // ── Download PDF Property Sheet ────────────────────────────
+  document.getElementById('cp-util-dl-pdf').addEventListener('click', async () => {
+    const p = currentProperty;
+    if (!p) { status.textContent = '✗ Property data not loaded yet.'; return; }
+
+    const btn = document.getElementById('cp-util-dl-pdf');
+    btn.disabled = true;
+    status.textContent = 'Loading PDF engine…';
+
+    // Lazy-load jsPDF from CDN on first use
+    if (!window.jspdf) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.crossOrigin = 'anonymous';
+        s.onload  = resolve;
+        s.onerror = () => reject(new Error('Failed to load PDF engine'));
+        document.head.appendChild(s);
+      });
+    }
+
+    const { jsPDF } = window.jspdf;
+
+    // A4 portrait in mm
+    const doc  = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const PW   = 210;   // page width mm
+    const PH   = 297;   // page height mm
+    const MAR  = 14;    // margin mm
+    const CW   = PW - MAR * 2;  // content width
+
+    // Brand colours as hex strings for setTextColor / setFillColor
+    const C_DARK   = [10,  22,  40];
+    const C_BLUE   = [0,   106, 255];
+    const C_TEXT   = [30,  41,  59];
+    const C_MUTED  = [100, 116, 139];
+    const C_LIGHT  = [241, 245, 249];
+    const C_WHITE  = [255, 255, 255];
+    const C_RULE   = [226, 232, 240];
+
+    // ── Helper: load an image URL → base64 data URI ──────────
+    async function urlToDataUrl(url) {
+      try {
+        const res  = await fetch(url, { mode: 'cors' });
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return new Promise(res2 => {
+          const fr = new FileReader();
+          fr.onload  = () => res2(fr.result);
+          fr.onerror = () => res2(null);
+          fr.readAsDataURL(blob);
+        });
+      } catch { return null; }
+    }
+
+    // ── Helper: wrap text and return lines array ─────────────
+    function wrapText(text, maxWidth) {
+      return doc.splitTextToSize(text || '', maxWidth);
+    }
+
+    // ── Helper: horizontal rule ──────────────────────────────
+    function hRule(y, alpha) {
+      doc.setDrawColor(...C_RULE);
+      doc.setLineWidth(0.25);
+      doc.line(MAR, y, PW - MAR, y);
+    }
+
+    // ── Helper: section heading ──────────────────────────────
+    function sectionHead(label, y) {
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...C_BLUE);
+      doc.text(label.toUpperCase(), MAR, y);
+      return y + 5;
+    }
+
+    // ── Helper: key-value row, returns new y ─────────────────
+    function kvRow(key, val, y) {
+      if (!val) return y;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...C_MUTED);
+      doc.text(key, MAR, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C_TEXT);
+      const lines = wrapText(String(val), CW - 40);
+      doc.text(lines, MAR + 38, y);
+      return y + lines.length * 5 + 1;
+    }
+
+    // ── PAGE 1: Cover ─────────────────────────────────────────
+    status.textContent = 'Building cover page…';
+
+    // Dark header band
+    doc.setFillColor(...C_DARK);
+    doc.rect(0, 0, PW, 12, 'F');
+    doc.setFillColor(...C_BLUE);
+    doc.rect(0, 0, 4, 12, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C_WHITE);
+    doc.text('CHOICE PROPERTIES', MAR, 8);
+    const siteLabel = (typeof CONFIG !== 'undefined' && CONFIG.SITE_URL)
+      ? CONFIG.SITE_URL.replace(/^https?:\/\//, '')
+      : 'choiceproperties.com';
+    doc.setFont('helvetica', 'normal');
+    doc.text(siteLabel, PW - MAR, 8, { align: 'right' });
+
+    // Main cover photo (full width, 90mm tall)
+    const coverPhotos = (allPhotos || []).filter(u => u && !u.includes('placeholder'));
+    let coverY = 12;
+    if (coverPhotos.length) {
+      status.textContent = 'Embedding cover photo…';
+      const dataUrl = await urlToDataUrl(originalUrl(coverPhotos[0]));
+      if (dataUrl) {
+        try {
+          doc.addImage(dataUrl, 'JPEG', 0, coverY, PW, 88, undefined, 'MEDIUM');
+        } catch (_) {}
+        // Gradient overlay strip at bottom of photo for legibility
+        doc.setFillColor(...C_DARK);
+        for (let i = 0; i < 30; i++) {
+          doc.setGState(new doc.GState({ opacity: i / 80 }));
+          doc.rect(0, coverY + 88 - 30 + i, PW, 1, 'F');
+        }
+        doc.setGState(new doc.GState({ opacity: 1 }));
+      }
+      coverY += 88;
+    }
+
+    // Price
+    const rent = p.monthly_rent != null ? `$${Number(p.monthly_rent).toLocaleString()}/mo` : 'Rent TBD';
+    coverY += 8;
+    doc.setFontSize(28);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C_DARK);
+    doc.text(rent, MAR, coverY);
+    coverY += 10;
+
+    // Title
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C_TEXT);
+    const titleLines = wrapText(p.title || 'Property Listing', CW);
+    doc.text(titleLines, MAR, coverY);
+    coverY += titleLines.length * 7 + 2;
+
+    // Address
+    const unit = p.unit_number ? ` ${p.unit_number}` : '';
+    const addr = `${p.address}${unit}, ${p.city}, ${p.state}${p.zip ? ' ' + p.zip : ''}`;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...C_MUTED);
+    doc.text(addr, MAR, coverY);
+    coverY += 8;
+
+    hRule(coverY); coverY += 6;
+
+    // Stats chips row
+    const stats = [];
+    if (p.bedrooms != null) stats.push(`${p.bedrooms === 0 ? 'Studio' : p.bedrooms + ' bed'}`);
+    if (p.bathrooms)        stats.push(`${p.bathrooms} bath`);
+    if (p.square_footage)   stats.push(`${Number(p.square_footage).toLocaleString()} sqft`);
+    if (p.property_type)    stats.push(p.property_type.charAt(0).toUpperCase() + p.property_type.slice(1));
+    if (p.pets_allowed != null) stats.push(p.pets_allowed ? 'Pets OK' : 'No Pets');
+
+    let chipX = MAR;
+    stats.forEach(s => {
+      const tw = doc.getTextWidth(s) + 6;
+      doc.setFillColor(...C_LIGHT);
+      doc.roundedRect(chipX, coverY - 4, tw, 7, 1.5, 1.5, 'F');
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...C_TEXT);
+      doc.text(s, chipX + 3, coverY + 0.5);
+      chipX += tw + 3;
+    });
+    coverY += 10;
+
+    // Availability badge
+    const availNow = !p.available_date || new Date(p.available_date) <= new Date();
+    const availLabel = availNow ? 'Available Now'
+      : `Available ${new Date((p.available_date || '') + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    doc.setFillColor(availNow ? 16 : 212, availNow ? 185 : 160, availNow ? 129 : 23);
+    doc.setFillColor(...(availNow ? [220, 252, 231] : [254, 249, 195]));
+    const avW = doc.getTextWidth(availLabel) + 8;
+    doc.roundedRect(MAR, coverY - 4, avW, 7, 1.5, 1.5, 'F');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...(availNow ? [21, 128, 61] : [133, 77, 14]));
+    doc.text(availLabel, MAR + 4, coverY + 0.5);
+    coverY += 10;
+
+    hRule(coverY); coverY += 6;
+
+    // Key financials on cover
+    const finItems = [];
+    if (p.monthly_rent != null)   finItems.push(['Monthly Rent',      `$${Number(p.monthly_rent).toLocaleString()}`]);
+    if (p.security_deposit)       finItems.push(['Security Deposit',   `$${Number(p.security_deposit).toLocaleString()}`]);
+    if (p.last_months_rent)       finItems.push(["Last Month's Rent",  `$${Number(p.last_months_rent).toLocaleString()}`]);
+    if (p.admin_fee)              finItems.push(['Admin / Move-in Fee',`$${Number(p.admin_fee).toLocaleString()}`]);
+    if (p.application_fee > 0)   finItems.push(['Application Fee',    `$${Number(p.application_fee).toLocaleString()}`]);
+    else if (p.application_fee === 0) finItems.push(['Application Fee', 'Free']);
+
+    finItems.forEach(([k, v]) => { coverY = kvRow(k, v, coverY); });
+
+    if (p.id) {
+      coverY += 2;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C_MUTED);
+      doc.text(`Property ID: ${p.id}`, MAR, coverY);
+    }
+
+    // ── PAGE 2: Full Details ──────────────────────────────────
+    doc.addPage();
+    status.textContent = 'Building details page…';
+
+    // Header band
+    doc.setFillColor(...C_DARK);
+    doc.rect(0, 0, PW, 12, 'F');
+    doc.setFillColor(...C_BLUE);
+    doc.rect(0, 0, 4, 12, 'F');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C_WHITE);
+    doc.text('PROPERTY DETAILS', MAR, 8);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(p.title || '', PW - MAR, 8, { align: 'right' });
+
+    let dy = 22;
+
+    // Description
+    if (p.description) {
+      dy = sectionHead('Description', dy);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C_TEXT);
+      const descLines = wrapText(p.description, CW);
+      // Limit to first 30 lines to avoid overflow
+      descLines.slice(0, 30).forEach(line => {
+        if (dy > PH - 20) return;
+        doc.text(line, MAR, dy);
+        dy += 4.8;
+      });
+      if (descLines.length > 30) {
+        doc.setTextColor(...C_MUTED);
+        doc.text('…', MAR, dy); dy += 4.8;
+      }
+      dy += 3;
+      hRule(dy); dy += 6;
+    }
+
+    // Amenities
+    if (p.amenities?.length) {
+      dy = sectionHead('Amenities', dy);
+      const cols = 3;
+      p.amenities.forEach((a, i) => {
+        if (dy > PH - 20) return;
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...C_TEXT);
+        doc.text(`• ${a}`, MAR + col * (CW / cols), dy + row * 5);
+        if (col === cols - 1) dy += 5;
+      });
+      if (p.amenities.length % cols !== 0) dy += 5;
+      dy += 4;
+      hRule(dy); dy += 6;
+    }
+
+    // Appliances
+    if (p.appliances?.length) {
+      dy = sectionHead('Appliances', dy);
+      const cols = 3;
+      p.appliances.forEach((a, i) => {
+        if (dy > PH - 20) return;
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...C_TEXT);
+        doc.text(`• ${a}`, MAR + col * (CW / cols), dy + row * 5);
+        if (col === cols - 1) dy += 5;
+      });
+      if (p.appliances.length % cols !== 0) dy += 5;
+      dy += 4;
+      hRule(dy); dy += 6;
+    }
+
+    // Utilities & Extras
+    const utilItems = [];
+    if (p.utilities_included?.length) utilItems.push(['Utilities Included', p.utilities_included.join(', ')]);
+    if (p.parking)       utilItems.push(['Parking',  p.parking]);
+    if (p.laundry_type)  utilItems.push(['Laundry',  p.laundry_type]);
+    if (p.heating_type)  utilItems.push(['Heating',  p.heating_type]);
+    if (p.cooling_type)  utilItems.push(['Cooling',  p.cooling_type]);
+    if (p.flooring?.length) utilItems.push(['Flooring', p.flooring.join(', ')]);
+
+    if (utilItems.length) {
+      dy = sectionHead('Utilities & Features', dy);
+      utilItems.forEach(([k, v]) => { if (dy < PH - 20) dy = kvRow(k, v, dy); });
+      dy += 3; hRule(dy); dy += 6;
+    }
+
+    // Lease terms
+    const leaseItems = [];
+    if (p.lease_terms?.length)      leaseItems.push(['Lease Terms',      p.lease_terms.join(', ')]);
+    if (p.minimum_lease_months)     leaseItems.push(['Min. Lease',        `${p.minimum_lease_months} month${p.minimum_lease_months !== 1 ? 's' : ''}`]);
+    if (p.smoking_allowed != null)  leaseItems.push(['Smoking',           p.smoking_allowed ? 'Permitted' : 'Not Permitted']);
+    if (p.pets_allowed != null) {
+      const petStr = p.pets_allowed
+        ? [p.pet_types_allowed?.length ? p.pet_types_allowed.join(', ') : 'Allowed', p.pet_weight_limit ? `Max ${p.pet_weight_limit} lbs` : ''].filter(Boolean).join(' · ')
+        : 'Not Allowed';
+      leaseItems.push(['Pets', petStr]);
+    }
+    if (p.pet_deposit)        leaseItems.push(['Pet Deposit',    `$${Number(p.pet_deposit).toLocaleString()}`]);
+    if (p.move_in_special)    leaseItems.push(['Move-in Special', p.move_in_special]);
+    if (p.showing_instructions) leaseItems.push(['Showings', p.showing_instructions]);
+
+    if (leaseItems.length) {
+      dy = sectionHead('Lease & Policies', dy);
+      leaseItems.forEach(([k, v]) => { if (dy < PH - 20) dy = kvRow(k, v, dy); });
+      dy += 3; hRule(dy); dy += 6;
+    }
+
+    // Contact / footer on details page
+    if (dy < PH - 30) {
+      dy = sectionHead('Contact', dy);
+      if (typeof CONFIG !== 'undefined') {
+        if (CONFIG.COMPANY_EMAIL) dy = kvRow('Email', CONFIG.COMPANY_EMAIL, dy);
+        if (CONFIG.COMPANY_PHONE) dy = kvRow('Phone', CONFIG.COMPANY_PHONE, dy);
+        if (CONFIG.SITE_URL)      dy = kvRow('Website', CONFIG.SITE_URL, dy);
+      }
+    }
+
+    // ── PAGE 3+: Photo Gallery ────────────────────────────────
+    const galleryPhotos = coverPhotos.slice(1); // skip cover photo (already on page 1)
+    if (galleryPhotos.length) {
+      const PHOTOS_PER_PAGE = 2;
+      const PHOTO_H = 100; // mm
+      const pages = Math.ceil(galleryPhotos.length / PHOTOS_PER_PAGE);
+
+      for (let pg = 0; pg < pages; pg++) {
+        doc.addPage();
+
+        // Header band
+        doc.setFillColor(...C_DARK);
+        doc.rect(0, 0, PW, 12, 'F');
+        doc.setFillColor(...C_BLUE);
+        doc.rect(0, 0, 4, 12, 'F');
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...C_WHITE);
+        doc.text(`PHOTO GALLERY  (${pg + 1} / ${pages})`, MAR, 8);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.text(p.title || '', PW - MAR, 8, { align: 'right' });
+
+        let gy = 18;
+
+        for (let i = 0; i < PHOTOS_PER_PAGE; i++) {
+          const idx = pg * PHOTOS_PER_PAGE + i;
+          if (idx >= galleryPhotos.length) break;
+
+          status.textContent = `Embedding photo ${idx + 2} of ${coverPhotos.length}…`;
+
+          const dataUrl = await urlToDataUrl(originalUrl(galleryPhotos[idx]));
+          if (dataUrl) {
+            try {
+              doc.addImage(dataUrl, 'JPEG', MAR, gy, CW, PHOTO_H, undefined, 'MEDIUM');
+            } catch (_) {
+              doc.setFillColor(...C_LIGHT);
+              doc.rect(MAR, gy, CW, PHOTO_H, 'F');
+              doc.setFontSize(8);
+              doc.setTextColor(...C_MUTED);
+              doc.text('Photo unavailable', MAR + CW / 2, gy + PHOTO_H / 2, { align: 'center' });
+            }
+          } else {
+            doc.setFillColor(...C_LIGHT);
+            doc.rect(MAR, gy, CW, PHOTO_H, 'F');
+            doc.setFontSize(8);
+            doc.setTextColor(...C_MUTED);
+            doc.text('Photo unavailable', MAR + CW / 2, gy + PHOTO_H / 2, { align: 'center' });
+          }
+
+          // Photo label
+          doc.setFontSize(7.5);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(...C_MUTED);
+          doc.text(`Photo ${idx + 2} of ${coverPhotos.length}`, MAR, gy + PHOTO_H + 4);
+
+          gy += PHOTO_H + 10;
+        }
+
+        // Page footer
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...C_MUTED);
+        doc.text(`${siteLabel}  ·  ${p.id || ''}  ·  Page ${doc.internal.getNumberOfPages()}`, PW / 2, PH - 6, { align: 'center' });
+      }
+    }
+
+    // Footer on all non-gallery pages (pages 1 and 2)
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let pg = 1; pg <= Math.min(2, totalPages); pg++) {
+      doc.setPage(pg);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...C_MUTED);
+      doc.text(`${siteLabel}  ·  ${p.id || ''}  ·  Page ${pg} of ${totalPages}`, PW / 2, PH - 6, { align: 'center' });
+    }
+
+    status.textContent = 'Saving PDF…';
+    const filename = `${p.id || 'property'}-sheet.pdf`;
+    doc.save(filename);
+    status.textContent = `✓ PDF saved as ${filename}`;
+    btn.disabled = false;
+  });
+
 })();
 
 
