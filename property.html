@@ -63,6 +63,18 @@
     #mobile-apply-bar .mob-btn{background:#006aff;color:#fff;border:none;border-radius:8px;padding:12px 22px;font-size:.875rem;font-weight:700;letter-spacing:-.01em;text-decoration:none;white-space:nowrap;cursor:pointer;flex-shrink:0;box-shadow:0 4px 16px rgba(0,106,255,.35);transition:background 160ms ease,box-shadow 160ms ease}
     #mobile-apply-bar .mob-btn:hover{background:#0054cc;box-shadow:0 6px 22px rgba(0,106,255,.45)}
     @media(max-width:767px){#mobile-apply-bar.active{display:flex}body.mob-bar-active{padding-bottom:calc(80px + env(safe-area-inset-bottom))}}
+    #cp-util-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8998;backdrop-filter:blur(2px)}
+    #cp-util-panel{display:none;position:fixed;bottom:0;left:0;right:0;z-index:8999;background:#0a1628;border-top:1px solid rgba(255,255,255,.1);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,.6);font-family:"Inter",-apple-system,sans-serif;max-width:520px;margin:0 auto}
+    #cp-util-panel.cp-util-open,#cp-util-overlay.cp-util-open{display:block}
+    #cp-util-panel .cup-handle{width:40px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 20px}
+    #cp-util-panel .cup-title{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#64748b;margin-bottom:16px}
+    #cp-util-panel .cup-btn{display:flex;align-items:center;gap:12px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:14px 16px;color:#e2e8f0;font-size:.875rem;font-weight:600;cursor:pointer;margin-bottom:10px;text-align:left;transition:background 150ms}
+    #cp-util-panel .cup-btn:hover{background:rgba(255,255,255,.1)}
+    #cp-util-panel .cup-btn:disabled{opacity:.5;cursor:not-allowed}
+    #cp-util-panel .cup-btn i{font-size:1rem;width:20px;text-align:center;color:#006aff}
+    #cp-util-panel .cup-btn .cup-sub{font-size:.75rem;font-weight:400;color:#64748b;display:block;margin-top:2px}
+    #cp-util-panel #cp-util-status{font-size:.78rem;color:#60a5fa;min-height:18px;margin-top:6px;text-align:center}
+    #cp-util-panel .cup-close{display:block;width:100%;background:none;border:none;color:#475569;font-size:.8rem;cursor:pointer;margin-top:12px;padding:8px}
   </style>
 <script defer src="/config.js?v=__BUILD_VERSION__"></script>
 <script defer src="/js/supabase.min.js"></script>
@@ -334,6 +346,26 @@
 
 <!-- Contact drawer overlay (mobile) -->
 <div class="contact-drawer-overlay" id="contactDrawerOverlay" aria-hidden="true"></div>
+
+<div id="cp-util-overlay" aria-hidden="true"></div>
+<div id="cp-util-panel" role="dialog" aria-modal="true" aria-label="Tools" aria-hidden="true">
+  <div class="cup-handle"></div>
+  <div class="cup-title">Property Tools</div>
+  <button class="cup-btn" id="cp-util-dl-photos">
+    <i class="fas fa-images"></i>
+    <span>Download All Photos<span class="cup-sub">Save every listing photo to your device</span></span>
+  </button>
+  <button class="cup-btn" id="cp-util-dl-card">
+    <i class="fas fa-address-card"></i>
+    <span>Download Info Card<span class="cup-sub">Save a branded property summary image</span></span>
+  </button>
+  <button class="cup-btn" id="cp-util-copy-urls">
+    <i class="fas fa-link"></i>
+    <span>Copy Photo URLs<span class="cup-sub">Copy all full-quality photo links</span></span>
+  </button>
+  <div id="cp-util-status"></div>
+  <button class="cup-close" id="cp-util-close">Close</button>
+</div>
 
 <!-- Mobile-only sticky Apply bar — populated by renderProperty() -->
 <div id="mobile-apply-bar" role="complementary" aria-label="Apply for this property">
