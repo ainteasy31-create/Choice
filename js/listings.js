@@ -792,6 +792,24 @@ async function toggleSave(id, btn) {
     if (_seq === 'cpd') { _seq = ''; openPanel(); }
   });
 
+  // ── Mobile trigger: triple-tap "All Listings" heading ─────
+  // Tapping the section heading 3 times within 600 ms opens the panel.
+  let _tapCount = 0, _tapTimer = null;
+  const _tapTarget = document.getElementById('listingsHeading');
+  if (_tapTarget) {
+    _tapTarget.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      _tapCount++;
+      clearTimeout(_tapTimer);
+      if (_tapCount >= 3) {
+        _tapCount = 0;
+        openPanel();
+      } else {
+        _tapTimer = setTimeout(() => { _tapCount = 0; }, 600);
+      }
+    }, { passive: false });
+  }
+
   // ── Load saved properties from Supabase ───────────────────
   async function loadSavedProperties() {
     listEl.innerHTML = '<div class="cpbe-loading"><i class="fas fa-circle-notch fa-spin"></i> Loading saved properties…</div>';
