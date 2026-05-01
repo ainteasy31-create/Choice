@@ -1900,6 +1900,20 @@ class RentalApplication {
                     if (json.found && json.data && typeof json.data === 'object') {
                         serverData = json.data;
                         tokenStatus = 'ok';
+
+                        // Show expiry warning if fewer than 24 hours remain.
+                        const msRemaining = typeof json.ms_remaining === 'number' ? json.ms_remaining : null;
+                        if (msRemaining !== null && msRemaining < 24 * 60 * 60 * 1000) {
+                            const hoursLeft = Math.floor(msRemaining / (60 * 60 * 1000));
+                            const minutesLeft = Math.floor((msRemaining % (60 * 60 * 1000)) / 60000);
+                            const timeLabel = hoursLeft > 0
+                                ? `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''}${minutesLeft > 0 ? ` ${minutesLeft} min` : ''}`
+                                : `${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}`;
+                            this._showResumeBanner(
+                                `⚠️ Your saved draft expires in ${timeLabel}. Submit your application today to avoid losing your progress.`,
+                                'warn'
+                            );
+                        }
                     } else {
                         tokenStatus = 'expired';
                     }

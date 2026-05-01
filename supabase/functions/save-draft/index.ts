@@ -27,10 +27,11 @@ Deno.serve(async (req: Request) => {
     const token = (url.searchParams.get('token') || '').trim();
     if (!TOKEN_RE.test(token)) return jsonErr(400, 'Invalid token');
 
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - DRAFT_TTL_MS).toISOString();
     const { data, error } = await supabase
       .from('draft_applications')
-      .select('data')
+      .select('data, created_at')
       .eq('token', token)
       .gte('created_at', cutoff)
       .maybeSingle();
@@ -41,7 +42,19 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!data) return jsonOk({ found: false, expired: true });
-    return jsonOk({ found: true, data: data.data });
+
+    // Compute ms remaining so the client can show an expiry warning banner.
+    const createdAt = data.created_at as string;
+    const expiresAt = new Date(new Date(createdAt).getTime() + DRAFT_TTL_MS);
+    const msRemaining = expiresAt.getTime() - Date.now();
+
+    return jsonOk({
+      found: true,
+      data: data.data,
+      created_at: createdAt,
+      expires_at: expiresAt.toISOString(),
+      ms_remaining: Math.max(0, msRemaining),
+    });
   }
 
   // POST { token, email, send_email, data, property_fingerprint }
