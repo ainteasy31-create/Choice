@@ -529,7 +529,15 @@ function renderPhotoTile(p) {
   if (p.status !== 'uploaded') {
     const badge = document.createElement('div');
     badge.className = 'badge';
-    badge.textContent = p.status === 'failed' ? 'Failed — retry' : (p.status === 'uploading' ? 'Uploading…' : 'Pending');
+    if (p.status === 'failed') {
+      // Show the specific error message (e.g. HEIC converter not ready) so the user
+      // sees actionable text right on the tile — not just in the temporary toast.
+      const errText = p.error || 'Upload failed — tap to retry';
+      badge.textContent = errText;
+      badge.title = errText;
+    } else {
+      badge.textContent = p.status === 'uploading' ? 'Uploading…' : 'Pending';
+    }
     div.appendChild(badge);
     if (p.status === 'failed') {
       div.style.cursor = 'pointer';
