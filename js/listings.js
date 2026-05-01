@@ -840,7 +840,8 @@ async function toggleSave(id, btn) {
   function renderChecklist() {
     const _esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     listEl.innerHTML = propData.map(p => {
-      const thumb   = p.photo_urls?.[0] ? CONFIG.img(p.photo_urls[0], 'thumb') : '/assets/placeholder-property.jpg';
+      const _cfgImg = typeof CONFIG !== 'undefined' && CONFIG.img;
+      const thumb   = p.photo_urls?.[0] && _cfgImg ? CONFIG.img(p.photo_urls[0], 'thumb') : '/assets/placeholder-property.jpg';
       const price   = p.monthly_rent != null ? `$${Number(p.monthly_rent).toLocaleString()}/mo` : 'TBD';
       const beds    = p.bedrooms === 0 ? 'Studio' : (p.bedrooms != null ? `${p.bedrooms}bd` : '');
       const checked = checkedIds.has(p.id) ? 'checked' : '';
@@ -960,7 +961,7 @@ async function toggleSave(id, btn) {
         canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/png');
       }
 
-      const bgUrl = p.photo_urls?.[0] && !p.photo_urls[0].includes('placeholder')
+      const bgUrl = p.photo_urls?.[0] && !p.photo_urls[0].includes('placeholder') && typeof CONFIG !== 'undefined' && CONFIG.img
         ? CONFIG.img(p.photo_urls[0], 'og') : null;
 
       if (bgUrl) {
