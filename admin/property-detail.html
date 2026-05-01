@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1e">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="robots" content="noindex, nofollow">
+<title>Property Detail · Choice Properties Admin</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
+<script defer src="/config.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js" integrity="sha384-YieCqqg9gQufX7+5HcFvCEg/n3KUEdl8/Jb+A6J0npf1mB740VayvwKjTrtCeUoy" crossorigin="anonymous"></script>
+<script defer src="/js/cp-api.js" type="module"></script>
+<script defer src="/js/cp-chrome.js?v=__BUILD_VERSION__"></script>
+<script defer src="/js/cp-shell.js?v=__BUILD_VERSION__"></script>
+<style>
+  .pd-gallery{display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;border-radius:var(--r-md);margin-bottom:18px;max-height:280px}
+  .pd-gallery img{flex:0 0 auto;width:calc(100% - 0px);max-width:480px;height:260px;object-fit:cover;scroll-snap-align:start;border-radius:var(--r-md);background:var(--surface-2)}
+  .pd-gallery img:only-child{width:100%;max-width:100%}
+  @media(max-width:560px){.pd-gallery img{height:200px}}
+  .pd-no-photo{height:180px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r-md);color:var(--muted);margin-bottom:18px;font-size:.82rem}
+  .pd-section{margin-bottom:22px}
+  .pd-section-title{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .pd-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(min-width:640px){.pd-grid{grid-template-columns:repeat(3,1fr)}}
+  .pd-field{display:flex;flex-direction:column;gap:3px}
+  .pd-field-label{font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .pd-field-value{font-size:.9rem;font-weight:600;color:var(--text)}
+  .pd-desc{font-size:.84rem;color:var(--text);line-height:1.6;white-space:pre-wrap;background:var(--surface-2);border-radius:var(--r-sm);padding:12px 14px}
+  .pd-amenity-list{display:flex;flex-wrap:wrap;gap:6px}
+  .pd-amenity{padding:4px 12px;border-radius:99px;background:var(--surface-2);font-size:.74rem;font-weight:600;color:var(--text)}
+  .pd-table{width:100%;border-collapse:collapse;font-size:.8rem}
+  .pd-table th{text-align:left;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border)}
+  .pd-table td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+  .pd-table tr:last-child td{border-bottom:none}
+  .pd-table tr:hover td{background:var(--surface-2)}
+  .pd-empty-row{color:var(--muted);font-size:.8rem;padding:14px 10px;font-style:italic}
+  .pd-landlord{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-2);border-radius:var(--r-md)}
+  .pd-landlord-avatar{width:42px;height:42px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;color:#fff;flex-shrink:0}
+  .pd-landlord-info{display:flex;flex-direction:column;gap:2px}
+  .pd-landlord-name{font-weight:700;font-size:.9rem;color:var(--text)}
+  .pd-landlord-meta{font-size:.76rem;color:var(--muted)}
+  .pd-status-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .pd-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+</style>
+</head>
+<body data-page-title="Property Detail" data-page-sub="Loading…">
+<div class="app">
+  <main class="app-content">
+
+    <div style="margin-bottom:14px">
+      <a href="/admin/properties.html" class="text-xs muted" style="text-decoration:none">&larr; Back to properties</a>
+    </div>
+
+    <div id="pd-root">
+      <div class="empty"><div class="text-sm muted">Loading…</div></div>
+    </div>
+
+  </main>
+</div>
+
+<script defer src="/js/admin/property-detail.js?v=__BUILD_VERSION__"></script>
+</body>
+</html>
