@@ -2240,10 +2240,10 @@ class RentalApplication {
                 paymentRequiredDesc: freeApp
                     ? 'Great news — there is no application fee for this property. Your application will proceed directly to review.'
                     : `A $${fee} application fee is required after submission. Our team will contact you to securely complete payment before your application is reviewed.`,
-                completePaymentTitle: freeApp ? 'Application Activated' : 'Complete Payment to Activate Review',
+                completePaymentTitle: freeApp ? 'Application Activated' : 'We\'ll Reach Out to Arrange Payment',
                 completePaymentDesc: freeApp
                     ? 'No payment is needed — your application is active and will be reviewed as submitted.'
-                    : `Applications are only activated after payment is completed. Applicants who complete payment quickly are placed earlier in the review queue.`,
+                    : `Our team will contact you using your preferred payment method to arrange the $${fee} fee. Keep your phone and payment app ready.`,
                 reviewBeginsTitle: freeApp ? 'Active Review Begins' : 'Active Review Begins',
                 reviewBeginsDesc: freeApp
                     ? 'Your application is now in active review. Decisions are typically made within 24 to 72 hours, and applicants who respond promptly to any follow-up are often prioritized.'
@@ -2252,7 +2252,7 @@ class RentalApplication {
                 paymentUrgentText: freeApp
                     ? 'Your application is active and will be evaluated for selection — no payment is required for this property.'
                     : `Your application is now being evaluated for qualification. Payment of the $${fee} fee is the next step to activate review — please keep your phone nearby so our team can reach you.`,
-                yourPreferences: 'Your Preferences',
+                yourPreferences: 'Your Payment Preferences',
                 contactMethod: 'Contact Method:',
                 bestTimes: 'Best Times:',
                 paymentPref: 'Payment Preferences:',
@@ -2546,10 +2546,10 @@ class RentalApplication {
                 paymentRequiredDesc: freeApp
                     ? 'Buenas noticias: no hay tarifa de solicitud para esta propiedad. Su solicitud pasará directamente a revisión.'
                     : `Nuestro equipo se comunicará con usted en breve al número proporcionado para coordinar el pago de $${fee}.`,
-                completePaymentTitle: freeApp ? 'Solicitud Completa' : 'Completar el Pago',
+                completePaymentTitle: freeApp ? 'Solicitud Completa' : 'Le Contactaremos para Coordinar el Pago',
                 completePaymentDesc: freeApp
                     ? 'No se requiere pago. Su solicitud será revisada tal como fue enviada.'
-                    : `Su solicitud no está completa hasta que se haya pagado la tarifa de $${fee}. Discutiremos opciones de pago que conozca.`,
+                    : `Nuestro equipo le contactará usando su método de pago preferido para coordinar la tarifa de $${fee}. Tenga su teléfono y aplicación de pago a mano.`,
                 reviewBeginsTitle: 'Comienza la Revisión',
                 reviewBeginsDesc: freeApp
                     ? 'Su solicitud ha sido recibida y entrará de inmediato al proceso de revisión formal. Puede seguir el estado en línea con su ID.'
@@ -2558,7 +2558,7 @@ class RentalApplication {
                 paymentUrgentText: freeApp
                     ? 'No hay tarifa de solicitud para esta propiedad — su solicitud pasa directamente a revisión.'
                     : `Su solicitud no está completa hasta que se haya pagado la tarifa de $${fee}. Por favor mantenga su teléfono cerca.`,
-                yourPreferences: 'Sus Preferencias',
+                yourPreferences: 'Sus Preferencias de Pago',
                 contactMethod: 'Método de Contacto:',
                 bestTimes: 'Mejores Horarios:',
                 paymentPref: 'Preferencias de Pago:',
