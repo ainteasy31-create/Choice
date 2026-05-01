@@ -112,11 +112,7 @@
         badge = '<div class="property-card-badge badge-verified"><i class="fas fa-shield-halved"></i> Verified</div>';
       }
 
-    // ── Freshness chip (Phase 9.2) — stacks under the badge, top-left ──
-    var freshText = freshnessLabel(p.created_at);
-    var freshChipHtml = freshText
-      ? '<div class="property-card-fresh-chip"><span class="property-card-fresh-dot" aria-hidden="true"></span>' + esc(freshText) + '</div>'
-      : '';
+    var freshChipHtml = '';
 
 
     // P2-C: Property type label — defined here so typeChipHtml below can use it ──────
@@ -167,8 +163,6 @@
           photoCountHtml +
           // Property type chip — bottom-left
           typeChipHtml +
-          // Save heart — top-right, always visible
-          '<button class="property-card-save" data-id="' + id + '" aria-label="Save property"><i class="far fa-heart"></i></button>' +
           // Share icon — bottom-right, always visible
           // URL: canonical slug URL (Phase C SEO). Falls back to /property.html?id= when fields missing.
           '<button class="property-card-share" data-id="' + id + '" data-title="' + title + '" data-url="' + (window.CP && window.CP.UI && window.CP.UI.propertyUrl ? window.CP.UI.propertyUrl(p) : '/property.html?id=' + id) + '" aria-label="Share property"><i class="fas fa-share-nodes"></i></button>' +
