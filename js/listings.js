@@ -869,10 +869,19 @@ async function toggleSave(id, btn) {
     if (!url || typeof CONFIG === 'undefined' || !CONFIG.IMAGEKIT_URL) return url;
     return url.replace(/\/tr:[^/]+\//, '/');
   }
-  async function fetchBlob(url) {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return res.blob();
+  async function fetchBlob(url, retries = 2) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.blob();
+      } catch (e) {
+        lastErr = e;
+        if (attempt < retries) await new Promise(r => setTimeout(r, 900 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
   }
   function downloadBlob(blob, filename) {
     const a = document.createElement('a');
