@@ -1,20 +1,18 @@
-# Choice Properties — CODEOWNERS
-# Protected files require owner review on all pull requests.
+# CODEOWNERS — Choice Properties website
+  # Changes to files matching these patterns require review from the listed users.
 
-* @choicepropertyofficial1-collab
+  # Supabase migrations affect production data — all changes need review
+  /supabase/migrations/          @choice121
 
-package.json @choicepropertyofficial1-collab
-package-lock.json @choicepropertyofficial1-collab
-generate-config.js @choicepropertyofficial1-collab
-scripts/enforce-cloudflare-only.js @choicepropertyofficial1-collab
-.github/workflows/cloudflare-only.yml @choicepropertyofficial1-collab
-.cfpagesignore @choicepropertyofficial1-collab
-_headers @choicepropertyofficial1-collab
-_redirects @choicepropertyofficial1-collab
-SETUP.sql @choicepropertyofficial1-collab
-js/cp-api.js @choicepropertyofficial1-collab
-supabase/functions/** @choicepropertyofficial1-collab
-.agents/instructions.md @choicepropertyofficial1-collab
-.github/copilot-instructions.md @choicepropertyofficial1-collab
-.github/CODEOWNERS @choicepropertyofficial1-collab
-.githooks/pre-commit @choicepropertyofficial1-collab
+  # Pipeline schema migrations are especially sensitive — the pipeline project depends on these
+  # Any migration touching the pipeline schema must be coordinated with the pipeline team
+  /supabase/migrations/*pipeline* @choice121
+
+  # Ecosystem documentation — keep in sync with property-pipeline repo
+  /ECOSYSTEM.md                  @choice121
+
+  # Deployment and CI configuration
+  /.github/                      @choice121
+  /wrangler.toml                 @choice121
+  /cloudflare*.json              @choice121
+  
