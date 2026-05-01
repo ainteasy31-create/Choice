@@ -1211,4 +1211,305 @@ function preloadLightboxAdjacentImages(idx) {
   });
 }
 
+/* ═══════════════════════════════════════════════════════════
+   OWNER DOWNLOAD PACK — Hidden feature
+   Trigger → mobile: triple-tap the price  |  desktop: type "cpd"
+   ═══════════════════════════════════════════════════════════ */
+(function () {
+
+  // ── Panel helpers ──────────────────────────────────────────
+  const panel   = document.getElementById('cp-util-panel');
+  const overlay = document.getElementById('cp-util-overlay');
+  const status  = document.getElementById('cp-util-status');
+
+  function openPack() {
+    panel.classList.add('cp-util-open');
+    overlay.classList.add('cp-util-open');
+    panel.setAttribute('aria-hidden', 'false');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    status.textContent = '';
+  }
+  function closePack() {
+    panel.classList.remove('cp-util-open');
+    overlay.classList.remove('cp-util-open');
+    panel.setAttribute('aria-hidden', 'true');
+    overlay.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('cp-util-close').addEventListener('click', closePack);
+  overlay.addEventListener('click', closePack);
+
+  // ── Mobile trigger: triple-tap on price ───────────────────
+  let _taps = 0, _tapTimer = null;
+  const priceEl = document.getElementById('detailPrice');
+  if (priceEl) {
+    priceEl.addEventListener('click', () => {
+      _taps++;
+      clearTimeout(_tapTimer);
+      if (_taps >= 3) { _taps = 0; openPack(); return; }
+      _tapTimer = setTimeout(() => { _taps = 0; }, 1500);
+    });
+  }
+
+  // ── Desktop trigger: type "cpd" ───────────────────────────
+  let _seq = '';
+  document.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+    _seq = (_seq + e.key.toLowerCase()).slice(-3);
+    if (_seq === 'cpd') { _seq = ''; openPack(); }
+  });
+
+  // ── Strip ImageKit transforms → full-quality source URL ───
+  function originalUrl(url) {
+    if (!url || typeof CONFIG === 'undefined' || !CONFIG.IMAGEKIT_URL) return url;
+    return url.replace(/\/tr:[^/]+\//, '/');
+  }
+
+  // ── Fetch as blob (CORS) ───────────────────────────────────
+  async function fetchBlob(url) {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.blob();
+  }
+
+  // ── Trigger a file download ────────────────────────────────
+  function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) {} }, 1500);
+  }
+
+  // ── Download All Photos ────────────────────────────────────
+  document.getElementById('cp-util-dl-photos').addEventListener('click', async () => {
+    const photos = (allPhotos || []).filter(u => u && !u.includes('placeholder'));
+    if (!photos.length) { status.textContent = '✗ No photos found on this listing.'; return; }
+
+    const btn = document.getElementById('cp-util-dl-photos');
+    btn.disabled = true;
+    status.textContent = `Preparing ${photos.length} photo${photos.length > 1 ? 's' : ''}…`;
+
+    const propId = currentProperty?.id || 'property';
+
+    // iOS / Android: try Web Share API with File objects first
+    if (navigator.canShare) {
+      try {
+        status.textContent = 'Fetching photos for sharing…';
+        const files = [];
+        for (let i = 0; i < photos.length; i++) {
+          status.textContent = `Fetching ${i + 1} / ${photos.length}…`;
+          const blob = await fetchBlob(originalUrl(photos[i]));
+          files.push(new File([blob], `${propId}-photo-${i + 1}.jpg`, { type: 'image/jpeg' }));
+        }
+        if (navigator.canShare({ files })) {
+          await navigator.share({ files, title: currentProperty?.title || 'Property Photos' });
+          status.textContent = '✓ Share sheet opened — tap Save Image on each photo.';
+          btn.disabled = false;
+          return;
+        }
+      } catch (e) {
+        // Share was cancelled or failed — fall through to blob download
+      }
+    }
+
+    // Blob download fallback (Android Chrome / desktop)
+    let done = 0;
+    for (let i = 0; i < photos.length; i++) {
+      try {
+        status.textContent = `Downloading ${i + 1} / ${photos.length}…`;
+        const blob = await fetchBlob(originalUrl(photos[i]));
+        downloadBlob(blob, `${propId}-photo-${i + 1}.jpg`);
+        done++;
+        await new Promise(r => setTimeout(r, 450));
+      } catch (_) {
+        status.textContent = `Photo ${i + 1} failed — skipping…`;
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+    status.textContent = `✓ ${done} of ${photos.length} photo${photos.length > 1 ? 's' : ''} downloaded.`;
+    btn.disabled = false;
+  });
+
+  // ── Copy All Photo URLs ────────────────────────────────────
+  document.getElementById('cp-util-copy-urls').addEventListener('click', async () => {
+    const photos = (allPhotos || []).filter(u => u && !u.includes('placeholder'));
+    if (!photos.length) { status.textContent = '✗ No photos found.'; return; }
+    const text = photos.map(u => originalUrl(u)).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = `✓ ${photos.length} photo URL${photos.length > 1 ? 's' : ''} copied to clipboard.`;
+    } catch (_) {
+      status.textContent = '✗ Clipboard access denied. Try again.';
+    }
+  });
+
+  // ── Download Property Info Card (Canvas) ──────────────────
+  document.getElementById('cp-util-dl-card').addEventListener('click', async () => {
+    const p = currentProperty;
+    if (!p) { status.textContent = '✗ Property data not loaded yet.'; return; }
+
+    const btn = document.getElementById('cp-util-dl-card');
+    btn.disabled = true;
+    status.textContent = 'Generating property card…';
+
+    const W = 1200, H = 630;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    function drawCardContent() {
+      // Background gradient
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#0a1628');
+      bg.addColorStop(1, '#0d1f3c');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      // Left accent stripe
+      ctx.fillStyle = '#006aff';
+      ctx.fillRect(0, 0, 6, H);
+
+      // Brand label
+      ctx.fillStyle = '#006aff';
+      ctx.font = 'bold 16px Arial, sans-serif';
+      ctx.letterSpacing = '0.12em';
+      ctx.fillText('CHOICE PROPERTIES', 40, 50);
+      ctx.letterSpacing = '0';
+
+      // Price
+      const rent = p.monthly_rent != null ? `$${Number(p.monthly_rent).toLocaleString()}/mo` : 'Rent TBD';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 68px Arial, sans-serif';
+      ctx.fillText(rent, 40, 148);
+
+      // Title
+      const title = (p.title || 'Property Listing');
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '600 30px Arial, sans-serif';
+      ctx.fillText(title.length > 58 ? title.slice(0, 58) + '…' : title, 40, 204);
+
+      // Address
+      const unit = p.unit_number ? ` ${p.unit_number}` : '';
+      const addr = `${p.address}${unit}, ${p.city}, ${p.state}${p.zip ? ' ' + p.zip : ''}`;
+      ctx.fillStyle = '#64748b';
+      ctx.font = '400 20px Arial, sans-serif';
+      ctx.fillText(addr, 40, 244);
+
+      // Divider
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(40, 274); ctx.lineTo(W - 40, 274); ctx.stroke();
+
+      // Stats row
+      const stats = [];
+      if (p.bedrooms != null) stats.push({ label: 'Beds', value: p.bedrooms === 0 ? 'Studio' : String(p.bedrooms) });
+      if (p.bathrooms)        stats.push({ label: 'Baths', value: String(p.bathrooms) });
+      if (p.square_footage)   stats.push({ label: 'Sq Ft', value: Number(p.square_footage).toLocaleString() });
+      if (p.property_type)    stats.push({ label: 'Type', value: p.property_type.charAt(0).toUpperCase() + p.property_type.slice(1) });
+      if (p.pets_allowed != null) stats.push({ label: 'Pets', value: p.pets_allowed ? 'Allowed' : 'No Pets' });
+
+      stats.slice(0, 5).forEach((s, i) => {
+        const x = 40 + i * 222;
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = 'bold 28px Arial, sans-serif';
+        ctx.fillText(s.value, x, 330);
+        ctx.fillStyle = '#475569';
+        ctx.font = '400 14px Arial, sans-serif';
+        ctx.fillText(s.label, x, 354);
+      });
+
+      // Divider 2
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+      ctx.beginPath(); ctx.moveTo(40, 380); ctx.lineTo(W - 40, 380); ctx.stroke();
+
+      // Amenities row (up to 4)
+      const amenities = (p.amenities || []).slice(0, 4);
+      if (amenities.length) {
+        ctx.fillStyle = '#475569';
+        ctx.font = '700 12px Arial, sans-serif';
+        ctx.fillText('AMENITIES', 40, 412);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '400 18px Arial, sans-serif';
+        amenities.forEach((a, i) => {
+          ctx.fillText(`• ${a}`, 40 + i * 278, 440);
+        });
+      }
+
+      // Deposit / availability row
+      const meta = [];
+      if (p.security_deposit) meta.push(`Deposit: $${Number(p.security_deposit).toLocaleString()}`);
+      if (p.application_fee > 0) meta.push(`App Fee: $${Number(p.application_fee).toLocaleString()}`);
+      const availNow = !p.available_date || new Date(p.available_date) <= new Date();
+      meta.push(availNow ? 'Available Now' : `Avail: ${new Date((p.available_date || '') + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`);
+      ctx.fillStyle = '#64748b';
+      ctx.font = '400 16px Arial, sans-serif';
+      ctx.fillText(meta.join('   ·   '), 40, 492);
+
+      // Bottom bar
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      ctx.fillRect(0, H - 58, W, 58);
+      const siteUrl = (typeof CONFIG !== 'undefined' && CONFIG.SITE_URL) ? CONFIG.SITE_URL.replace(/^https?:\/\//, '') : 'choiceproperties.com';
+      ctx.fillStyle = '#334155';
+      ctx.font = '400 14px Arial, sans-serif';
+      ctx.fillText(`${siteUrl}  ·  ${p.id || ''}`, 40, H - 20);
+
+      // Property ID badge (top right)
+      if (p.id) {
+        ctx.fillStyle = 'rgba(0,106,255,0.15)';
+        const bw = 200, bh = 30;
+        const bx = W - bw - 36, by = 28;
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 6) : ctx.rect(bx, by, bw, bh);
+        ctx.fill();
+        ctx.fillStyle = '#60a5fa';
+        ctx.font = '600 13px Arial, sans-serif';
+        ctx.fillText(p.id, bx + 12, by + 20);
+      }
+    }
+
+    function finalizeCard() {
+      canvas.toBlob(blob => {
+        if (!blob) { status.textContent = '✗ Card generation failed.'; btn.disabled = false; return; }
+        downloadBlob(blob, `${p.id || 'property'}-info-card.png`);
+        status.textContent = '✓ Property info card saved.';
+        btn.disabled = false;
+      }, 'image/png');
+    }
+
+    // Try rendering main photo on the right half as background
+    const bgUrl = (allPhotos && allPhotos[0] && !allPhotos[0].includes('placeholder'))
+      ? CONFIG.img(allPhotos[0], 'og')
+      : null;
+
+    if (bgUrl) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        // Draw photo covering the right 50%
+        ctx.drawImage(img, W / 2, 0, W / 2, H);
+        // Gradient overlay so left text stays readable
+        const fade = ctx.createLinearGradient(W / 2, 0, W, 0);
+        fade.addColorStop(0,   'rgba(10,22,40,1)');
+        fade.addColorStop(0.35,'rgba(10,22,40,0.65)');
+        fade.addColorStop(1,   'rgba(10,22,40,0.18)');
+        ctx.fillStyle = fade;
+        ctx.fillRect(W / 2, 0, W / 2, H);
+        drawCardContent();
+        finalizeCard();
+      };
+      img.onerror = () => { drawCardContent(); finalizeCard(); };
+      img.src = bgUrl;
+    } else {
+      drawCardContent();
+      finalizeCard();
+    }
+  });
+
+})();
+
 
