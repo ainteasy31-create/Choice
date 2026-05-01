@@ -781,6 +781,33 @@
       loadApps();
     });
 
+    document.getElementById('btn-cleanup-drafts').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-cleanup-drafts');
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      try {
+        const { ok: pOk, json: pJson } = await S.callFn('/cleanup-expired-drafts', { dry_run: true });
+        if (!pOk) return;  // callFn already toasted the error
+        const count = pJson?.would_delete ?? 0;
+        if (count === 0) {
+          S.toast('No expired drafts found — everything is clean.', 'success', 4000);
+          return;
+        }
+        const confirmed = window.confirm(
+          `Found ${count} draft application${count !== 1 ? 's' : ''} older than 7 days.\n\nDelete them permanently?`
+        );
+        if (!confirmed) return;
+        btn.textContent = 'Deleting…';
+        const { ok: dOk, json: dJson } = await S.callFn('/cleanup-expired-drafts', {});
+        if (!dOk) return;
+        const deleted = dJson?.deleted ?? count;
+        S.toast(`Deleted ${deleted} expired draft${deleted !== 1 ? 's' : ''}.`, 'success', 5000);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🗑 Clean drafts';
+      }
+    });
+
     const okAuth = await S.requireAdmin();
     if(!okAuth) return;
 
