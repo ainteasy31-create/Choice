@@ -41,3 +41,6 @@
 .chip-amber{background:rgba(245,158,11,.18);color:#b45309}
 .chip-green{background:rgba(34,197,94,.15);color:#16a34a}
 .chip-grey{background:var(--surface-2);color:var(--muted)}
+.wm-card.wm-saved{border-color:rgba(34,197,94,.35)}
+.wm-saved-badge{display:inline-flex;align-items:center;gap:4px;font-size:.62rem;font-weight:700;color:#16a34a;background:rgba(34,197,94,.12);padding:2px 8px;border-radius:99px;margin-top:2px}
+.wm-saved-badge::before{content:'✓';font-size:.7rem}
