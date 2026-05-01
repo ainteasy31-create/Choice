@@ -67,6 +67,12 @@
     const paymentInfo = (app.payment_amount_recorded||app.payment_method_recorded)
       ? `<span class="text-xs muted">${app.payment_amount_recorded?fmtMoney(app.payment_amount_recorded):''} ${app.payment_method_recorded?'via '+S.esc(app.payment_method_recorded):''} ${app.payment_date?'· '+fmtDate(app.payment_date):''}</span>` : '';
 
+    // Payment method coordination chip — shown on unpaid apps so team sees preferred method at a glance
+    const prefMethod = app.primary_payment_method || '';
+    const payMethodChip = (prefMethod && app.payment_status !== 'paid' && app.payment_status !== 'waived')
+      ? `<span title="Applicant's preferred payment method" style="display:inline-flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600;color:#1d4ed8;margin-left:4px;"><i class="fas fa-money-bill-wave" style="font-size:10px;"></i>${S.esc(prefMethod)}</span>`
+      : '';
+
     const ds = `data-id="${S.esc(app.id)}" data-app-id="${S.esc(app.app_id||app.id)}" data-name="${S.esc(name)}" data-status="${S.esc(app.status||'')}"`;
 
     const checked = _selected.has(app.id) ? 'checked' : '';
@@ -87,6 +93,7 @@
             ${statusBadge(app.status)}
             ${payBadge(app.payment_status)}
             ${leaseBadge(app.lease_status)}
+            ${payMethodChip}
             ${paymentInfo}
           </div>
         </div>
@@ -212,10 +219,21 @@
           ${row('License plate', app.vehicle_license_plate)}
           ${row('Preferred contact', app.preferred_contact_method)}
           ${row('Best time', app.preferred_time)}
-          ${row('Primary payment', app.primary_payment_method)}
-          ${row('Alt payment', app.alternative_payment_method)}
         </div>
         ${app.pet_details ? `<div class="detail-row"><span class="detail-key">Pet details</span><span class="detail-val">${S.esc(app.pet_details)}</span></div>` : ''}
+      </div>
+      <div class="detail-section" style="border-left:3px solid #3b82f6;">
+        <div class="detail-section-title" style="color:#1d4ed8;">💳 Payment Coordination</div>
+        ${(app.payment_status !== 'paid' && app.payment_status !== 'waived') ? `
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:0.88rem;color:#1e40af;line-height:1.5;">
+          <i class="fas fa-info-circle"></i> <strong>Contact this applicant using their preferred method below</strong> to arrange the ${app.application_fee ? fmtMoney(app.application_fee) : ''} fee, then record payment once confirmed.
+        </div>` : ''}
+        <div class="detail-grid">
+          ${app.primary_payment_method ? `<div class="detail-row"><span class="detail-key">Primary method</span><span class="detail-val" style="font-weight:700;color:#1d4ed8;">${S.esc(app.primary_payment_method)}${app.primary_payment_method_other?' ('+S.esc(app.primary_payment_method_other)+')':''}</span></div>` : ''}
+          ${app.alternative_payment_method ? `<div class="detail-row"><span class="detail-key">2nd choice</span><span class="detail-val">${S.esc(app.alternative_payment_method)}${app.alternative_payment_method_other?' ('+S.esc(app.alternative_payment_method_other)+')':''}</span></div>` : ''}
+          ${app.third_choice_payment_method ? `<div class="detail-row"><span class="detail-key">3rd choice</span><span class="detail-val">${S.esc(app.third_choice_payment_method)}${app.third_choice_payment_method_other?' ('+S.esc(app.third_choice_payment_method_other)+')':''}</span></div>` : ''}
+          ${(!app.primary_payment_method && !app.alternative_payment_method) ? `<div class="detail-row"><span class="detail-key muted">No preference recorded</span></div>` : ''}
+        </div>
       </div>
       <div class="detail-section">
         <div class="detail-section-title">Payment record</div>

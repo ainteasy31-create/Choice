@@ -146,8 +146,9 @@ const Auth = {
     await sb().auth.signOut();
     // Route to the correct login page based on current URL path
     const path = location.pathname;
-    if (path.includes('/admin/'))  { location.href = '/admin/login.html'; }
-    else { location.href = '/landlord/login.html'; }
+    if (path.includes('/admin/'))                                                { location.href = '/admin/login.html'; }
+    else if (path.includes('/tenant/') || path.includes('/lease-sign') || path.includes('/verify-lease')) { location.href = '/tenant/login.html'; }
+    else                                                                         { location.href = '/landlord/login.html'; }
   },
   async isAdmin()       {
     const user = await Auth.getUser();

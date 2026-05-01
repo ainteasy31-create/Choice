@@ -1262,6 +1262,9 @@ document.addEventListener('DOMContentLoaded',async()=>{
   if(!activeSession){
     const loginUrl = new URL('/tenant/login.html', window.location.origin);
     if(requestedAppId) loginUrl.searchParams.set('app_id', requestedAppId);
+    // Distinguish expired sessions from fresh visits so login page can show
+    // a helpful "your session expired" message instead of a blank form.
+    loginUrl.searchParams.set('reason', 'session_expired');
     location.href = loginUrl.pathname + loginUrl.search;
     return;
   }

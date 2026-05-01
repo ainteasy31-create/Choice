@@ -175,11 +175,24 @@ Deno.serve(async (req: Request) => {
     return jsonErr(400, 'You must accept the Terms & Privacy Policy to submit.');
   }
 
-  // ── Server-side age 18+ check ─────────────────────────────────────────────
+  // ── Server-side age 18+ check — primary applicant ────────────────────────
   const age = ageInYears(dob);
   if (age === null) return jsonErr(400, 'A valid date of birth is required.');
   if (age < 18)     return jsonErr(400, 'Applicants must be 18 years of age or older.');
   if (age > 120)    return jsonErr(400, 'Please enter a valid date of birth.');
+
+  // ── Server-side age 18+ check — co-applicant (if present) ────────────────
+  const hasCoApplicant = fBool(fields['Has Co-Applicant']) === true;
+  const coDob = fv(fields['Co-Applicant DOB']);
+  if (hasCoApplicant && coDob) {
+    const coAge = ageInYears(coDob);
+    if (coAge !== null && coAge < 18) {
+      return jsonErr(400, 'Co-applicant must be 18 years of age or older.');
+    }
+    if (coAge !== null && coAge > 120) {
+      return jsonErr(400, 'Please enter a valid date of birth for the co-applicant.');
+    }
+  }
 
   // ── Property is required, fee/rent/deposit must come from DB, never client ─
   const submittedPropertyId = fv(fields['Property ID']);
@@ -324,6 +337,7 @@ Deno.serve(async (req: Request) => {
     co_applicant_last_name: fv(fields['Co-Applicant Last Name']) || null,
     co_applicant_email: fv(fields['Co-Applicant Email']) || null,
     co_applicant_phone: fv(fields['Co-Applicant Phone']) || null,
+    co_applicant_dob:   coDob || null,
     // Server-authoritative fee/rent/deposit (overrides anything from client)
     application_fee: enforcedFee,
     monthly_rent: enforcedRent,

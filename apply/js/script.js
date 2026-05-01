@@ -267,6 +267,10 @@ class RentalApplication {
     }
 
     setupDevTools() {
+        const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        const isDevParam  = new URLSearchParams(window.location.search).get('_dev') === '1';
+        if (!isLocalhost && !isDevParam) return;
+
         if (document.getElementById('devTestFillBtn')) return;
 
         // "Fill Current Step" button
@@ -281,7 +285,6 @@ class RentalApplication {
         button.style.cssText = 'position:fixed;bottom:70px;right:16px;z-index:99998;background:#f39c12;color:#fff;border:none;border-radius:24px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,0.25)';
         button.addEventListener('click', () => this._devFillTestData());
         document.body.appendChild(button);
-
     }
 
 
@@ -296,7 +299,18 @@ class RentalApplication {
         try {
             const p      = new URLSearchParams(window.location.search);
             const rawFee = p.get('fee');
-            if (rawFee === null) return; // param absent — keep default of 50
+            if (rawFee === null) {
+                // No fee param — check if we also have no property context (direct /apply/ visit)
+                const hiddenPropId = document.getElementById('hiddenPropertyId');
+                if (!hiddenPropId || !hiddenPropId.value.trim()) {
+                    // No property context at all — show "To be confirmed" instead of $50
+                    const feeTitle  = document.querySelector('[data-i18n="feeTitle"]');
+                    const feeAmount = document.querySelector('.fee-amount');
+                    if (feeTitle)  feeTitle.textContent  = 'Application Fee: To be confirmed';
+                    if (feeAmount) { feeAmount.textContent = 'TBD'; feeAmount.style.display = ''; }
+                }
+                return;
+            }
             const fee = parseFloat(rawFee);
             if (isNaN(fee)) return;      // unparseable — keep default
             this.state.applicationFee = fee;
@@ -1289,6 +1303,34 @@ class RentalApplication {
             }
         });
         if (stepNumber === 1) {
+            // Block progression if no property ID — visitor opened /apply/ directly
+            const hiddenPropId = document.getElementById('hiddenPropertyId');
+            if (!hiddenPropId || !hiddenPropId.value.trim()) {
+                const existingErr = document.getElementById('noPropIdError');
+                if (!existingErr) {
+                    const errBanner = document.createElement('div');
+                    errBanner.id = 'noPropIdError';
+                    errBanner.className = 'no-context-banner';
+                    errBanner.setAttribute('role', 'alert');
+                    const listingUrl = (window.CP_CONFIG && window.CP_CONFIG.LISTING_SITE_URL
+                        ? window.CP_CONFIG.LISTING_SITE_URL
+                        : 'https://choice-properties-site.pages.dev') + '/listings.html';
+                    errBanner.innerHTML = '<div class="ncb-inner" style="border:2px solid #e65100">' +
+                        '<div class="ncb-icon"><i class="fas fa-exclamation-triangle" style="color:#e65100"></i></div>' +
+                        '<div class="ncb-text">' +
+                        '<div class="ncb-title" style="color:#e65100">No property selected</div>' +
+                        '<div class="ncb-sub">Please choose a property from our listings before applying. Applications must be linked to an available property.</div>' +
+                        '<a href="' + listingUrl + '" class="ncb-browse-link"><i class="fas fa-search"></i> Browse Available Listings</a>' +
+                        '</div></div>';
+                    const progressContainer = document.querySelector('.progress-container');
+                    if (progressContainer && progressContainer.parentNode) {
+                        progressContainer.parentNode.insertBefore(errBanner, progressContainer);
+                    }
+                    errBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                isStepValid = false;
+            }
+
             const hasCoApplicant = document.getElementById('hasCoApplicant');
             const coSection = document.getElementById('coApplicantSection');
             if (hasCoApplicant && hasCoApplicant.checked && coSection && coSection.style.display !== 'none') {
@@ -3541,6 +3583,20 @@ class RentalApplication {
         if (thirdPayment && thirdPayment.trim()) {
             paymentPrefs += `, ${thirdPayment}`;
         }
+
+        // Build payment method chips for prominent display
+        const paymentMethods = [primaryPayment, secondaryPayment, thirdPayment].filter(Boolean);
+        const paymentChipsHtml = paymentMethods.length
+            ? paymentMethods.map((m, i) => {
+                const label = i === 0 ? '<strong>' + this._escHtml(m) + '</strong>' : this._escHtml(m);
+                const badge = i === 0 ? ' <span style="font-size:10px;background:#1e3a8a;color:#fff;border-radius:4px;padding:1px 5px;vertical-align:middle;margin-left:4px;">PRIMARY</span>' : '';
+                return '<span class="payment-method-chip" style="display:inline-flex;align-items:center;background:#f0f4ff;border:1.5px solid #c7d4f5;border-radius:20px;padding:5px 14px;margin:3px 4px 3px 0;font-size:0.92rem;color:#1e3a8a;">' + label + badge + '</span>';
+              }).join('')
+            : '<span style="color:#64748b;">' + this._escHtml(t.notSelected) + '</span>';
+
+        // Primary method for the coordination callout
+        const primaryMethodName = primaryPayment ? primaryPayment : 'your preferred method';
+        const feeAmt = this.state.applicationFee > 0 ? '$' + this.state.applicationFee : 'the application fee';
         
         // Property context line for success card (if arrived from listing site)
         const ctx = this.state.propertyContext;
@@ -3611,8 +3667,16 @@ class RentalApplication {
                 </div>
 
                 <div class="preference-summary">
-                    <h4><i class="fas fa-clipboard-list"></i> ${t.yourPreferences}</h4>
-                    <div class="preference-grid">
+                    <h4><i class="fas fa-credit-card"></i> ${t.yourPreferences}</h4>
+                    <div style="margin-bottom:10px;padding:12px 14px;background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px;font-size:0.9rem;color:#92400e;line-height:1.5;">
+                        <i class="fas fa-phone-alt" style="margin-right:6px;"></i>
+                        <strong>Our team will contact you via ${primaryMethodName}</strong> to arrange your ${feeAmt} application fee. Please make sure your account is ready to receive payment.
+                    </div>
+                    <div style="margin-bottom:8px;">
+                        <div style="font-size:0.8rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">${t.paymentPref}</div>
+                        ${this._safeHtml(paymentChipsHtml)}
+                    </div>
+                    <div class="preference-grid" style="margin-top:10px;">
                         <div class="pref-item">
                             <span class="pref-label">${t.contactMethod}</span>
                             <span class="pref-value">${contactMethodsDisplay}</span>
@@ -3620,10 +3684,6 @@ class RentalApplication {
                         <div class="pref-item">
                             <span class="pref-label">${t.bestTimes}</span>
                             <span class="pref-value">${contactTimesDisplay}</span>
-                        </div>
-                        <div class="pref-item">
-                            <span class="pref-label">${t.paymentPref}</span>
-                            <span class="pref-value">${paymentPrefs}</span>
                         </div>
                     </div>
                     <p class="pref-note">${t.preferenceNote}</p>
@@ -3707,6 +3767,7 @@ class RentalApplication {
                 'Has Co-Applicant', 'Additional Person Role',
                 'Co-Applicant First Name', 'Co-Applicant Last Name',
                 'Co-Applicant Email', 'Co-Applicant Phone',
+                'Co-Applicant DOB',
                 'Co-Applicant SSN',
                 'Co-Applicant Employer', 'Co-Applicant Job Title',
                 'Co-Applicant Monthly Income', 'Co-Applicant Employment Duration',

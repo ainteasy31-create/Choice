@@ -302,7 +302,19 @@ export function adminNotificationHtml(
   <div class="status-line status-pending">&#x26A1; &nbsp; Action Required — Contact Applicant Within 24 Hours</div>
   <div class="email-body">
     <p class="greeting">New Application Alert,</p>
-    <p class="intro-text">A new rental application has been submitted and requires your attention. The applicant is awaiting contact to arrange payment of the application fee. Please reach out within 24 hours.</p>
+    <p class="intro-text">A new rental application has been submitted. Contact the applicant to arrange payment of the application fee using their preferred method below, then mark as paid once confirmed.</p>
+
+    <div class="section">
+      <div class="section-label" style="color:#1d4ed8;">💳 Payment Coordination — Act First</div>
+      <div class="callout amber">
+        <h4>Collect ${feeDisplay} Application Fee via Applicant's Preferred Method</h4>
+        ${payMethods.length
+          ? `<p style="margin-bottom:10px;"><strong>Contact ${firstName} using:</strong></p>
+             <div style="margin-bottom:8px;">${payMethods.map((m, i) => `<span class="pay-pill" style="${i===0?'background:#1e3a8a;color:#fff;font-weight:700;':''}">${i===0?'★ ':''} ${m}</span>`).join('')}</div>
+             <p style="font-size:12px;color:#6b7280;margin-top:8px;">Once payment is received, open the application in the admin panel and click "Mark paid".</p>`
+          : '<p>No payment method preference specified — contact applicant directly to arrange.</p>'}
+      </div>
+    </div>
 
     <div class="section">
       <div class="section-label">Applicant Overview</div>
@@ -316,14 +328,6 @@ export function adminNotificationHtml(
         <tr><td>Contact Preference</td><td>${fields?.['Preferred Contact Method'] || 'Not specified'}</td></tr>
         <tr><td>Best Time to Reach</td><td>${[fields?.['Preferred Time'], fields?.['Preferred Time Specific']].filter(Boolean).join(' — ') || 'Any'}</td></tr>
       </table>
-    </div>
-
-    <div class="section">
-      <div class="section-label">Payment Preferences</div>
-      <div class="callout amber">
-        <h4>Contact Applicant to Collect ${feeDisplay} Application Fee</h4>
-        ${payMethods.length ? `<p style="margin-bottom:12px;">Applicant's preferred payment methods:</p><div>${payMethods.map(m => `<span class="pay-pill">${m}</span>`).join('')}</div>` : '<p>No payment method preference specified — contact applicant to arrange.</p>'}
-      </div>
     </div>
 
     ${fields?.['Employment Status'] ? `

@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
         email,
         data: progressData ?? {},
         property_fingerprint: propertyFingerprint || null,
-        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       }, { onConflict: 'token' });
 
     if (upsertErr) {

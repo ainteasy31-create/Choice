@@ -155,7 +155,7 @@ async function convertHeicIfNeeded(file) {
   const isHeic = /^image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
   if (!isHeic) return file;
   if (typeof window.heic2any !== 'function') {
-    throw new Error('HEIC converter still loading — try again in a moment.');
+    throw new Error('iPhone photo (HEIC) converter is still loading. Please wait a moment and try selecting your photo again.');
   }
   const out = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
   const blob = Array.isArray(out) ? out[0] : out;

@@ -291,6 +291,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       fe.classList.add('visible');
     }
   }
+
+  // Show a friendly banner when the tenant was redirected here because their session expired
+  const reason = params.get('reason') || '';
+  if (reason === 'session_expired') {
+    const fe = document.getElementById('field-error');
+    if (fe && !linkError) {
+      fe.classList.remove('error');
+      fe.classList.add('info', 'visible');
+      fe.innerHTML = '<strong>Your session has expired.</strong> Enter your email below and we\'ll send you a new sign-in link instantly.';
+    }
+  }
+
   _pendingPortalAppId = appId;
   if (appId) sessionStorage.setItem('pendingPortalAppId', appId);
   if (emailParam) document.getElementById('email').value = emailParam;
