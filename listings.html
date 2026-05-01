@@ -55,34 +55,6 @@
     .property-grid{display:grid;grid-template-columns:1fr;gap:16px}
     .property-card{overflow:hidden;background:#fff;border-radius:18px}
     .property-card-img{position:relative;aspect-ratio:4/3;width:100%;overflow:hidden;background:linear-gradient(145deg,#c8d8e8 0%,#b8cad8 50%,#a8bac8 100%)}
-    #cpbe-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8998;backdrop-filter:blur(2px)}
-    #cpbe-overlay.cpbe-open{display:block}
-    #cpbe-panel{display:none;position:fixed;bottom:0;left:0;right:0;z-index:8999;background:#0a1628;border-top:1px solid rgba(255,255,255,.1);border-radius:20px 20px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,.6);font-family:"Inter",-apple-system,sans-serif;max-width:540px;margin:0 auto;max-height:88vh;display:none;flex-direction:column}
-    #cpbe-panel.cpbe-open{display:flex}
-    #cpbe-panel .cpbe-handle{width:40px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 16px;flex-shrink:0}
-    #cpbe-panel .cpbe-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0}
-    #cpbe-panel .cpbe-title{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#64748b}
-    #cpbe-panel .cpbe-actions{display:flex;gap:6px}
-    #cpbe-panel .cpbe-sel-btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#94a3b8;font-size:.72rem;font-weight:600;padding:4px 10px;cursor:pointer}
-    #cpbe-panel .cpbe-sel-btn:hover{background:rgba(255,255,255,.12)}
-    #cpbe-panel .cpbe-list{overflow-y:auto;flex:1;min-height:0;border-radius:10px;border:1px solid rgba(255,255,255,.07);margin-bottom:12px}
-    #cpbe-panel .cpbe-loading,#cpbe-panel .cpbe-empty{padding:24px;text-align:center;color:#64748b;font-size:.85rem;line-height:1.6}
-    #cpbe-panel .cpbe-item{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background 120ms}
-    #cpbe-panel .cpbe-item:last-child{border-bottom:none}
-    #cpbe-panel .cpbe-item:hover{background:rgba(255,255,255,.04)}
-    #cpbe-panel .cpbe-item--checked{background:rgba(0,106,255,.07)}
-    #cpbe-panel .cpbe-check{width:16px;height:16px;accent-color:#006aff;cursor:pointer;flex-shrink:0}
-    #cpbe-panel .cpbe-thumb{width:48px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;background:#1e2d42}
-    #cpbe-panel .cpbe-item-info{flex:1;min-width:0}
-    #cpbe-panel .cpbe-item-title{font-size:.82rem;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #cpbe-panel .cpbe-item-meta{font-size:.72rem;color:#64748b;margin-top:1px}
-    #cpbe-panel .cpbe-export-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;flex-shrink:0}
-    #cpbe-panel .cpbe-export-btn{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 8px;color:#e2e8f0;font-size:.82rem;font-weight:600;cursor:pointer;transition:background 150ms}
-    #cpbe-panel .cpbe-export-btn:hover{background:rgba(255,255,255,.1)}
-    #cpbe-panel .cpbe-export-btn:disabled{opacity:.45;cursor:not-allowed}
-    #cpbe-panel .cpbe-export-btn i{color:#006aff;font-size:.95rem}
-    #cpbe-panel .cpbe-status{font-size:.77rem;color:#60a5fa;min-height:16px;text-align:center;margin-bottom:6px;flex-shrink:0}
-    #cpbe-panel .cpbe-close{background:none;border:none;color:#475569;font-size:.78rem;cursor:pointer;padding:6px;flex-shrink:0}
   </style>
 <script defer src="/config.js?v=__BUILD_VERSION__"></script>
 <script defer src="/js/supabase.min.js"></script>
@@ -377,27 +349,6 @@
 <button class="scroll-top" id="scrollTopBtn" aria-label="Back to top"><i class="fas fa-chevron-up"></i></button>
 
 <!-- Leaflet loaded lazily when user switches to Map View -->
-
-<div id="cpbe-overlay" aria-hidden="true"></div>
-<div id="cpbe-panel" role="dialog" aria-modal="true" aria-label="Export Tools" aria-hidden="true">
-  <div class="cpbe-handle"></div>
-  <div class="cpbe-header">
-    <div class="cpbe-title">Saved Properties Export</div>
-    <div class="cpbe-actions">
-      <button class="cpbe-sel-btn" id="cpbe-sel-all">All</button>
-      <button class="cpbe-sel-btn" id="cpbe-sel-none">None</button>
-    </div>
-  </div>
-  <div class="cpbe-list" id="cpbe-list">
-    <div class="cpbe-loading"><i class="fas fa-circle-notch fa-spin"></i> Loading saved properties…</div>
-  </div>
-  <div class="cpbe-export-row">
-    <button class="cpbe-export-btn" id="cpbe-btn-cards"><i class="fas fa-address-card"></i><span>Info Cards</span></button>
-    <button class="cpbe-export-btn" id="cpbe-btn-pdf"><i class="fas fa-file-pdf"></i><span>PDF Pack</span></button>
-  </div>
-  <div class="cpbe-status" id="cpbe-status"></div>
-  <button class="cpbe-close" id="cpbe-close">Close</button>
-</div>
 
 <script type="module" src="/js/listings.js?v=__BUILD_VERSION__"></script>
 </body>
