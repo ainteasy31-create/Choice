@@ -781,6 +781,37 @@
       loadApps();
     });
 
+    document.getElementById('btn-nudge-drafts').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-nudge-drafts');
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      try {
+        const { ok: pOk, json: pJson } = await S.callFn('/nudge-expiring-drafts', { dry_run: true });
+        if (!pOk) return;
+        const count = pJson?.would_nudge ?? 0;
+        if (count === 0) {
+          S.toast('No drafts in the expiry window right now — nothing to nudge.', 'success', 4000);
+          return;
+        }
+        const confirmed = window.confirm(
+          `Found ${count} draft${count !== 1 ? 's' : ''} expiring within 48 hours that haven't been emailed yet.\n\nSend reminder email${count !== 1 ? 's' : ''} now?`
+        );
+        if (!confirmed) return;
+        btn.textContent = 'Sending…';
+        const { ok: dOk, json: dJson } = await S.callFn('/nudge-expiring-drafts', {});
+        if (!dOk) return;
+        const nudged = dJson?.nudged ?? count;
+        const failed = dJson?.failed ?? 0;
+        const msg = failed > 0
+          ? `Sent ${nudged} nudge${nudged !== 1 ? 's' : ''}, ${failed} failed — check console.`
+          : `Sent ${nudged} expiry reminder${nudged !== 1 ? 's' : ''} successfully.`;
+        S.toast(msg, failed > 0 ? 'warn' : 'success', 5000);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📧 Nudge expiring';
+      }
+    });
+
     document.getElementById('btn-cleanup-drafts').addEventListener('click', async () => {
       const btn = document.getElementById('btn-cleanup-drafts');
       btn.disabled = true;
