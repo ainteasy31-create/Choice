@@ -740,3 +740,419 @@ async function toggleSave(id, btn) {
 }
 
 /* ─── Mobile Drawer ─── */
+
+/* ═══════════════════════════════════════════════════════════
+   BULK EXPORT — Hidden feature (listings page)
+   Trigger: type "cpd" anywhere on the listings page
+   ═══════════════════════════════════════════════════════════ */
+(function () {
+
+  const panelEl   = document.getElementById('cpbe-panel');
+  const overlayEl = document.getElementById('cpbe-overlay');
+  const listEl    = document.getElementById('cpbe-list');
+  const statusEl  = document.getElementById('cpbe-status');
+
+  let propData   = [];
+  let checkedIds = new Set();
+
+  // ── Open / Close ───────────────────────────────────────────
+  function openPanel() {
+    panelEl.classList.add('cpbe-open');
+    overlayEl.classList.add('cpbe-open');
+    panelEl.setAttribute('aria-hidden', 'false');
+    overlayEl.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    statusEl.textContent = '';
+    loadSavedProperties();
+  }
+  function closePanel() {
+    panelEl.classList.remove('cpbe-open');
+    overlayEl.classList.remove('cpbe-open');
+    panelEl.setAttribute('aria-hidden', 'true');
+    overlayEl.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('cpbe-close').addEventListener('click', closePanel);
+  overlayEl.addEventListener('click', closePanel);
+  document.getElementById('cpbe-sel-all').addEventListener('click', () => {
+    checkedIds = new Set(propData.map(p => p.id));
+    renderChecklist();
+  });
+  document.getElementById('cpbe-sel-none').addEventListener('click', () => {
+    checkedIds.clear();
+    renderChecklist();
+  });
+
+  // ── Desktop trigger: type "cpd" ───────────────────────────
+  let _seq = '';
+  document.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+    _seq = (_seq + e.key.toLowerCase()).slice(-3);
+    if (_seq === 'cpd') { _seq = ''; openPanel(); }
+  });
+
+  // ── Load saved properties from Supabase ───────────────────
+  async function loadSavedProperties() {
+    listEl.innerHTML = '<div class="cpbe-loading"><i class="fas fa-circle-notch fa-spin"></i> Loading saved properties…</div>';
+    propData = [];
+
+    let ids = [];
+    try { ids = JSON.parse(localStorage.getItem('cp_saved') || '[]'); } catch (_) { ids = []; }
+    try {
+      const serverIds = await window.CP?.SavedProperties?.getIds?.();
+      if (serverIds && serverIds.size > 0) ids = [...serverIds];
+    } catch (_) {}
+
+    if (!ids.length) {
+      listEl.innerHTML = '<div class="cpbe-empty">No saved properties found.<br><small>Tap the heart on any listing to save it.</small></div>';
+      return;
+    }
+
+    try {
+      const client = window.CP?.sb?.();
+      if (!client) throw new Error('Supabase not ready — try refreshing.');
+      const { data, error } = await client
+        .from('properties')
+        .select('id, title, address, unit_number, city, state, zip, monthly_rent, bedrooms, bathrooms, square_footage, property_type, pets_allowed, amenities, security_deposit, available_date, property_photos(url, display_order)')
+        .in('id', ids.slice(0, 20));
+      if (error) throw error;
+      propData = (data || []).map(p => {
+        const sorted = (p.property_photos || []).slice().sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+        p.photo_urls = sorted.map(ph => ph.url).filter(Boolean);
+        return p;
+      });
+    } catch (e) {
+      listEl.innerHTML = `<div class="cpbe-empty">Could not load properties.<br><small>${e.message}</small></div>`;
+      return;
+    }
+
+    if (!propData.length) {
+      listEl.innerHTML = '<div class="cpbe-empty">No matching properties found.</div>';
+      return;
+    }
+
+    checkedIds = new Set(propData.map(p => p.id));
+    renderChecklist();
+  }
+
+  // ── Render checklist ───────────────────────────────────────
+  function renderChecklist() {
+    const _esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    listEl.innerHTML = propData.map(p => {
+      const thumb   = p.photo_urls?.[0] ? CONFIG.img(p.photo_urls[0], 'thumb') : '/assets/placeholder-property.jpg';
+      const price   = p.monthly_rent != null ? `$${Number(p.monthly_rent).toLocaleString()}/mo` : 'TBD';
+      const beds    = p.bedrooms === 0 ? 'Studio' : (p.bedrooms != null ? `${p.bedrooms}bd` : '');
+      const checked = checkedIds.has(p.id) ? 'checked' : '';
+      return `
+        <label class="cpbe-item${checkedIds.has(p.id) ? ' cpbe-item--checked' : ''}" data-id="${_esc(p.id)}">
+          <input type="checkbox" class="cpbe-check" value="${_esc(p.id)}" ${checked}>
+          <img class="cpbe-thumb" src="${_esc(thumb)}" alt="" loading="lazy">
+          <div class="cpbe-item-info">
+            <div class="cpbe-item-title">${_esc(p.title || p.address)}</div>
+            <div class="cpbe-item-meta">${_esc(price)}${beds ? '  ·  ' + beds : ''}  ·  ${_esc(p.city)}, ${_esc(p.state)}</div>
+          </div>
+        </label>`;
+    }).join('');
+
+    listEl.querySelectorAll('.cpbe-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) checkedIds.add(cb.value); else checkedIds.delete(cb.value);
+        cb.closest('.cpbe-item').classList.toggle('cpbe-item--checked', cb.checked);
+      });
+    });
+  }
+
+  // ── Shared helpers ─────────────────────────────────────────
+  function originalUrl(url) {
+    if (!url || typeof CONFIG === 'undefined' || !CONFIG.IMAGEKIT_URL) return url;
+    return url.replace(/\/tr:[^/]+\//, '/');
+  }
+  async function fetchBlob(url) {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.blob();
+  }
+  function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) {} }, 1500);
+  }
+  async function urlToDataUrl(url) {
+    try {
+      const res  = await fetch(url, { mode: 'cors' });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise(res2 => {
+        const fr = new FileReader();
+        fr.onload  = () => res2(fr.result);
+        fr.onerror = () => res2(null);
+        fr.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  }
+
+  // ── Draw single info card → blob ──────────────────────────
+  function drawCardBlob(p) {
+    return new Promise(async (resolve, reject) => {
+      const W = 1200, H = 630;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      function drawContent() {
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0a1628'); bg.addColorStop(1, '#0d1f3c');
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#006aff'; ctx.fillRect(0, 0, 6, H);
+        ctx.fillStyle = '#006aff'; ctx.font = 'bold 16px Arial,sans-serif';
+        ctx.fillText('CHOICE PROPERTIES', 40, 50);
+        const rent = p.monthly_rent != null ? `$${Number(p.monthly_rent).toLocaleString()}/mo` : 'Rent TBD';
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 68px Arial,sans-serif'; ctx.fillText(rent, 40, 148);
+        const title = p.title || 'Property Listing';
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '600 30px Arial,sans-serif';
+        ctx.fillText(title.length > 58 ? title.slice(0, 58) + '…' : title, 40, 204);
+        const unit = p.unit_number ? ` ${p.unit_number}` : '';
+        const addr = `${p.address}${unit}, ${p.city}, ${p.state}${p.zip ? ' ' + p.zip : ''}`;
+        ctx.fillStyle = '#64748b'; ctx.font = '400 20px Arial,sans-serif'; ctx.fillText(addr, 40, 244);
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(40, 274); ctx.lineTo(W - 40, 274); ctx.stroke();
+        const stats = [];
+        if (p.bedrooms != null) stats.push({ label: 'Beds',  value: p.bedrooms === 0 ? 'Studio' : String(p.bedrooms) });
+        if (p.bathrooms)        stats.push({ label: 'Baths', value: String(p.bathrooms) });
+        if (p.square_footage)   stats.push({ label: 'Sq Ft', value: Number(p.square_footage).toLocaleString() });
+        if (p.property_type)    stats.push({ label: 'Type',  value: p.property_type.charAt(0).toUpperCase() + p.property_type.slice(1) });
+        stats.slice(0, 5).forEach((s, i) => {
+          const x = 40 + i * 222;
+          ctx.fillStyle = '#f1f5f9'; ctx.font = 'bold 28px Arial,sans-serif'; ctx.fillText(s.value, x, 330);
+          ctx.fillStyle = '#475569'; ctx.font = '400 14px Arial,sans-serif';  ctx.fillText(s.label, x, 354);
+        });
+        ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+        ctx.beginPath(); ctx.moveTo(40, 380); ctx.lineTo(W - 40, 380); ctx.stroke();
+        const amenities = (p.amenities || []).slice(0, 4);
+        if (amenities.length) {
+          ctx.fillStyle = '#475569'; ctx.font = '700 12px Arial,sans-serif'; ctx.fillText('AMENITIES', 40, 412);
+          ctx.fillStyle = '#94a3b8'; ctx.font = '400 18px Arial,sans-serif';
+          amenities.forEach((a, i) => ctx.fillText(`• ${a}`, 40 + i * 278, 440));
+        }
+        const availNow = !p.available_date || new Date(p.available_date) <= new Date();
+        const meta = [];
+        if (p.security_deposit) meta.push(`Deposit: $${Number(p.security_deposit).toLocaleString()}`);
+        meta.push(availNow ? 'Available Now' : `Avail: ${new Date((p.available_date || '') + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`);
+        ctx.fillStyle = '#64748b'; ctx.font = '400 16px Arial,sans-serif'; ctx.fillText(meta.join('   ·   '), 40, 492);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(0, H - 58, W, 58);
+        const siteUrl = (typeof CONFIG !== 'undefined' && CONFIG.SITE_URL) ? CONFIG.SITE_URL.replace(/^https?:\/\//, '') : 'choiceproperties.com';
+        ctx.fillStyle = '#334155'; ctx.font = '400 14px Arial,sans-serif';
+        ctx.fillText(`${siteUrl}  ·  ${p.id || ''}`, 40, H - 20);
+        if (p.id) {
+          ctx.fillStyle = 'rgba(0,106,255,0.15)';
+          const bw = 200, bh = 30, bx = W - bw - 36, by = 28;
+          ctx.fillRect(bx, by, bw, bh);
+          ctx.fillStyle = '#60a5fa'; ctx.font = '600 13px Arial,sans-serif'; ctx.fillText(p.id, bx + 12, by + 20);
+        }
+      }
+
+      function finish() {
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/png');
+      }
+
+      const bgUrl = p.photo_urls?.[0] && !p.photo_urls[0].includes('placeholder')
+        ? CONFIG.img(p.photo_urls[0], 'og') : null;
+
+      if (bgUrl) {
+        const img = new Image(); img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          ctx.drawImage(img, W / 2, 0, W / 2, H);
+          const fade = ctx.createLinearGradient(W / 2, 0, W, 0);
+          fade.addColorStop(0, 'rgba(10,22,40,1)'); fade.addColorStop(0.35, 'rgba(10,22,40,0.65)'); fade.addColorStop(1, 'rgba(10,22,40,0.18)');
+          ctx.fillStyle = fade; ctx.fillRect(W / 2, 0, W / 2, H);
+          drawContent(); finish();
+        };
+        img.onerror = () => { drawContent(); finish(); };
+        img.src = bgUrl;
+      } else {
+        drawContent(); finish();
+      }
+    });
+  }
+
+  // ── Export: Info Cards (one PNG per property) ─────────────
+  document.getElementById('cpbe-btn-cards').addEventListener('click', async () => {
+    const selected = propData.filter(p => checkedIds.has(p.id));
+    if (!selected.length) { statusEl.textContent = '✗ Select at least one property.'; return; }
+    const btn = document.getElementById('cpbe-btn-cards');
+    btn.disabled = true;
+    let done = 0;
+    for (const p of selected) {
+      statusEl.textContent = `Generating card ${done + 1} of ${selected.length}…`;
+      try {
+        const blob = await drawCardBlob(p);
+        downloadBlob(blob, `${p.id}-info-card.png`);
+        done++;
+        await new Promise(r => setTimeout(r, 500));
+      } catch (_) {
+        statusEl.textContent = `Card for "${p.title || p.id}" failed — skipping…`;
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+    statusEl.textContent = `✓ ${done} info card${done !== 1 ? 's' : ''} downloaded.`;
+    btn.disabled = false;
+  });
+
+  // ── Export: PDF Pack (all selected → one PDF) ─────────────
+  document.getElementById('cpbe-btn-pdf').addEventListener('click', async () => {
+    const selected = propData.filter(p => checkedIds.has(p.id));
+    if (!selected.length) { statusEl.textContent = '✗ Select at least one property.'; return; }
+    const btn = document.getElementById('cpbe-btn-pdf');
+    btn.disabled = true;
+    statusEl.textContent = 'Loading PDF engine…';
+
+    if (!window.jspdf) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.crossOrigin = 'anonymous';
+        s.onload  = resolve;
+        s.onerror = () => reject(new Error('Failed to load PDF engine'));
+        document.head.appendChild(s);
+      });
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const PW = 210, PH = 297, MAR = 14, CW = PW - MAR * 2;
+    const C_DARK  = [10, 22, 40],  C_BLUE  = [0, 106, 255];
+    const C_TEXT  = [30, 41, 59],  C_MUTED = [100, 116, 139];
+    const C_LIGHT = [241, 245, 249], C_WHITE = [255, 255, 255];
+
+    const siteUrl = (typeof CONFIG !== 'undefined' && CONFIG.SITE_URL)
+      ? CONFIG.SITE_URL.replace(/^https?:\/\//, '') : 'choiceproperties.com';
+
+    function hRule(y) {
+      doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.25);
+      doc.line(MAR, y, PW - MAR, y);
+    }
+    function sectionHead(label, y) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_BLUE);
+      doc.text(label.toUpperCase(), MAR, y); return y + 5;
+    }
+    function kvRow(key, val, y) {
+      if (!val) return y;
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_MUTED); doc.text(key, MAR, y);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_TEXT);
+      const lines = doc.splitTextToSize(String(val), CW - 40); doc.text(lines, MAR + 38, y);
+      return y + lines.length * 5 + 1;
+    }
+    function pageHeader(right) {
+      doc.setFillColor(...C_DARK); doc.rect(0, 0, PW, 12, 'F');
+      doc.setFillColor(...C_BLUE); doc.rect(0, 0, 4, 12, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_WHITE);
+      doc.text('CHOICE PROPERTIES', MAR, 8);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+      doc.text(right || '', PW - MAR, 8, { align: 'right' });
+    }
+
+    let firstPage = true;
+
+    for (let pi = 0; pi < selected.length; pi++) {
+      const p = selected[pi];
+      statusEl.textContent = `Building PDF… ${pi + 1} of ${selected.length}`;
+
+      if (!firstPage) doc.addPage();
+      firstPage = false;
+
+      pageHeader(`${pi + 1} of ${selected.length}`);
+      let y = 12;
+
+      const photos = (p.photo_urls || []).filter(u => u && !u.includes('placeholder'));
+      if (photos.length) {
+        statusEl.textContent = `Embedding photo for property ${pi + 1}…`;
+        const dataUrl = await urlToDataUrl(originalUrl(photos[0]));
+        if (dataUrl) {
+          try { doc.addImage(dataUrl, 'JPEG', 0, y, PW, 72, undefined, 'MEDIUM'); } catch (_) {}
+          for (let i = 0; i < 18; i++) {
+            try { doc.setGState(new doc.GState({ opacity: i / 36 })); } catch (_) {}
+            doc.setFillColor(...C_DARK); doc.rect(0, y + 72 - 18 + i, PW, 1, 'F');
+          }
+          try { doc.setGState(new doc.GState({ opacity: 1 })); } catch (_) {}
+        }
+        y += 72;
+      }
+
+      y += 7;
+      const rent = p.monthly_rent != null ? `$${Number(p.monthly_rent).toLocaleString()}/mo` : 'Rent TBD';
+      doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_DARK); doc.text(rent, MAR, y); y += 9;
+
+      const titleLines = doc.splitTextToSize(p.title || 'Property', CW);
+      doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_TEXT); doc.text(titleLines, MAR, y); y += titleLines.length * 7 + 2;
+
+      const unit = p.unit_number ? ` ${p.unit_number}` : '';
+      const addr = `${p.address}${unit}, ${p.city}, ${p.state}${p.zip ? ' ' + p.zip : ''}`;
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_MUTED); doc.text(addr, MAR, y); y += 7;
+
+      hRule(y); y += 5;
+
+      // Stats chips
+      const stats = [];
+      if (p.bedrooms != null) stats.push(p.bedrooms === 0 ? 'Studio' : `${p.bedrooms} bed`);
+      if (p.bathrooms)        stats.push(`${p.bathrooms} bath`);
+      if (p.square_footage)   stats.push(`${Number(p.square_footage).toLocaleString()} sqft`);
+      if (p.property_type)    stats.push(p.property_type.charAt(0).toUpperCase() + p.property_type.slice(1));
+      let chipX = MAR;
+      stats.forEach(s => {
+        const tw = doc.getTextWidth(s) + 6;
+        doc.setFillColor(...C_LIGHT); doc.roundedRect(chipX, y - 4, tw, 7, 1.5, 1.5, 'F');
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C_TEXT); doc.text(s, chipX + 3, y + 0.5);
+        chipX += tw + 3;
+      });
+      y += 10;
+
+      if (p.monthly_rent != null)  y = kvRow('Monthly Rent',     `$${Number(p.monthly_rent).toLocaleString()}`, y);
+      if (p.security_deposit)      y = kvRow('Security Deposit', `$${Number(p.security_deposit).toLocaleString()}`, y);
+      const availNow = !p.available_date || new Date(p.available_date) <= new Date();
+      y = kvRow('Availability', availNow ? 'Available Now'
+        : new Date((p.available_date || '') + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), y);
+
+      if (p.amenities?.length && y < PH - 35) {
+        y += 3; hRule(y); y += 6;
+        y = sectionHead('Amenities', y);
+        const cols = 3;
+        p.amenities.slice(0, 9).forEach((a, i) => {
+          if (y > PH - 22) return;
+          const col = i % cols, row = Math.floor(i / cols);
+          doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_TEXT);
+          doc.text(`• ${a}`, MAR + col * (CW / cols), y + row * 5);
+          if (col === cols - 1) y += 5;
+        });
+        if (p.amenities.length % cols !== 0) y += 5;
+      }
+
+      // Property ID + footer
+      if (p.id) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_MUTED);
+        doc.text(`ID: ${p.id}`, MAR, PH - 14);
+      }
+    }
+
+    // Stamp correct total on every footer
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFillColor(247, 249, 252); doc.rect(0, PH - 12, PW, 12, 'F');
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_MUTED);
+      const pid = selected[Math.min(i - 1, selected.length - 1)]?.id || '';
+      doc.text(`${siteUrl}  ·  ${pid}  ·  Page ${i} of ${totalPages}`, PW / 2, PH - 4, { align: 'center' });
+    }
+
+    statusEl.textContent = 'Saving PDF…';
+    const date = new Date().toISOString().slice(0, 10);
+    doc.save(`cp-saved-properties-${date}.pdf`);
+    statusEl.textContent = `✓ PDF pack saved — ${selected.length} propert${selected.length !== 1 ? 'ies' : 'y'}.`;
+    btn.disabled = false;
+  });
+
+})();
