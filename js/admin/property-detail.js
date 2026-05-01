@@ -14,24 +14,85 @@
   }
 
   let S;
-  const params  = new URLSearchParams(location.search);
-  const propId  = params.get('id');
+  const params = new URLSearchParams(location.search);
+  const propId = params.get('id');
+
+  // Current property state (mutated on status change)
+  let _prop = null;
 
   // ── Formatters ──────────────────────────────────────────────────────────
   function fmt(d)     { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}); } catch { return d; } }
   function fmtMoney(v){ if (v == null) return '—'; return '$' + Number(v).toLocaleString('en-US'); }
-  function pill(s)    {
-    const m = { active:'pill-success', rented:'pill-info', inactive:'pill-muted', maintenance:'pill-warning',
-                pending:'pill-warning', approved:'pill-success', declined:'pill-muted', submitted:'pill-info' };
-    return '<span class="pill '+(m[s]||'pill-muted')+'">'+(s||'—')+'</span>';
-  }
   function initials(name) {
     if (!name) return '?';
     return name.trim().split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase();
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  const STATUS_OPTIONS = [
+    { value: 'active',      label: 'Active',      cls: 'pd-status-chip active' },
+    { value: 'rented',      label: 'Rented',      cls: 'pd-status-chip rented' },
+    { value: 'inactive',    label: 'Inactive',    cls: 'pd-status-chip inactive' },
+    { value: 'maintenance', label: 'Maintenance', cls: 'pd-status-chip maintenance' },
+  ];
+
+  // ── Status toggle UI ─────────────────────────────────────────────────────
+  function renderStatusBar(currentStatus) {
+    return '<div class="pd-status-toggle" id="pd-status-toggle" role="group" aria-label="Property status">'
+      + STATUS_OPTIONS.map(opt =>
+          '<button class="' + opt.cls + (currentStatus === opt.value ? ' is-current' : '') + '" '
+          + 'data-status-val="' + opt.value + '" '
+          + 'aria-pressed="' + (currentStatus === opt.value ? 'true' : 'false') + '">'
+          + opt.label
+          + (currentStatus === opt.value ? ' <span class="pd-status-check" aria-hidden="true">✓</span>' : '')
+          + '</button>'
+        ).join('')
+      + '</div>';
+  }
+
+  async function handleStatusChange(newStatus) {
+    if (!_prop || newStatus === _prop.status) return;
+
+    const toggle = document.getElementById('pd-status-toggle');
+    if (toggle) toggle.style.opacity = '0.5';
+
+    const { error } = await CP.sb()
+      .from('properties')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', propId);
+
+    if (toggle) toggle.style.opacity = '1';
+
+    if (error) {
+      S.toast('Failed to update status: ' + error.message, 'error');
+      return;
+    }
+
+    _prop.status = newStatus;
+
+    // Re-render just the toggle in place
+    if (toggle) {
+      toggle.outerHTML = renderStatusBar(newStatus);
+      bindStatusToggle();
+    }
+
+    S.toast('Status updated to ' + newStatus, 'success');
+  }
+
+  function bindStatusToggle() {
+    const toggle = document.getElementById('pd-status-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', e => {
+      const btn = e.target.closest('[data-status-val]');
+      if (!btn) return;
+      const val = btn.dataset.statusVal;
+      if (val && val !== _prop.status) handleStatusChange(val);
+    });
+  }
+
+  // ── Full page render ─────────────────────────────────────────────────────
   function render(p, apps, inqs) {
+    _prop = p;
+
     const photos = Array.isArray(p.property_photos)
       ? p.property_photos.slice().sort((a,b) => (a.display_order||0)-(b.display_order||0)).map(x => x.url).filter(Boolean)
       : [];
@@ -45,12 +106,19 @@
         ).join('') + '</div>'
       : '<div class="pd-no-photo"><span>No photos uploaded</span></div>';
 
-    // Status + badges
-    const statusBar = '<div class="pd-status-bar">'
-      + pill(p.status)
-      + (p.featured ? '<span class="pill pill-warning">Featured</span>' : '')
-      + (p.property_type ? '<span class="pill pill-muted">' + S.esc(p.property_type) + '</span>' : '')
+    // Status toggle
+    const statusToggleHtml = '<div class="pd-section" style="margin-bottom:14px">'
+      + '<div class="pd-section-title">Status</div>'
+      + renderStatusBar(p.status)
       + '</div>';
+
+    // Extra badges (featured / type)
+    const extraBadges = (p.featured || p.property_type)
+      ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'
+          + (p.featured ? '<span class="pill pill-warning">Featured</span>' : '')
+          + (p.property_type ? '<span class="pill pill-muted">' + S.esc(p.property_type) + '</span>' : '')
+        + '</div>'
+      : '';
 
     // Action buttons
     const actions = '<div class="pd-actions">'
@@ -99,6 +167,20 @@
         + '</div></div>'
       : '';
 
+    // Watermark summary
+    const wmPhotos = (p.property_photos || []).filter(ph => ph.watermark_status && ph.watermark_status !== 'applied');
+    let wmHtml = '';
+    if (wmPhotos.length) {
+      const flagged = wmPhotos.filter(ph => ph.watermark_status === 'watermark' || ph.watermark_status === 'branding').length;
+      wmHtml = '<div class="pd-section"><div class="pd-section-title">Watermark scan</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+        + (flagged > 0
+            ? '<span class="pill pill-warning">' + flagged + ' photo' + (flagged===1?'':'s') + ' flagged</span>'
+            : '<span class="pill pill-success">All clear</span>')
+        + '<a class="btn btn-ghost btn-sm" href="/admin/watermark-review.html" style="font-size:.72rem">Open review</a>'
+        + '</div></div>';
+    }
+
     // Applications table
     const appRows = apps.length
       ? apps.map(a => {
@@ -106,7 +188,7 @@
           return '<tr>'
             + '<td>' + S.esc(tenant.full_name || tenant.name || '—') + '</td>'
             + '<td>' + S.esc(tenant.email || '—') + '</td>'
-            + '<td>' + pill(a.status) + '</td>'
+            + '<td><span class="pill ' + pillCls(a.status) + '">' + S.esc(a.status || '—') + '</span></td>'
             + '<td>' + fmt(a.created_at) + '</td>'
             + '<td><a class="btn btn-ghost btn-sm" href="/admin/applications.html" style="font-size:.72rem">View</a></td>'
             + '</tr>';
@@ -126,7 +208,7 @@
           + '<td>' + S.esc(i.email || '—') + '</td>'
           + '<td>' + S.esc(i.phone || '—') + '</td>'
           + '<td>' + fmt(i.created_at) + '</td>'
-          + '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + S.esc(i.message || '—') + '</td>'
+          + '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + S.esc(i.message||'') + '">' + S.esc(i.message || '—') + '</td>'
           + '</tr>'
         ).join('')
       : '<tr><td colspan="5" class="pd-empty-row">No inquiries yet.</td></tr>';
@@ -136,25 +218,12 @@
       + '<th>Name</th><th>Email</th><th>Phone</th><th>Date</th><th>Message</th>'
       + '</tr></thead><tbody>' + inqRows + '</tbody></table></div></div>';
 
-    // Photos watermark status summary
-    const wmPhotos = (p.property_photos || []).filter(ph => ph.watermark_status && ph.watermark_status !== 'applied');
-    let wmHtml = '';
-    if (wmPhotos.length) {
-      const flagged = wmPhotos.filter(ph => ph.watermark_status === 'watermark' || ph.watermark_status === 'branding').length;
-      wmHtml = '<div class="pd-section"><div class="pd-section-title">Watermark scan</div>'
-        + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
-        + (flagged > 0
-            ? '<span class="pill pill-warning">' + flagged + ' photo' + (flagged===1?'':'s') + ' flagged</span>'
-            : '<span class="pill pill-success">All clear</span>')
-        + '<a class="btn btn-ghost btn-sm" href="/admin/watermark-review.html" style="font-size:.72rem">Open review</a>'
-        + '</div></div>';
-    }
-
     document.getElementById('pd-root').innerHTML =
       galleryHtml
       + '<h2 style="font-size:1.15rem;font-weight:800;margin:0 0 4px">' + S.esc(p.title || 'Untitled') + '</h2>'
-      + '<div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">' + S.esc([p.address, p.city, p.state].filter(Boolean).join(', ') || '—') + '</div>'
-      + statusBar
+      + '<div style="font-size:.8rem;color:var(--muted);margin-bottom:14px">' + S.esc([p.address, p.city, p.state].filter(Boolean).join(', ') || '—') + '</div>'
+      + statusToggleHtml
+      + extraBadges
       + actions
       + '<div class="pd-section"><div class="pd-section-title">Details</div>' + fieldsHtml + '</div>'
       + descHtml
@@ -165,13 +234,21 @@
       + inqsHtml;
 
     // Update page subtitle
-    const sub = document.querySelector('[data-page-sub], #page-sub');
+    const sub = document.querySelector('[data-page-sub]');
     if (sub) sub.textContent = p.title || 'Property detail';
 
-    // Edit button
+    // Wire up edit button
     document.getElementById('pd-btn-edit').addEventListener('click', () => {
       location.href = '/admin/properties.html#edit=' + encodeURIComponent(p.id);
     });
+
+    // Wire up status toggle
+    bindStatusToggle();
+  }
+
+  function pillCls(s) {
+    return { active:'pill-success', rented:'pill-info', inactive:'pill-muted', maintenance:'pill-warning',
+             pending:'pill-warning', approved:'pill-success', declined:'pill-muted', submitted:'pill-info' }[s] || 'pill-muted';
   }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
@@ -193,7 +270,6 @@
     const ok = await S.requireAdmin();
     if (!ok) return;
 
-    // Parallel fetch: property, applications, inquiries
     const [propRes, appsRes, inqsRes] = await Promise.all([
       CP.sb()
         .from('properties')
@@ -202,7 +278,7 @@
         .single(),
       CP.sb()
         .from('applications')
-        .select('id,status,created_at,monthly_rent,tenants(full_name,name,email)')
+        .select('id,status,created_at,tenants(full_name,name,email)')
         .eq('property_id', propId)
         .order('created_at', { ascending: false })
         .limit(25),
