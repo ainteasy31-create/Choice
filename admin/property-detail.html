@@ -49,6 +49,15 @@
   .pd-landlord-meta{font-size:.76rem;color:var(--muted)}
   .pd-status-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
   .pd-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+  .pd-status-toggle{display:flex;gap:6px;flex-wrap:wrap}
+  .pd-status-chip{padding:6px 16px;border-radius:99px;font-size:.78rem;font-weight:700;cursor:pointer;border:2px solid transparent;background:var(--surface-2);color:var(--muted);transition:all .15s}
+  .pd-status-chip:hover{background:var(--surface-3,var(--surface));color:var(--text)}
+  .pd-status-chip.is-current{cursor:default}
+  .pd-status-chip.active.is-current{background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.5);color:#16a34a}
+  .pd-status-chip.rented.is-current{background:rgba(59,130,246,.18);border-color:rgba(59,130,246,.5);color:#2563eb}
+  .pd-status-chip.inactive.is-current{background:var(--surface-2);border-color:var(--border);color:var(--muted)}
+  .pd-status-chip.maintenance.is-current{background:rgba(245,158,11,.18);border-color:rgba(245,158,11,.5);color:#b45309}
+  .pd-status-check{font-size:.7rem;margin-left:2px}
 </style>
 </head>
 <body data-page-title="Property Detail" data-page-sub="Loading…">
