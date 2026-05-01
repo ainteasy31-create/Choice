@@ -1267,11 +1267,20 @@ function preloadLightboxAdjacentImages(idx) {
     return url.replace(/\/tr:[^/]+\//, '/');
   }
 
-  // ── Fetch as blob (CORS) ───────────────────────────────────
-  async function fetchBlob(url) {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return res.blob();
+  // ── Fetch as blob with automatic retry ────────────────────
+  async function fetchBlob(url, retries = 2) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.blob();
+      } catch (e) {
+        lastErr = e;
+        if (attempt < retries) await new Promise(r => setTimeout(r, 900 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
   }
 
   // ── Trigger a file download ────────────────────────────────
@@ -1295,29 +1304,70 @@ function preloadLightboxAdjacentImages(idx) {
     status.textContent = `Preparing ${photos.length} photo${photos.length > 1 ? 's' : ''}…`;
 
     const propId = currentProperty?.id || 'property';
+    const isIOS  = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-    // iOS / Android: try Web Share API with File objects first
+    // ── Mobile: Web Share API in batches of 6 ─────────────────
+    // Fetch each photo with retry; skip failures rather than aborting the whole set.
+    // Batching prevents iOS from refusing a giant files[] array.
     if (navigator.canShare) {
-      try {
-        status.textContent = 'Fetching photos for sharing…';
+      const BATCH = 6;
+      let sharedTotal = 0;
+      let userCancelled = false;
+
+      for (let batchStart = 0; batchStart < photos.length; batchStart += BATCH) {
+        if (userCancelled) break;
+        const batch = photos.slice(batchStart, batchStart + BATCH);
         const files = [];
-        for (let i = 0; i < photos.length; i++) {
-          status.textContent = `Fetching ${i + 1} / ${photos.length}…`;
-          const blob = await fetchBlob(originalUrl(photos[i]));
-          files.push(new File([blob], `${propId}-photo-${i + 1}.jpg`, { type: 'image/jpeg' }));
+
+        for (let i = 0; i < batch.length; i++) {
+          const globalIdx = batchStart + i;
+          status.textContent = `Preparing ${globalIdx + 1} / ${photos.length}…`;
+          try {
+            const blob = await fetchBlob(originalUrl(batch[i]));
+            files.push(new File([blob], `${propId}-photo-${globalIdx + 1}.jpg`, { type: 'image/jpeg' }));
+          } catch (_) {
+            // Skip individual failures — don't abort the batch
+          }
         }
-        if (navigator.canShare({ files })) {
-          await navigator.share({ files, title: currentProperty?.title || 'Property Photos' });
-          status.textContent = '✓ Share sheet opened — tap Save Image on each photo.';
-          btn.disabled = false;
-          return;
+
+        if (!files.length || !navigator.canShare({ files })) continue;
+
+        try {
+          const rangeLabel = photos.length > BATCH
+            ? ` (${batchStart + 1}–${Math.min(batchStart + BATCH, photos.length)} of ${photos.length})`
+            : '';
+          await navigator.share({ files, title: `${currentProperty?.title || 'Property Photos'}${rangeLabel}` });
+          sharedTotal += files.length;
+          status.textContent = `✓ Shared ${sharedTotal} so far — tap Save Image on each…`;
+          if (batchStart + BATCH < photos.length) await new Promise(r => setTimeout(r, 1200));
+        } catch (_) {
+          userCancelled = true;
         }
-      } catch (e) {
-        // Share was cancelled or failed — fall through to blob download
       }
+
+      if (sharedTotal > 0) {
+        status.textContent = `✓ ${sharedTotal} photo${sharedTotal !== 1 ? 's' : ''} shared — tap "Save Image" on each.`;
+        btn.disabled = false;
+        return;
+      }
+      // Fall through if user cancelled all batches or canShare({ files }) was false
     }
 
-    // Blob download fallback (Android Chrome / desktop)
+    // ── iOS fallback: open each photo in new tab for manual save ──
+    // Blob <a download> is silently blocked on iOS; opening the URL lets the
+    // user long-press → "Add to Photos" / "Save to Files".
+    if (isIOS) {
+      status.textContent = `Opening ${photos.length} photo${photos.length > 1 ? 's' : ''}…`;
+      for (let i = 0; i < photos.length; i++) {
+        window.open(originalUrl(photos[i]), '_blank', 'noopener');
+        await new Promise(r => setTimeout(r, 400));
+      }
+      status.textContent = `✓ ${photos.length} photo${photos.length > 1 ? 's' : ''} opened — long-press each to Save to Photos.`;
+      btn.disabled = false;
+      return;
+    }
+
+    // ── Desktop / Android Chrome: blob download with retry ────
     let done = 0;
     for (let i = 0; i < photos.length; i++) {
       try {
@@ -1327,8 +1377,8 @@ function preloadLightboxAdjacentImages(idx) {
         done++;
         await new Promise(r => setTimeout(r, 450));
       } catch (_) {
-        status.textContent = `Photo ${i + 1} failed — skipping…`;
-        await new Promise(r => setTimeout(r, 500));
+        status.textContent = `Photo ${i + 1} failed after retries — skipping…`;
+        await new Promise(r => setTimeout(r, 400));
       }
     }
     status.textContent = `✓ ${done} of ${photos.length} photo${photos.length > 1 ? 's' : ''} downloaded.`;
