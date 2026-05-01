@@ -32,7 +32,7 @@
         +     '<div class="row-sub" style="color:var(--muted-2)">'+S.esc(meta)+'</div>'
         +     '<div class="prop-actions">'
         +       '<button class="btn btn-ghost btn-sm" data-action="edit-prop" data-id="'+S.esc(p.id)+'">Edit</button>'
-        +       '<a class="btn btn-ghost btn-sm" href="/property.html?id='+S.esc(p.id)+'" target="_blank" rel="noopener">View</a>'
+        +       '<a class="btn btn-ghost btn-sm" href="/admin/property-detail.html?id='+S.esc(p.id)+'">View</a>'
         +       '<button class="btn btn-ghost btn-sm" data-action="delete-prop" data-id="'+S.esc(p.id)+'" style="color:#dc2626;margin-left:auto" title="Delete property forever" aria-label="Delete property forever">Delete</button>'
         +     '</div>'
         +   '</div>'
