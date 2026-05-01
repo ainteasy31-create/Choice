@@ -80,4 +80,34 @@
   3. Inserts into `public.property_photos`
 
   This website then reads from `public.properties` live — no rebuild needed.
+
+    ---
+
+    ## PHOTO SYSTEM — CRITICAL (Updated May 2026)
+
+    ### property_photos table schema
+    The pipeline publishes up to **40 photos per listing** into `public.property_photos`. Each row is one photo:
+
+    ```
+    property_id      text  -- "PROP-BF860F35" — matches properties.id
+    url              text  -- ImageKit CDN URL
+    file_id          text  -- ImageKit file ID (for deletion/updates)
+    display_order    int   -- 0-indexed gallery order
+    alt_text         text
+    caption          text
+    watermark_status text
+    width / height   int
+    ```
+
+    ### Removed columns — DO NOT RESTORE
+    Migration `20260426000002` removed `photo_urls` and `photo_file_ids` from `public.properties`. These columns no longer exist. **Do not add them back** — the pipeline publisher writes only to `property_photos` now.
+
+    ### AI model (for reference)
+    The pipeline uses **`gemini-2.0-flash`** for all AI enrichment (was: `gemini-1.5-pro` which is deprecated/removed).
+
+    ### Pipeline scraper sources (updated)
+    Zillow, Realtor.com, Redfin, HotPads, Craigslist, Apartments.com, Opendoor, Invitation Homes, Progress Residential
+
+    ### Re-download endpoint (new)
+    The pipeline has a `POST /api/properties/{id}/redownload-images` endpoint that clears and re-queues image downloads for a specific property. This is an internal pipeline operation — it does not affect the Choice website directly.
   
