@@ -32,7 +32,10 @@
       +       '<div class="row-sub">'+sub+'</div>'
       +       '<div class="row-sub" style="color:var(--muted-2)">'+(p.views_count||0)+' views · '+(p.applications_count||0)+' apps · listed '+S.fmtRelative(p.created_at)+'</div>'
       +     '</div>'
-      +     '<button class="btn btn-ghost btn-sm" data-action="status">Status</button>'
+      +     '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">'
+      +       '<a class="btn btn-ghost btn-sm" href="property-detail.html?id='+S.esc(p.id)+'">View ↗</a>'
+      +       '<button class="btn btn-ghost btn-sm" data-action="status">Status</button>'
+      +     '</div>'
       +   '</div>'
       + '</div>';
   }
@@ -95,6 +98,8 @@
           {value:'draft',label:'Draft'},
           {value:'paused',label:'Paused'},
           {value:'rented',label:'Rented'},
+          {value:'inactive',label:'Inactive'},
+          {value:'maintenance',label:'Maintenance'},
           {value:'archived',label:'Archived'}
         ]
       }]

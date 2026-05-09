@@ -7,21 +7,38 @@
   const ACTION_LABELS = {
     update_status:'Update status', mark_paid:'Mark paid', mark_movein:'Mark move-in',
     generate_lease:'Generate lease', resend_lease:'Resend lease', void_lease:'Void lease',
-    tenant_signed_lease:'Tenant signed', co_applicant_signed_lease:'Co-applicant signed'
+    tenant_signed_lease:'Tenant signed', co_applicant_signed_lease:'Co-applicant signed',
+    'property.edit':'Property edited', 'property.hard_delete':'Property deleted',
+    'property.photo_reorder':'Photos reordered', 'property.photo_delete':'Photo deleted',
+    'property.status_change':'Status changed'
   };
   const ACTION_PILL = {
     update_status:'pill-info', mark_paid:'pill-success', mark_movein:'pill-purple',
     generate_lease:'pill-warning', resend_lease:'pill-warning', void_lease:'pill-danger',
-    tenant_signed_lease:'pill-success', co_applicant_signed_lease:'pill-success'
+    tenant_signed_lease:'pill-success', co_applicant_signed_lease:'pill-success',
+    'property.edit':'pill-info', 'property.hard_delete':'pill-danger',
+    'property.photo_reorder':'pill-muted', 'property.photo_delete':'pill-warning',
+    'property.status_change':'pill-info'
   };
+
+  // Route target links based on target_type
+  function targetLink(r){
+    const S = AdminShell;
+    if(!r.target_id) return '<span class="muted">'+S.esc(r.target_type||'—')+'</span>';
+    const id = r.target_id;
+    const type = r.target_type || '';
+    if(type === 'property'){
+      return '<a href="property-detail.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id.slice(0,8))+'… ↗</a>';
+    }
+    // Default: assume application id
+    return '<a href="applications.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id)+'</a>';
+  }
 
   function row(r){
     const S = AdminShell;
     const label = ACTION_LABELS[r.action] || r.action;
     const cls = ACTION_PILL[r.action] || 'pill-muted';
-    const target = r.target_id
-      ? '<a href="applications.html?id='+S.esc(r.target_id)+'" style="font-family:monospace">'+S.esc(r.target_id)+'</a>'
-      : '<span class="muted">'+S.esc(r.target_type||'—')+'</span>';
+    const target = targetLink(r);
     const meta = (r.metadata && typeof r.metadata === 'object')
       ? Object.entries(r.metadata).filter(([,v]) => v!=null && v!=='')
           .map(([k,v]) => '<span class="meta-pill">'+S.esc(k)+': '+S.esc(String(v).slice(0,40))+'</span>').join('')
