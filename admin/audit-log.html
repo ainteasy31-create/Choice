@@ -35,16 +35,25 @@
     <div class="form-grid-2">
       <select id="f-action" class="form-input">
         <option value="">All actions</option>
-        <option value="update_status">Update status</option>
-        <option value="mark_paid">Mark paid</option>
-        <option value="mark_movein">Mark move-in</option>
-        <option value="generate_lease">Generate lease</option>
-        <option value="resend_lease">Resend lease</option>
-        <option value="void_lease">Void lease</option>
-        <option value="tenant_signed_lease">Tenant signed</option>
-        <option value="co_applicant_signed_lease">Co-applicant signed</option>
+        <optgroup label="Applications">
+          <option value="update_status">Update status</option>
+          <option value="mark_paid">Mark paid</option>
+          <option value="mark_movein">Mark move-in</option>
+          <option value="generate_lease">Generate lease</option>
+          <option value="resend_lease">Resend lease</option>
+          <option value="void_lease">Void lease</option>
+          <option value="tenant_signed_lease">Tenant signed</option>
+          <option value="co_applicant_signed_lease">Co-applicant signed</option>
+        </optgroup>
+        <optgroup label="Properties">
+          <option value="property.edit">Property edited</option>
+          <option value="property.status_change">Status changed</option>
+          <option value="property.hard_delete">Property deleted</option>
+          <option value="property.photo_delete">Photo deleted</option>
+          <option value="property.photo_reorder">Photos reordered</option>
+        </optgroup>
       </select>
-      <input id="f-app" class="form-input" type="text" placeholder="Filter by App ID…" maxlength="12" style="text-transform:uppercase">
+      <input id="f-app" class="form-input" type="text" placeholder="Filter by App/Property ID…" maxlength="36" style="text-transform:uppercase">
     </div>
 
     <div class="row-flex between">
