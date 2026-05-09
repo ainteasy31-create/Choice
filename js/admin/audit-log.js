@@ -63,7 +63,7 @@
     const from = (currentPage-1)*PAGE_SIZE, to = from+PAGE_SIZE-1;
     let q = CP.sb().from('admin_actions').select('*',{count:'exact'}).order('created_at',{ascending:false}).range(from,to);
     if(activeAction) q = q.eq('action', activeAction);
-    if(activeAppId)  q = q.eq('target_id', activeAppId.toUpperCase());
+    if(activeAppId)  q = q.eq('target_id', activeAppId);
     const { data, count, error } = await q;
     if(error){
       document.getElementById('audit-list').innerHTML =

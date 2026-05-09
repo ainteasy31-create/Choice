@@ -92,13 +92,13 @@
           { href: 'email-logs.html',      icon: 'i-mail',     label: 'Email Logs' }
         ]},
         { sect: 'Operations',     items: [
-          { href: 'inspections.html',     icon: 'i-door',     label: 'Inspections' }
+          { href: 'inspections.html',     icon: 'i-check',    label: 'Inspections' }
         ]},
         { sect: 'Admin',          items: [
           { href: 'audit-log.html',         icon: 'i-history',  label: 'Audit Log' },
           { href: 'watermark-review.html',  icon: 'i-image',    label: 'Watermark Review' },
-          { href: 'deposit-accounting.html',icon: 'i-mail',     label: 'Deposit Accounting' },
-          { href: 'state-law.html',         icon: 'i-history',  label: 'State Law Reference' }
+          { href: 'deposit-accounting.html',icon: 'i-card',     label: 'Deposit Accounting' },
+          { href: 'state-law.html',         icon: 'i-list',     label: 'State Law Reference' }
         ]}
       ],
       tabs: [
@@ -109,15 +109,15 @@
       ],
       more: [
         { href: 'move-ins.html',          icon: 'i-door',    label: 'Move-ins' },
-        { href: 'inspections.html',       icon: 'i-door',    label: 'Inspections' },
+        { href: 'inspections.html',       icon: 'i-check',   label: 'Inspections' },
         { href: 'listings.html',          icon: 'i-list',    label: 'Listings' },
         { href: 'landlords.html',         icon: 'i-user',    label: 'Landlords' },
         { href: 'messages.html',          icon: 'i-message', label: 'Messages' },
         { href: 'email-logs.html',        icon: 'i-mail',    label: 'Email logs' },
         { href: 'audit-log.html',         icon: 'i-history', label: 'Audit log' },
         { href: 'watermark-review.html',  icon: 'i-image',   label: 'Watermark review' },
-        { href: 'deposit-accounting.html',icon: 'i-mail',    label: 'Deposit accounting' },
-        { href: 'state-law.html',         icon: 'i-history', label: 'State law reference' }
+        { href: 'deposit-accounting.html',icon: 'i-card',    label: 'Deposit accounting' },
+        { href: 'state-law.html',         icon: 'i-list',    label: 'State law reference' }
       ]
     },
 
