@@ -30,6 +30,7 @@
   function initials(name) { if (!name) return '?'; return name.trim().split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase(); }
   function pillCls(s) {
     return {active:'pill-success',rented:'pill-info',inactive:'pill-muted',maintenance:'pill-warning',
+            draft:'pill-muted',paused:'pill-warning',archived:'pill-muted',
             pending:'pill-warning',approved:'pill-success',declined:'pill-muted',submitted:'pill-info',
             reviewing:'pill-info',waitlisted:'pill-warning'}[s] || 'pill-muted';
   }
@@ -603,6 +604,14 @@
               <label class="pd-edit-label">Unit number
                 <input class="pd-edit-input" name="unit_number" type="text" value="${esc(p.unit_number || '')}" placeholder="Apt 4B">
               </label>
+              <label class="pd-edit-label">Status
+                <span class="pd-edit-hint">Changes here override the inline status toggle</span>
+                <select class="pd-edit-input" name="status">
+                  ${['active','rented','inactive','maintenance','draft','paused','archived'].map(v =>
+                    `<option value="${v}"${p.status===v?' selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`
+                  ).join('')}
+                </select>
+              </label>
             </div>
 
             <div class="pd-edit-group">
@@ -874,6 +883,7 @@
 
     const patch = {
       title:              get('title'),
+      status:             get('status') || _prop.status || 'active',
       address:            get('address'),
       city:               get('city') || null,
       state:              get('state') || null,
@@ -929,6 +939,14 @@
     if (error) { S.toast('Save failed: ' + error.message, 'error'); return; }
 
     S.toast('Property saved!', 'success');
+
+    // Refresh the inline status toggle if status changed
+    if (patch.status && patch.status !== _prop.status) {
+      _prop.status = patch.status;
+      const toggle = document.getElementById('pd-status-toggle');
+      if (toggle) { toggle.outerHTML = renderStatusBar(patch.status); bindStatusToggle(); }
+    }
+
     closePanel();
 
     // ── Audit log (non-blocking) ──

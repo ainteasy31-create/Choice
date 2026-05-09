@@ -284,6 +284,23 @@
         clearTimeout(_debounce); _debounce = setTimeout(load, 300);
       });
 
+      // Show landlord filter banner if ?landlord= is set
+      if(_landlordFilter){
+        const banner = document.getElementById('landlord-banner');
+        if(banner){
+          banner.style.display = 'flex';
+          // Try to resolve landlord name via RPC
+          CP.sb().rpc('admin_list_landlords', { p_page: 0, p_per_page: 200 }).then(({ data }) => {
+            const rows = (data && data.rows) || [];
+            const lname = document.getElementById('landlord-banner-name');
+            if(lname){
+              const l = rows.find(r => r.id === _landlordFilter);
+              lname.textContent = l ? (l.business_name || l.contact_name || l.email || _landlordFilter) : _landlordFilter;
+            }
+          }).catch(()=>{});
+        }
+      }
+
       load();
     });
   })();
