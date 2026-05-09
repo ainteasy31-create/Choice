@@ -61,6 +61,7 @@
 
   async function handleStatusChange(newStatus) {
     if (!_prop || newStatus === _prop.status) return;
+    const prevStatus = _prop.status;
     const toggle = document.getElementById('pd-status-toggle');
     if (toggle) toggle.style.opacity = '0.5';
     const { error } = await CP.sb().from('properties').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', propId);
@@ -69,6 +70,16 @@
     _prop.status = newStatus;
     if (toggle) { toggle.outerHTML = renderStatusBar(newStatus); bindStatusToggle(); }
     S.toast('Status updated to ' + newStatus, 'success');
+    // Audit log (non-blocking)
+    CP.sb().auth.getUser().then(({ data: ud }) => {
+      CP.sb().from('admin_actions').insert([{
+        user_id:     ud?.user?.id || null,
+        action:      'property.status_change',
+        target_type: 'property',
+        target_id:   propId,
+        metadata:    { from: prevStatus, to: newStatus }
+      }]).then(() => {}).catch(() => {});
+    }).catch(() => {});
   }
 
   function bindStatusToggle() {
