@@ -14,7 +14,33 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous">
 <link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
+<style>
+/* ── Landlord detail slide-out panel ── */
+.pd-edit-panel{display:none;position:fixed;inset:0;z-index:9000}
+.pd-edit-panel.open{display:flex}
+.pd-edit-overlay{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.pd-edit-drawer{position:absolute;right:0;top:0;bottom:0;width:min(540px,100%);background:var(--surface);display:flex;flex-direction:column;box-shadow:-4px 0 32px rgba(0,0,0,.3);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+.pd-edit-panel.open .pd-edit-drawer{transform:translateX(0)}
+.pd-edit-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pd-edit-header h3{font-size:1rem;font-weight:800;color:var(--text);margin:0}
+.pd-edit-close{background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.pd-edit-close:hover{background:var(--surface-2)}
+.pd-edit-body{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:20px}
+.pd-edit-footer{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--border);flex-shrink:0}
+.pd-edit-group{display:flex;flex-direction:column;gap:12px}
+.pd-edit-group-title{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.pd-empty-row{color:var(--muted);font-size:.8rem;padding:14px 10px;font-style:italic}
+/* ── Key-value rows inside detail panel ── */
+.pd-detail-rows{display:flex;flex-direction:column;gap:0;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border)}
+.pd-detail-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 12px;font-size:.82rem;border-bottom:1px solid var(--border)}
+.pd-detail-row:last-child{border-bottom:none}
+.pd-detail-row:nth-child(even){background:var(--surface-2)}
+.pd-detail-row > span:first-child{color:var(--muted);font-weight:600;flex-shrink:0;font-size:.76rem}
+.pd-detail-row > span:last-child{color:var(--text);font-weight:500;text-align:right;word-break:break-all}
+.pd-detail-row a{color:var(--brand)}
+</style>
 <script defer src="/config.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js" integrity="sha384-YieCqqg9gQufX7+5HcFvCEg/n3KUEdl8/Jb+A6J0npf1mB740VayvwKjTrtCeUoy" crossorigin="anonymous"></script>
 <script defer src="/js/cp-api.js" type="module"></script>
@@ -24,9 +50,13 @@
 <body data-page-title="Landlords" data-page-sub="Loading…">
 <div class="app">
   <main class="app-content">
-    <div class="row-flex between" style="margin-bottom:4px">
+    <div class="row-flex between" style="margin-bottom:8px">
       <div class="text-strong">All landlord accounts</div>
       <span class="text-xs muted" id="count-label"></span>
+    </div>
+    <div class="search" style="margin-bottom:12px">
+      <svg class="i"><use href="#i-search"/></svg>
+      <input id="lord-search" type="text" placeholder="Search name, email, phone, state…">
     </div>
     <div id="lord-list">
       <div class="list">

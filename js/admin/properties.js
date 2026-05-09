@@ -1,9 +1,17 @@
 (function(){
     'use strict';
     let _statusFilter = 'all';
+    let _landlordFilter = null;
     let _q = '';
     let _debounce = null;
     let _allCache = [];
+
+    // ── Pre-seed from URL ──
+    try {
+      const usp = new URLSearchParams(location.search);
+      if(usp.get('status')) _statusFilter = usp.get('status');
+      if(usp.get('landlord')) _landlordFilter = usp.get('landlord');
+    } catch(e){}
 
     function pill(s){
       const m = { active:'pill-success', rented:'pill-info', inactive:'pill-muted', maintenance:'pill-warning', draft:'pill-muted', paused:'pill-warning', archived:'pill-muted' };
@@ -45,6 +53,7 @@
       document.getElementById('page-sub').textContent = 'Loading…';
       let q = CP.sb().from('properties').select('*, landlords(business_name,contact_name), property_photos(url,display_order)').order('created_at',{ascending:false});
       if(_statusFilter !== 'all') q = q.eq('status', _statusFilter);
+      if(_landlordFilter) q = q.eq('landlord_id', _landlordFilter);
       if(_q.trim()){
         const s = _q.trim().replace(/'/g,"''");
         q = q.or('title.ilike.%'+s+'%,address.ilike.%'+s+'%');
@@ -77,8 +86,9 @@
       p = p || {};
       return [
         { name:'title',          label:'Title',         type:'text',     value:p.title||'',          required:true,  placeholder:'2BR/1BA Apartment' },
-        { name:'status',         label:'Status',        type:'select',   value:p.status||'active', options:[
-            {value:'active',label:'Active'},{value:'inactive',label:'Inactive'},{value:'rented',label:'Rented'},{value:'maintenance',label:'Maintenance'}
+        { name:'status',         label:'Status',        type:'select',   value:p.status||'draft', options:[
+            {value:'draft',label:'Draft'},{value:'active',label:'Active'},{value:'inactive',label:'Inactive'},
+            {value:'rented',label:'Rented'},{value:'maintenance',label:'Maintenance'},{value:'paused',label:'Paused'},{value:'archived',label:'Archived'}
           ]},
         { name:'address',        label:'Address',       type:'text',     value:p.address||p.location||'', required:true, placeholder:'123 Main St, City, State 12345' },
         { name:'bedrooms',       label:'Bedrooms',      type:'number',   value:p.bedrooms!=null?p.bedrooms:'', placeholder:'2' },
@@ -123,13 +133,22 @@
       let error;
       if(isEdit){
         const r = await CP.sb().from('properties').update(patch).eq('id', p.id); error = r.error;
+        if(error){ AdminShell.toast('Save failed: '+error.message,'error'); return; }
+        AdminShell.toast('Updated','success');
+        load();
       } else {
         patch.created_at = new Date().toISOString();
-        const r = await CP.sb().from('properties').insert([patch]); error = r.error;
+        const r = await CP.sb().from('properties').insert([patch]).select('id').single();
+        error = r.error;
+        if(error){ AdminShell.toast('Save failed: '+error.message,'error'); return; }
+        AdminShell.toast('Property created — opening detail page…','success');
+        const newId = r.data && r.data.id;
+        if(newId){
+          setTimeout(() => { location.href = '/admin/property-detail.html?id='+encodeURIComponent(newId)+'&edit=1'; }, 600);
+        } else {
+          load();
+        }
       }
-      if(error){ AdminShell.toast('Save failed: '+error.message,'error'); return; }
-      AdminShell.toast(isEdit ? 'Updated' : 'Property added','success');
-      load();
     }
 
     // ─────────────────────── Hard delete (admin-only) ───────────────────────
