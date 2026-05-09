@@ -6,7 +6,7 @@
     let _allCache = [];
 
     function pill(s){
-      const m = { active:'pill-success', rented:'pill-info', inactive:'pill-muted', maintenance:'pill-warning' };
+      const m = { active:'pill-success', rented:'pill-info', inactive:'pill-muted', maintenance:'pill-warning', draft:'pill-muted', paused:'pill-warning', archived:'pill-muted' };
       return '<span class="pill '+(m[s]||'pill-muted')+'">'+(s||'unknown')+'</span>';
     }
     function fmtMoney(v){ if(v==null) return '—'; return '$'+Number(v).toLocaleString('en-US'); }
@@ -28,10 +28,10 @@
         +   '<div class="prop-body">'
         +     '<div class="row-title">'+S.esc(p.title||'Untitled')+'</div>'
         +     '<div class="row-sub">'+S.esc(p.address||p.location||'No address')+'</div>'
-        +     '<div>'+pill(p.status)+'</div>'
+        +     '<div>'+pill(p.status)+(p.landlords ? ' <span class="pill pill-muted" style="font-size:.65rem">'+S.esc(p.landlords.business_name||p.landlords.contact_name||'')+'</span>' : '')+'</div>'
         +     '<div class="row-sub" style="color:var(--muted-2)">'+S.esc(meta)+'</div>'
         +     '<div class="prop-actions">'
-        +       '<button class="btn btn-ghost btn-sm" data-action="edit-prop" data-id="'+S.esc(p.id)+'">Edit</button>'
+        +       '<a class="btn btn-ghost btn-sm" href="/admin/property-detail.html?id='+S.esc(p.id)+'&edit=1">Edit</a>'
         +       '<a class="btn btn-ghost btn-sm" href="/admin/property-detail.html?id='+S.esc(p.id)+'">View</a>'
         +       '<button class="btn btn-ghost btn-sm" data-action="delete-prop" data-id="'+S.esc(p.id)+'" style="color:#dc2626;margin-left:auto" title="Delete property forever" aria-label="Delete property forever">Delete</button>'
         +     '</div>'
@@ -43,7 +43,7 @@
       const grid = document.getElementById('prop-grid');
       grid.innerHTML = '<div class="skeleton sk-line lg" style="height:220px;border-radius:12px"></div>'.repeat(3);
       document.getElementById('page-sub').textContent = 'Loading…';
-      let q = CP.sb().from('properties').select('*, property_photos(url,display_order)').order('created_at',{ascending:false});
+      let q = CP.sb().from('properties').select('*, landlords(business_name,contact_name), property_photos(url,display_order)').order('created_at',{ascending:false});
       if(_statusFilter !== 'all') q = q.eq('status', _statusFilter);
       if(_q.trim()){
         const s = _q.trim().replace(/'/g,"''");
@@ -237,11 +237,6 @@
 
       AdminShell.on('refresh', () => load());
       AdminShell.on('add-prop', (target, e) => { e.preventDefault(); openForm(null); });
-      AdminShell.on('edit-prop', (target) => {
-        const id = target.getAttribute('data-id');
-        const p = _allCache.find(x => x.id === id);
-        if(p) openForm(p);
-      });
       AdminShell.on('delete-prop', (target) => {
         const id = target.getAttribute('data-id');
         if(id) confirmAndDelete(id).catch(err => AdminShell.toast('Delete error: '+(err && err.message || err), 'error'));

@@ -40,6 +40,9 @@
     { value:'rented',      label:'Rented',      cls:'pd-status-chip rented' },
     { value:'inactive',    label:'Inactive',    cls:'pd-status-chip inactive' },
     { value:'maintenance', label:'Maintenance', cls:'pd-status-chip maintenance' },
+    { value:'draft',       label:'Draft',       cls:'pd-status-chip inactive' },
+    { value:'paused',      label:'Paused',      cls:'pd-status-chip maintenance' },
+    { value:'archived',    label:'Archived',    cls:'pd-status-chip inactive' },
   ];
 
   function renderStatusBar(currentStatus) {
@@ -449,7 +452,7 @@
             <div class="pd-landlord-name">${esc(name)} ${landlord.verified ? '<span class="pill pill-success" style="font-size:.6rem;padding:2px 8px">Verified</span>' : ''}</div>
             ${landlord.tagline ? `<div class="pd-landlord-tagline">${esc(landlord.tagline)}</div>` : ''}
             <div class="pd-landlord-meta">
-              ${esc(landlord.email || '—')}${landlord.phone ? ' · ' + esc(landlord.phone) : ''}
+              <a href="/admin/landlords.html" style="font-size:.74rem;color:var(--brand)">View full profile →</a>
             </div>
           </div>
         </div>
@@ -465,13 +468,14 @@
             <td>${esc(t.email || '—')}</td>
             <td><span class="pill ${pillCls(a.status)}">${esc(a.status || '—')}</span></td>
             <td>${fmt(a.created_at)}</td>
-            <td><a class="btn btn-ghost btn-sm" href="/admin/applications.html" style="font-size:.72rem">View</a></td>
+            <td><a class="btn btn-ghost btn-sm" href="/admin/applications.html?id=${esc(a.id)}" style="font-size:.72rem">Open</a></td>
           </tr>`;
         }).join('')
       : '<tr><td colspan="5" class="pd-empty-row">No applications for this property.</td></tr>';
 
+    const appsTitleSuffix = apps.length === 25 ? `${apps.length}+ <a href="/admin/applications.html?property=${esc(propId)}" style="font-size:.72rem;color:var(--brand);font-weight:500">View all ↗</a>` : String(apps.length);
     const appsHtml = `<div class="pd-section">
-      <div class="pd-section-title">Applications (${apps.length})</div>
+      <div class="pd-section-title">Applications (${appsTitleSuffix})</div>
       <div style="overflow-x:auto"><table class="pd-table"><thead><tr>
         <th>Tenant</th><th>Email</th><th>Status</th><th>Submitted</th><th></th>
       </tr></thead><tbody>${appRows}</tbody></table></div>
@@ -480,20 +484,21 @@
     // ── Inquiries ──
     const inqRows = inqs.length
       ? inqs.map(i =>
-          `<tr>
+          `<tr class="pd-inq-row" style="cursor:pointer" data-msg="${esc(i.message||'')}" title="Click to read message">
             <td>${esc(i.name || '—')}</td>
             <td>${esc(i.email || '—')}</td>
             <td>${esc(i.phone || '—')}</td>
             <td>${fmt(i.created_at)}</td>
-            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(i.message||'')}">${esc(i.message || '—')}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--brand)">${i.message ? '💬 ' + esc(i.message.slice(0,60)) + (i.message.length > 60 ? '…' : '') : '—'}</td>
           </tr>`
         ).join('')
       : '<tr><td colspan="5" class="pd-empty-row">No inquiries yet.</td></tr>';
 
+    const inqsTitleSuffix = inqs.length === 25 ? `${inqs.length}+` : String(inqs.length);
     const inqsHtml = `<div class="pd-section">
-      <div class="pd-section-title">Inquiries (${inqs.length})</div>
+      <div class="pd-section-title">Inquiries (${inqsTitleSuffix})</div>
       <div style="overflow-x:auto"><table class="pd-table"><thead><tr>
-        <th>Name</th><th>Email</th><th>Phone</th><th>Date</th><th>Message</th>
+        <th>Name</th><th>Email</th><th>Phone</th><th>Date</th><th>Message (click to expand)</th>
       </tr></thead><tbody>${inqRows}</tbody></table></div>
     </div>`;
 
@@ -548,6 +553,16 @@
 
     // Manage photos button
     document.getElementById('pd-btn-photos')?.addEventListener('click', () => openPhotoManager());
+
+    // Inquiry message expand (click row to read full message)
+    document.querySelectorAll('.pd-inq-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const msg = row.dataset.msg;
+        if (!msg) return;
+        const name = row.querySelector('td') ? row.querySelector('td').textContent : 'Inquiry';
+        S.toast(name + ': ' + msg, 'info', 8000);
+      });
+    });
   }
 
   // ── Edit panel ───────────────────────────────────────────────────────────────
@@ -758,6 +773,19 @@
                   <input class="pd-edit-input" name="lng" type="number" value="${esc(String(p.lng || ''))}" placeholder="-122.4194" step="any">
                 </label>
               </div>
+              <button type="button" id="pd-geocode-btn" class="btn btn-ghost btn-sm" style="margin-top:4px;align-self:flex-start">
+                <i class="fas fa-location-dot"></i> Get coords from address
+              </button>
+            </div>
+
+            <div class="pd-edit-group">
+              <div class="pd-edit-group-title">Landlord Assignment</div>
+              <label class="pd-edit-label">Assigned landlord
+                <span class="pd-edit-hint">Change which landlord manages this property</span>
+                <select class="pd-edit-input" name="landlord_id" id="pd-landlord-select">
+                  <option value="${esc(String(p.landlord_id || ''))}">Loading landlords…</option>
+                </select>
+              </label>
             </div>
 
           </form>
@@ -778,6 +806,54 @@
     document.getElementById('pd-edit-cancel').addEventListener('click', closePanel);
     document.getElementById('pd-edit-overlay').addEventListener('click', closePanel);
     document.getElementById('pd-edit-save').addEventListener('click', () => saveEdit(closePanel));
+
+    // ── Geocode button ──
+    document.getElementById('pd-geocode-btn').addEventListener('click', async () => {
+      const form = document.getElementById('pd-edit-form');
+      const addr = [
+        form.elements.address.value,
+        form.elements.city.value,
+        form.elements.state.value,
+        form.elements.zip.value
+      ].filter(Boolean).join(', ');
+      if (!addr) { S.toast('Enter an address first', 'error'); return; }
+      const apiKey = window.CONFIG && CONFIG.GEOAPIFY_API_KEY;
+      if (!apiKey) { S.toast('Geocoding not configured', 'error'); return; }
+      const btn = document.getElementById('pd-geocode-btn');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Looking up…';
+      try {
+        const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(addr)}&limit=1&apiKey=${encodeURIComponent(apiKey)}`);
+        const json = await res.json();
+        const feat = json && json.features && json.features[0];
+        if (!feat) { S.toast('Address not found', 'error'); return; }
+        const lat = feat.geometry.coordinates[1];
+        const lng = feat.geometry.coordinates[0];
+        form.elements.lat.value = lat.toFixed(6);
+        form.elements.lng.value = lng.toFixed(6);
+        S.toast('Coordinates updated!', 'success');
+      } catch (err) {
+        S.toast('Geocode failed: ' + (err.message || err), 'error');
+      } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-location-dot"></i> Get coords from address';
+      }
+    });
+
+    // ── Populate landlord dropdown ──
+    CP.sb().rpc('admin_list_landlords', { p_page: 0, p_per_page: 200 }).then(({ data, error }) => {
+      const sel = document.getElementById('pd-landlord-select');
+      if (!sel) return;
+      if (error || !data) { sel.innerHTML = '<option value="">— Could not load landlords —</option>'; return; }
+      const rows = data.rows || [];
+      sel.innerHTML = '<option value="">— Unassigned —</option>' +
+        rows.map(l => {
+          const label = esc(l.business_name || l.contact_name || l.id);
+          const selected = l.id === p.landlord_id ? ' selected' : '';
+          return `<option value="${esc(l.id)}"${selected}>${label}</option>`;
+        }).join('');
+    }).catch(() => {
+      const sel = document.getElementById('pd-landlord-select');
+      if (sel) sel.innerHTML = '<option value="">— Could not load landlords —</option>';
+    });
   }
 
   async function saveEdit(closePanel) {
@@ -842,6 +918,7 @@
       showing_instructions: get('showing_instructions') || null,
       lat:                getNum('lat'),
       lng:                getNum('lng'),
+      landlord_id:        get('landlord_id') || null,
       updated_at:         new Date().toISOString(),
     };
 
@@ -854,10 +931,22 @@
     S.toast('Property saved!', 'success');
     closePanel();
 
+    // ── Audit log (non-blocking) ──
+    CP.sb().auth.getUser().then(({ data: ud }) => {
+      const uid = ud && ud.user ? ud.user.id : null;
+      CP.sb().from('admin_actions').insert([{
+        user_id: uid,
+        action: 'property.edit',
+        target_type: 'property',
+        target_id: String(propId),
+        metadata: { title: patch.title, fields_changed: Object.keys(patch), updated_at: patch.updated_at }
+      }]).catch(() => {});
+    }).catch(() => {});
+
     // Reload page data
     const { data } = await CP.sb()
       .from('properties')
-      .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,phone,email,verified), property_photos(id,url,display_order,watermark_status,file_id)')
+      .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
       .eq('id', propId)
       .single();
     if (data) {
@@ -1008,7 +1097,7 @@
       // Reload page
       const { data } = await CP.sb()
         .from('properties')
-        .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,phone,email,verified), property_photos(id,url,display_order,watermark_status,file_id)')
+        .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
         .eq('id', propId).single();
       if (data) {
         const [appsRes, inqsRes] = await Promise.all([
@@ -1042,7 +1131,7 @@
     const [propRes, appsRes, inqsRes] = await Promise.all([
       CP.sb()
         .from('properties')
-        .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,phone,email,verified), property_photos(id,url,display_order,watermark_status,file_id)')
+        .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
         .eq('id', propId)
         .single(),
       CP.sb()
@@ -1066,5 +1155,13 @@
     }
 
     render(propRes.data, appsRes.data || [], inqsRes.data || []);
+
+    // Auto-open edit panel if ?edit=1 in URL
+    if (params.get('edit') === '1') {
+      openEditPanel(propRes.data);
+      // Clean up URL so refresh doesn't re-open
+      const cleanUrl = location.pathname + '?id=' + encodeURIComponent(propId);
+      history.replaceState(null, '', cleanUrl);
+    }
   });
 })();
