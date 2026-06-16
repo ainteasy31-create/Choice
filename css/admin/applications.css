@@ -52,6 +52,7 @@
 .b-denied   {background:rgba(239,68,68,.15);color:var(--danger)}
 .b-waitlisted{background:rgba(99,102,241,.15);color:#6366f1}
 .b-withdrawn{background:rgba(107,114,128,.15);color:#6b7280}
+.b-archived {background:rgba(107,114,128,.08);color:#9ca3af;text-decoration:line-through}
 .b-paid     {background:rgba(34,197,94,.15);color:var(--success)}
 .b-unpaid   {background:rgba(245,158,11,.15);color:var(--warning)}
 .b-waived   {background:rgba(107,114,128,.15);color:#6b7280}

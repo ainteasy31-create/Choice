@@ -37,8 +37,8 @@
   }
 
   function statusBadge(s){
-    const m={pending:'b-pending',under_review:'b-under_review',approved:'b-approved',denied:'b-denied',waitlisted:'b-waitlisted',withdrawn:'b-withdrawn'};
-    const l={pending:'Pending',under_review:'In Review',approved:'Approved',denied:'Denied',waitlisted:'Waitlisted',withdrawn:'Withdrawn'};
+    const m={pending:'b-pending',under_review:'b-under_review',approved:'b-approved',denied:'b-denied',waitlisted:'b-waitlisted',withdrawn:'b-withdrawn',archived:'b-archived'};
+    const l={pending:'Pending',under_review:'In Review',approved:'Approved',denied:'Denied',waitlisted:'Waitlisted',withdrawn:'Withdrawn',archived:'Archived'};
     return `<span class="badge ${m[s]||'b-pending'}">${S.esc(l[s]||s||'—')}</span>`;
   }
   function payBadge(s){
@@ -61,6 +61,7 @@
     const isApproved = app.status === 'approved';
     const isDenied = app.status === 'denied';
     const isWaitlisted = app.status === 'waitlisted';
+    const isArchived = app.status === 'archived';
     const hfRequested = !!app.holding_fee_requested;
     const hfPaid = !!app.holding_fee_paid;
 
@@ -101,10 +102,11 @@
       </div>
 
       <div class="card-actions">
-        ${!isApproved   ? `<button class="btn-act btn-approve"  data-action="status" data-set="approved"   ${ds}>✓ Approve</button>` : ''}
-        ${!isDenied     ? `<button class="btn-act btn-deny"     data-action="status" data-set="denied"     ${ds}>✗ Deny</button>` : ''}
-        ${!isWaitlisted ? `<button class="btn-act btn-waitlist" data-action="status" data-set="waitlisted" ${ds}>⧗ Waitlist</button>` : ''}
-        ${app.status!=='pending' ? `<button class="btn-act btn-pending" data-action="status" data-set="pending" ${ds}>↺ Reset</button>` : ''}
+        ${!isArchived && !isApproved   ? `<button class="btn-act btn-approve"  data-action="status" data-set="approved"   ${ds}>✓ Approve</button>` : ''}
+        ${!isArchived && !isDenied     ? `<button class="btn-act btn-deny"     data-action="status" data-set="denied"     ${ds}>✗ Deny</button>` : ''}
+        ${!isArchived && !isWaitlisted ? `<button class="btn-act btn-waitlist" data-action="status" data-set="waitlisted" ${ds}>⧗ Waitlist</button>` : ''}
+        ${!isArchived && app.status!=='pending' ? `<button class="btn-act btn-pending" data-action="status" data-set="pending" ${ds}>↺ Reset</button>` : ''}
+        ${!isArchived ? `<button class="btn-act btn-archive" data-action="status" data-set="archived" ${ds} style="opacity:.7">🗄 Archive</button>` : `<button class="btn-act btn-pending" data-action="status" data-set="pending" ${ds}>↺ Unarchive</button>`}
 
         ${!isPaid && !isWaived ? `<button class="btn-act btn-pay"   data-action="pay"   ${ds}>$ Mark paid</button>` : ''}
         ${isPaid                ? `<button class="btn-act btn-unpay" data-action="unpay" ${ds}>↺ Mark unpaid</button>` : ''}
@@ -320,6 +322,7 @@
           <button class="btn-act btn-approve"  data-action="bulk-status" data-set="approved">✓ Approve all</button>
           <button class="btn-act btn-deny"     data-action="bulk-status" data-set="denied">✗ Deny all</button>
           <button class="btn-act btn-waitlist" data-action="bulk-status" data-set="waitlisted">⧗ Waitlist all</button>
+          <button class="btn-act"              data-action="bulk-status" data-set="archived" style="opacity:.7">🗄 Archive all</button>
           <button class="btn-act btn-pay"      data-action="bulk-pay">$ Mark paid</button>
           <button class="btn-act"               data-action="bulk-waive">Waive fees</button>
           <button class="btn-act"               data-action="bulk-unpay">↺ Mark unpaid</button>
@@ -366,7 +369,7 @@
   }
 
   function bulkSetStatus(status){
-    const label = ({ approved:'Approve', denied:'Deny', waitlisted:'Waitlist' })[status] || 'Update status';
+    const label = ({ approved:'Approve', denied:'Deny', waitlisted:'Waitlist', archived:'Archive', withdrawn:'Withdraw' })[status] || 'Update status';
     return runBulk(label, (id) => CP.Applications.updateStatus(id, status), { danger: status === 'denied' });
   }
   function bulkMarkPaid(){
@@ -444,12 +447,13 @@
     const bar = document.getElementById('stats-bar');
     if(!bar) return;
     bar.style.display = 'grid';
-    const c = { total: rows.length, pending:0, approved:0, waitlisted:0, denied:0, unpaid:0 };
+    const c = { total: rows.length, pending:0, approved:0, waitlisted:0, denied:0, unpaid:0, archived:0 };
     rows.forEach(r => {
       if(r.status === 'pending') c.pending++;
       if(r.status === 'approved') c.approved++;
       if(r.status === 'waitlisted') c.waitlisted++;
       if(r.status === 'denied') c.denied++;
+      if(r.status === 'archived') c.archived++;
       if(r.payment_status === 'unpaid' && r.status === 'approved') c.unpaid++;
     });
     bar.innerHTML = `
@@ -458,14 +462,15 @@
       <div class="stat-card"><div class="stat-num" style="color:var(--success)">${c.approved}</div><div class="stat-label">Approved</div></div>
       <div class="stat-card"><div class="stat-num" style="color:#a855f7">${c.waitlisted}</div><div class="stat-label">Waitlisted</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--danger)">${c.denied}</div><div class="stat-label">Denied</div></div>
-      <div class="stat-card"><div class="stat-num" style="color:#f97316">${c.unpaid}</div><div class="stat-label">Unpaid + approved</div></div>`;
+      <div class="stat-card"><div class="stat-num" style="color:#f97316">${c.unpaid}</div><div class="stat-label">Unpaid + approved</div></div>
+      ${c.archived ? `<div class="stat-card"><div class="stat-num" style="color:#9ca3af">${c.archived}</div><div class="stat-label">Archived</div></div>` : ''}`;
   }
 
   // ───── Status change ─────
   async function setStatus(dbId, appId, status){
     const willEmail = ['approved','denied','waitlisted'].includes(status);
-    const labels = { approved:'Approve application?', denied:'Deny application?', waitlisted:'Move to waitlist?', pending:'Reset to pending?', new:'Reset to new?' };
-    const verbs  = { approved:'Approve', denied:'Deny', waitlisted:'Waitlist', pending:'Reset', new:'Reset' };
+    const labels = { approved:'Approve application?', denied:'Deny application?', waitlisted:'Move to waitlist?', pending:'Reset to pending?', new:'Reset to new?', archived:'Archive application?', withdrawn:'Mark as withdrawn?' };
+    const verbs  = { approved:'Approve', denied:'Deny', waitlisted:'Waitlist', pending:'Reset', new:'Reset', archived:'Archive', withdrawn:'Withdraw' };
     const proceed = await S.confirm({
       title: labels[status] || ('Set status to ' + status + '?'),
       message: willEmail
