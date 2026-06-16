@@ -133,7 +133,7 @@
         <i class="fas fa-spinner fa-pulse" id="submissionSpinner"></i>
         <span id="submissionMessage">Processing your application...</span>
     </div>
-    <div class="submission-note" data-i18n="submissionMessage">Please don't close this window. This may take a few moments...</div>
+    <div class="submission-note" data-i18n="submissionMessage">Do not close this window. Processing may take a few moments.</div>
 </div>
 
         <!-- Success State — hidden by default; JS populates and shows via showSuccessState() -->
@@ -261,7 +261,7 @@
                 <div class="form-group">
                     <label class="required" for="propertyAddress" data-i18n="propertyAddressLabel">Property Address Applying For</label>
                     <input type="text" id="propertyAddress" name="Property Address" required placeholder="Street address, city, state, zip" data-i18n="propertyAddressPlaceholder">
-                    <div class="error-message" data-i18n="errAddress">Please enter the property address</div>
+                    <div class="error-message" data-i18n="errAddress">Property address is required.</div>
                 </div>
                 <!-- Hidden inputs — carry URL param property context through FormData automatically -->
                 <input type="hidden" id="hiddenPropertyId"    name="Property ID">
@@ -347,7 +347,7 @@
                             <input type="email" id="email" name="Email" required placeholder="email@example.com" data-i18n="emailPlaceholder">
                             <div class="field-hint" data-i18n="emailHint">
                                 <i class="fas fa-info-circle"></i>
-                                Make sure the provided email is correct and accessible. Confirmation and updates sent here.
+                                Used for application communications and confirmation.
                             </div>
                             <div class="error-message" data-i18n="errEmail">Invalid email</div>
                         </div>
@@ -358,7 +358,7 @@
                             <input type="tel" id="phone" name="Phone" required placeholder="(555) 000-0000" autocomplete="tel" inputmode="tel" data-i18n="phonePlaceholder">
                             <div class="field-hint" data-i18n="phoneHint">
                                 <i class="fas fa-info-circle"></i>
-                                Our team will contact you here.
+                                Used for application-related contact.
                             </div>
                             <div class="error-message" data-i18n="errPhone">Invalid phone</div>
                         </div>
@@ -377,7 +377,7 @@
                         <div class="form-group">
                             <label class="required" for="ssn" data-i18n="ssnLabel">Social Security Number (Last 4 Digits)</label>
                             <div class="field-hint ssn-hint" data-i18n="ssnHint">
-                                <i class="fas fa-lock"></i> Only last 4 digits required
+                                <i class="fas fa-lock"></i> Last 4 digits only
                             </div>
                             <div class="ssn-container">
                                 <input type="password" id="ssn" name="SSN" placeholder="1234" maxlength="4" inputmode="numeric" required autocomplete="off" data-i18n="ssnPlaceholder">
@@ -863,7 +863,7 @@
                 <div class="payment-section-intro">
                     <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:0.88rem;color:#166534;display:flex;align-items:flex-start;gap:8px;">
                         <i class="fas fa-lock-open" style="margin-top:2px;flex-shrink:0;"></i>
-                        <span><strong>No payment is collected on this form.</strong> After you submit, our team will contact you using your selected method below to arrange the application fee at that time.</span>
+                        <span><strong>No payment is collected via this form.</strong> Following submission, a representative will contact you using your indicated method below to coordinate the application fee.</span>
                     </div>
                     <p data-i18n="paymentIntro">Tell us which payment services you use. When we contact you about the application fee, we'll reach out through the method you choose here.</p>
                     <div class="important">
@@ -1064,8 +1064,8 @@
                         <input type="file" id="docUpload" multiple accept=".pdf,.jpg,.jpeg,.png" style="display:none;" aria-label="Upload supporting documents" aria-describedby="uploadMeter uploadError">
                         <label for="docUpload" class="upload-label" id="uploadLabel">
                             <i class="fas fa-cloud-upload-alt" style="font-size:30px;color:var(--secondary);margin-bottom:8px;display:block;"></i>
-                            <strong data-i18n="uploadCta">Click to upload — or drag files here</strong><br>
-                            <span class="upload-hint" data-i18n="uploadHint">Government ID &nbsp;·&nbsp; Pay stubs &nbsp;·&nbsp; Bank statements</span>
+                            <strong data-i18n="uploadCta">Click to browse or drag files here</strong><br>
+                            <span class="upload-hint" data-i18n="uploadHint">Government-issued ID &nbsp;·&nbsp; Pay stubs &nbsp;·&nbsp; Bank statements</span>
                         </label>
                         <div id="uploadedFiles" class="uploaded-files-list"></div>
                         <div id="uploadMeter" class="upload-meter" aria-live="polite" style="display:none;margin-top:10px;font-size:12px;color:#5f6b7a;">
@@ -1087,27 +1087,27 @@
                     <div class="legal-checkbox-group">
                         <div class="custom-checkbox">
                             <input type="checkbox" id="certifyCorrect" name="certifyCorrect" required>
-                            <label for="certifyCorrect" data-i18n="legalCertify">I certify that all information provided in this application is true, accurate, and complete to the best of my knowledge. I understand that providing false information is grounds for immediate rejection.</label>
+                            <label for="certifyCorrect" data-i18n="legalCertify">I certify that all information provided in this application is true, accurate, and complete to the best of my knowledge. I understand that any material misrepresentation is grounds for denial or termination of tenancy.</label>
                         </div>
 
                         <div class="custom-checkbox">
                             <input type="checkbox" id="authorizeVerify" name="authorizeVerify" required>
-                            <label for="authorizeVerify" data-i18n="legalAuthorize">I authorize Choice Properties to verify all information provided, including employment history, income, rental history, references, and to conduct a credit and background check.</label>
+                            <label for="authorizeVerify" data-i18n="legalAuthorize">I authorize Choice Properties and its designated agents to verify all information provided in this application, including employment, income, rental history, personal references, and to conduct a consumer credit and background screening.</label>
                         </div>
 
                         <div class="custom-checkbox">
                             <input type="checkbox" id="feeAcknowledge" name="feeAcknowledge" value="on" required>
-                            <label for="feeAcknowledge" data-i18n="feeAcknowledge">I acknowledge the application fee policy and consent to my personal information being reviewed by Choice Properties staff and the landlord associated with this property solely for rental application evaluation. The application fee is <strong>non-refundable</strong> once submitted and payment is processed, except as described in the <a href="/application-credit-policy.html" target="_blank" rel="noopener" style="color:var(--primary);">Application Credit Policy</a>.</label>
+                            <label for="feeAcknowledge" data-i18n="feeAcknowledge">I acknowledge the application fee policy and consent to my personal information being reviewed by Choice Properties staff and the property owner solely for rental application screening. The application fee is <strong>non-refundable</strong> upon submission and payment processing, except as provided in the <a href="/application-credit-policy.html" target="_blank" rel="noopener" style="color:var(--primary);">Application Credit Policy</a>.</label>
                         </div>
 
                         <div class="custom-checkbox">
                             <input type="checkbox" id="agreeTermsPrivacy" name="agreeTermsPrivacy" value="on" required>
-                            <label for="agreeTermsPrivacy" data-i18n="agreeTermsPrivacy">I have read and agree to the <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--primary);">Terms of Service</a> (including the <strong>binding arbitration</strong> and <strong>class action waiver</strong> in Sections 18–19), the <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--primary);">Privacy Policy</a>, and the <a href="/policies.html" target="_blank" rel="noopener" style="color:var(--primary);">Complete Policy &amp; Legal Framework</a>. I confirm I am at least 18 years old and have legal capacity to enter into this agreement.</label>
+                            <label for="agreeTermsPrivacy" data-i18n="agreeTermsPrivacy">I have read and agree to the <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--primary);">Terms of Service</a> (including the <strong>binding arbitration clause</strong> and <strong>class action waiver</strong> in Sections 18–19), the <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--primary);">Privacy Policy</a>, and the <a href="/policies.html" target="_blank" rel="noopener" style="color:var(--primary);">Complete Policy &amp; Legal Framework</a>. I confirm I am at least 18 years of age and have legal capacity to enter into this agreement.</label>
                         </div>
 
                         <div class="custom-checkbox">
                             <input type="checkbox" id="smsConsent" name="smsConsent" value="on">
-                            <label for="smsConsent" data-i18n="smsConsent">I expressly consent to receive transactional SMS messages from Choice Properties at the mobile number I provided, regarding my application, payment coordination, lease, and move-in. Message frequency varies. <strong>Message and data rates may apply.</strong> Reply HELP for help, STOP to opt out. Consent to SMS is not required to apply — leave this unchecked to receive updates by email only.</label>
+                            <label for="smsConsent" data-i18n="smsConsent">I expressly consent to receive transactional SMS messages from Choice Properties at the mobile number provided, regarding application status, fee coordination, lease execution, and move-in scheduling. Message frequency varies. <strong>Message and data rates may apply.</strong> Reply HELP for assistance, STOP to opt out at any time. SMS consent is not a condition of application — leave unchecked to receive communications by email only.</label>
                         </div>
                     </div>
 
@@ -1120,7 +1120,7 @@
 
                 <div class="trust-submission-line" style="text-align:center;font-size:13px;color:#5f6b7a;margin:16px 0 8px;display:flex;align-items:center;justify-content:center;gap:8px;">
                     <i class="fas fa-shield-alt" style="color:var(--success);font-size:14px;"></i>
-                    <span data-i18n="trustLine">Your information is securely processed and will only be used for rental application review.</span>
+                    <span data-i18n="trustLine">Application data is transmitted securely and used solely for rental screening purposes.</span>
                 </div>
                 <div class="btn-container">
                     <button type="button" class="btn-prev"><i class="fas fa-arrow-left"></i> <span data-i18n="prevStep">Previous</span></button>
@@ -1128,7 +1128,7 @@
                         <span data-i18n="submitBtn">Submit Application</span> <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
-                <p class="submit-disclaimer" data-i18n="submitDisclaimer">By clicking submit, your application will be securely transmitted to Choice Properties.</p>
+                <p class="submit-disclaimer" data-i18n="submitDisclaimer">By submitting, you authorize Choice Properties to process this application in accordance with its Privacy Policy and Terms of Service.</p>
             </div>
 
           <!-- HONEYPOT — do not remove. Hidden from real users, catches bots. -->
@@ -1327,10 +1327,10 @@
     <div id="clearFormSheet" role="dialog" aria-modal="true" aria-labelledby="clearSheetTitle">
         <div class="sheet-handle"></div>
         <div class="sheet-warning-icon">&#x26A0;&#xFE0F;</div>
-        <h3 id="clearSheetTitle" data-i18n="startOverTitle">Start Over?</h3>
-        <p data-i18n="startOverDesc">All your entered information will be cleared and you'll return to Step 1.</p>
-        <button id="clearFormCancel" data-i18n="keepInfo">Keep My Information</button>
-        <button id="clearFormConfirm" data-i18n="yesStartOver">Yes, Clear Everything</button>
+        <h3 id="clearSheetTitle" data-i18n="startOverTitle">Discard Application?</h3>
+        <p data-i18n="startOverDesc">All entered information will be permanently cleared. You will be returned to Step 1.</p>
+        <button id="clearFormCancel" data-i18n="keepInfo">Continue Application</button>
+        <button id="clearFormConfirm" data-i18n="yesStartOver">Discard &amp; Restart</button>
     </div>
 
 </body>
