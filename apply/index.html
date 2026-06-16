@@ -178,7 +178,7 @@
                 </div>
                 <div class="urgent-notice">
                     <i class="fas fa-exclamation-circle"></i>
-                    <p><strong data-i18n="importantNote">Important:</strong> <span data-i18n="paymentUrgentText">Your application is now being evaluated for qualification. Payment is the next step to activate review — please keep your phone nearby so our team can reach you.</span></p>
+                    <p><strong data-i18n="importantNote">Important:</strong> <span data-i18n="paymentUrgentText">Payment is the next step to activate your application for review. Our leasing team will contact you shortly — please be available at the phone number or email address you provided.</span></p>
                 </div>
                 <div class="preference-summary">
                     <h4><i class="fas fa-clipboard-list"></i> <span data-i18n="yourPreferences">Your Preferences</span></h4>
@@ -202,7 +202,7 @@
                     <i class="fas fa-gem"></i>
                     <div>
                         <strong data-i18n="reapplicationPolicyTitle">Reapplication Protection</strong>
-                        <p data-i18n="reapplicationPolicyText">If your application is denied, you may apply for any other available property within 30 days — no new application fee. Your screening results remain valid for 60 days.</p>
+                        <p data-i18n="reapplicationPolicyText">If your application is denied after payment, you automatically receive application credits that cover the fee on a future application. Credits are valid for <strong>45 days</strong> from issuance. See the <a href="/application-credit-policy.html" target="_blank" rel="noopener" style="color:var(--primary);">Application Credit Policy</a> for full details.</p>
                     </div>
                 </div>
                 <div class="action-buttons">
@@ -358,7 +358,7 @@
                             <input type="tel" id="phone" name="Phone" required placeholder="(555) 000-0000" autocomplete="tel" inputmode="tel" data-i18n="phonePlaceholder">
                             <div class="field-hint" data-i18n="phoneHint">
                                 <i class="fas fa-info-circle"></i>
-                                Used for application-related contact.
+                                Used for application-related contact and fee coordination. You may receive text messages about your application — see SMS consent on the final step.
                             </div>
                             <div class="error-message" data-i18n="errPhone">Invalid phone</div>
                         </div>
@@ -1053,13 +1053,13 @@
 
                 <div class="policy-reminder">
                     <i class="fas fa-info-circle"></i>
-                    <span><strong data-i18n="reapplicationPolicyTitle">Reapplication Protection:</strong> <span data-i18n="reapplicationPolicyTextShort">If denied, apply again within 30 days with no new fee. Screening results valid for 60 days.</span></span>
+                    <span><strong data-i18n="reapplicationPolicyTitle">Reapplication Protection:</strong> <span data-i18n="reapplicationPolicyTextShort">If denied after payment, you receive application credits covering the fee on a future application. Credits valid for 45 days.</span></span>
                 </div>
 
                 <!-- Phase 8.2: Supporting Document Upload -->
                 <div class="upload-section" style="margin:20px 0;">
                     <h3 style="font-size:16px;font-weight:700;color:var(--primary);margin:0 0 6px;display:flex;align-items:center;gap:8px;"><i class="fas fa-paperclip" style="color:var(--secondary);"></i> <span data-i18n="uploadTitle">Supporting Documents</span> <span style="font-weight:400;font-size:13px;color:#64748b;"><span data-i18n="uploadOptional">(Optional)</span></span></h3>
-                    <p style="font-size:13px;color:#5f6b7a;margin:0 0 12px;line-height:1.5;" data-i18n="uploadDesc">Attaching documents now can speed up your review. You may also provide them when our team contacts you. <strong>Accepted:</strong> PDF, JPG, PNG · Max 1 MB per file · Up to 4 files · 3 MB total.</p>
+                    <p style="font-size:13px;color:#5f6b7a;margin:0 0 12px;line-height:1.5;" data-i18n="uploadDesc">Attaching documents now can speed up your review. You may also provide them when our team contacts you. <strong>Accepted:</strong> PDF, JPG, PNG · Max 1 MB per file · Up to 4 files · 3 MB total. Documents are transmitted securely and stored by Google as part of our application processing system — see our <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--primary);">Privacy Policy</a> for details.</p>
                     <div class="upload-zone" id="uploadZone">
                         <input type="file" id="docUpload" multiple accept=".pdf,.jpg,.jpeg,.png" style="display:none;" aria-label="Upload supporting documents" aria-describedby="uploadMeter uploadError">
                         <label for="docUpload" class="upload-label" id="uploadLabel">
@@ -1092,12 +1092,12 @@
 
                         <div class="custom-checkbox">
                             <input type="checkbox" id="authorizeVerify" name="authorizeVerify" required>
-                            <label for="authorizeVerify" data-i18n="legalAuthorize">I authorize Choice Properties and its designated agents to verify all information provided in this application, including employment, income, rental history, personal references, and to conduct a consumer credit and background screening.</label>
+                            <label for="authorizeVerify" data-i18n="legalAuthorize">I authorize Choice Properties and its designated agents — including the property landlord, employment and income verification services, and consumer reporting agencies (which conduct credit and background checks) — to verify all information provided in this application, including employment, income, rental history, and personal references. If adverse action is taken based on a consumer report, I will receive the name and contact information of the reporting agency used, a copy of the report, and a Summary of My Rights under the FCRA.</label>
                         </div>
 
                         <div class="custom-checkbox">
                             <input type="checkbox" id="feeAcknowledge" name="feeAcknowledge" value="on" required>
-                            <label for="feeAcknowledge" data-i18n="feeAcknowledge">I acknowledge the application fee policy and consent to my personal information being reviewed by Choice Properties staff and the property owner solely for rental application screening. The application fee is <strong>non-refundable</strong> upon submission and payment processing, except as provided in the <a href="/application-credit-policy.html" target="_blank" rel="noopener" style="color:var(--primary);">Application Credit Policy</a>.</label>
+                            <label for="feeAcknowledge" data-i18n="feeAcknowledge">I acknowledge the application fee policy and consent to my personal information being reviewed by Choice Properties staff and the property owner solely for rental application screening. The application fee is <strong>non-refundable once payment has been processed</strong> — nothing is charged until our team contacts you after submission — except as provided in the <a href="/application-credit-policy.html" target="_blank" rel="noopener" style="color:var(--primary);">Application Credit Policy</a>.</label>
                         </div>
 
                         <div class="custom-checkbox">
@@ -1107,7 +1107,7 @@
 
                         <div class="custom-checkbox">
                             <input type="checkbox" id="smsConsent" name="smsConsent" value="on">
-                            <label for="smsConsent" data-i18n="smsConsent">I expressly consent to receive transactional SMS messages from Choice Properties at the mobile number provided, regarding application status, fee coordination, lease execution, and move-in scheduling. Message frequency varies. <strong>Message and data rates may apply.</strong> Reply HELP for assistance, STOP to opt out at any time. SMS consent is not a condition of application — leave unchecked to receive communications by email only.</label>
+                            <label for="smsConsent" data-i18n="smsConsent">I expressly consent to receive transactional SMS messages from the <strong>Choice Properties Alerts</strong> program at the mobile number provided, regarding application status, fee coordination, lease execution, and move-in scheduling. Message frequency varies by application stage. <strong>Message and data rates may apply.</strong> Reply HELP for help or STOP to opt out at any time. View our <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--primary);">Privacy Policy</a>. SMS consent is not a condition of application — leave unchecked to receive communications by email only.</label>
                         </div>
                     </div>
 
@@ -1147,8 +1147,8 @@
             </div>
             <p data-i18n="footerCopyright">&copy; 2026 Choice Properties. All rights reserved.</p>
             <div class="footer-links">
-                <a href="mailto:support@choiceproperties.com" title="Privacy Policy — contact us for details"><i class="fas fa-shield-alt"></i> <span data-i18n="privacyPolicy">Privacy Policy</span></a>
-                <a href="mailto:support@choiceproperties.com" title="Terms of Service — contact us for details"><i class="fas fa-file-contract"></i> <span data-i18n="termsOfService">Terms of Service</span></a>
+                <a href="/privacy.html" target="_blank" rel="noopener"><i class="fas fa-shield-alt"></i> <span data-i18n="privacyPolicy">Privacy Policy</span></a>
+                <a href="/terms.html" target="_blank" rel="noopener"><i class="fas fa-file-contract"></i> <span data-i18n="termsOfService">Terms of Service</span></a>
                 <a href="mailto:support@choiceproperties.com"><i class="fas fa-envelope"></i> <span data-i18n="contactSupport">Contact Support</span></a>
             </div>
             <div class="security-badges">
