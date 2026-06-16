@@ -464,6 +464,53 @@ function renderPaymentStatus(app){
   return '';
 }
 
+// ── Documents submitted with the original application ────────────────────────
+function renderSubmittedDocs(app){
+  if(['denied','withdrawn'].includes(app.status)) return '';
+  return `<div class="section" id="submitted-docs-section" style="display:none">
+    <div class="section-label">Documents You Submitted</div>
+    <div class="card" id="submitted-docs-card">
+      <p style="color:var(--muted);font-size:.82rem;margin-bottom:10px">Files attached when you submitted your application. These are shared only with our leasing team.</p>
+      <div id="submitted-docs-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>`;
+}
+
+async function loadSubmittedDocs(appId){
+  try{
+    const sb=getSB();
+    const folder=appId+'/applicant_upload';
+    const {data:files,error}=await sb.storage.from('application-docs')
+      .list(folder,{limit:20,sortBy:{column:'created_at',order:'desc'}});
+    if(error||!files||!files.length) return;
+    const section=document.getElementById('submitted-docs-section');
+    const list=document.getElementById('submitted-docs-list');
+    if(!section||!list) return;
+    list.innerHTML=files.map(f=>{
+      const name=f.name||'document';
+      const isPdf=/\.pdf$/i.test(name);
+      const icon=isPdf?'&#128196;':'&#128247;';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--surface-2);border-radius:var(--r-md);border:1px solid var(--hairline)">
+        <span style="display:flex;align-items:center;gap:8px;font-size:.83rem;font-weight:500;min-width:0">
+          <span>${icon}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</span>
+        </span>
+        <button type="button" style="flex-shrink:0;font-size:.75rem;font-weight:600;color:#1d4ed8;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;white-space:nowrap"
+          data-action="dl-submitted-doc" data-path="${esc(folder+'/'+name)}">Download</button>
+      </div>`;
+    }).join('');
+    section.style.display='';
+  } catch(_){}
+}
+
+async function downloadSubmittedDoc(path){
+  try{
+    const {data,error}=await getSB().storage.from('application-docs').createSignedUrl(path,300);
+    if(error||!data?.signedUrl){showToast('Could not get download link','danger');return;}
+    window.open(data.signedUrl,'_blank');
+  }catch(e){showToast(e.message,'danger');}
+}
+
 // ── Document upload (checklist with live file list) ──────────────────────────
 function renderDocUpload(app){
   if(['denied','withdrawn'].includes(app.status))return '';
@@ -997,6 +1044,7 @@ function renderPortal(app){
     ${adminNotesHtml}
     ${moveInHtml}
     ${renderPaymentStatus(app)}
+    ${renderSubmittedDocs(app)}
     ${renderDocUpload(app)}
     <div class="trust-strip" aria-label="Privacy and security">
       <span><svg class="ico"><use href="#i-shield"/></svg>Documents encrypted in transit &amp; at rest</span>
@@ -1206,8 +1254,9 @@ document.addEventListener('click', function(e){
     case 'sign-out':       return signOut();
     case 'signout-retry':  return signOutAndRetry();
     case 'withdraw':       return withdrawApplication();
-    case 'download-lease': return downloadLease();
-    case 'lookup-app-id':  return lookupByAppId();
+    case 'download-lease':    return downloadLease();
+    case 'dl-submitted-doc':  return downloadSubmittedDoc(btn.dataset.path);
+    case 'lookup-app-id':     return lookupByAppId();
     case 'switch-app':     return window._switchApp && window._switchApp(btn.dataset.appId);
     case 'choose-file': {
       const target = document.getElementById(btn.dataset.target);
@@ -1435,6 +1484,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
     // returned docs, populateDocChecklist skips the storage.list round-trip.
     startCountdownTickers(content);
     populateDocChecklist(appId, prefetchedDocs);
+    loadSubmittedDocs(appId);
     setupDropzone();
 
     // Hydrate the property hero. When the portal-pulse RPC returned the

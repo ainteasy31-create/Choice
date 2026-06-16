@@ -209,6 +209,7 @@ export function applicationConfirmationHtml(
         <tr><td>Lease Term</td><td>${fields?.['Desired Lease Term'] || 'Not specified'}</td></tr>
         <tr><td>Email on File</td><td>${fields?.['Email'] || ''}</td></tr>
         <tr><td>Phone on File</td><td>${fields?.['Phone'] || ''}</td></tr>
+        ${(() => { const dc = fields ? Object.keys(fields).filter(k => k.startsWith('_docFile_') && k.endsWith('_name')).length : 0; return dc > 0 ? `<tr><td>Documents Submitted</td><td><strong>${dc} file${dc > 1 ? 's' : ''} attached</strong> — accessible via your tenant portal</td></tr>` : ''; })()}
       </table>
     </div>
 
@@ -327,6 +328,7 @@ export function adminNotificationHtml(
         <tr><td>Lease Term</td><td>${fields?.['Desired Lease Term'] || 'Not specified'}</td></tr>
         <tr><td>Contact Preference</td><td>${fields?.['Preferred Contact Method'] || 'Not specified'}</td></tr>
         <tr><td>Best Time to Reach</td><td>${[fields?.['Preferred Time'], fields?.['Preferred Time Specific']].filter(Boolean).join(' — ') || 'Any'}</td></tr>
+        ${(() => { const docCount = fields ? Object.keys(fields).filter(k => k.startsWith('_docFile_') && k.endsWith('_name')).length : 0; return docCount > 0 ? `<tr><td>Documents Attached</td><td><strong style="color:#059669;">&#x1F4CE; ${docCount} file${docCount > 1 ? 's' : ''} — view in admin portal</strong></td></tr>` : ''; })()}
       </table>
     </div>
 

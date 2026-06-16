@@ -386,6 +386,14 @@ Deno.serve(async (req: Request) => {
       const mimeType  = fv(fields[`_docFile_${docIdx}_type`]) || 'application/octet-stream';
       const b64       = fields[`_docFile_${docIdx}_data`];
 
+      // Server-side MIME allowlist — only accept PDF and common images
+      const ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
+      if (!ALLOWED_MIME.has(mimeType)) {
+        console.warn(`[CP] Skipping doc idx=${docIdx} — disallowed MIME type: ${mimeType}`);
+        docIdx++;
+        continue;
+      }
+
       // Decode base64 → Uint8Array for storage upload
       const binStr = atob(b64);
       const bytes  = new Uint8Array(binStr.length);

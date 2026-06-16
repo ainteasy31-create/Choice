@@ -78,7 +78,10 @@ Deno.serve(async (req: Request) => {
     const token = String(body.token || '').trim();
     const email = String(body.email || '').trim().toLowerCase();
     const sendResumeEmail = body.send_email === true;
-    const progressData = body.data;
+    // Strip _docFile_* keys — base64 file data must never be stored in draft DB
+    const progressData = (body.data && typeof body.data === 'object' && !Array.isArray(body.data))
+      ? Object.fromEntries(Object.entries(body.data as Record<string, unknown>).filter(([k]) => !k.startsWith('_docFile_')))
+      : body.data;
     const propertyFingerprint = String(body.property_fingerprint || '').trim();
 
     if (!TOKEN_RE.test(token)) return jsonErr(400, 'Invalid token');
