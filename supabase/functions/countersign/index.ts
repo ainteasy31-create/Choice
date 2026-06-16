@@ -12,11 +12,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { handleCors, jsonOk, jsonErr } from '../_shared/cors.ts';
 import { sendEmail } from '../_shared/send-email.ts';
-import { leaseFullyExecutedHtml } from '../_shared/email.ts';
-import { getTenantLoginUrl, getSiteUrl } from '../_shared/config.ts';
+import { leaseFullyExecutedHtml, landlordLeaseExecutedHtml } from '../_shared/email.ts';
+import { getTenantLoginUrl, getSiteUrl, getAdminUrl } from '../_shared/config.ts';
 import { resolveLeaseTemplate, finalizeAndStorePdf } from '../_shared/lease-render.ts';
 import { fetchAttachedAddenda } from '../_shared/lease-addenda.ts';
 import { mirrorAppToLease } from '../_shared/lease-mirror.ts';
+import { sendLandlordEmail } from '../_shared/landlord-notify.ts';
 
 const TENANT_LOGIN_URL = getTenantLoginUrl();
 
@@ -24,6 +25,10 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
+
+async function logEmail(appId: string, type: string, recipient: string, status: string, provider = 'gas', errorMsg: string | null = null) {
+  try { await supabase.from('email_logs').insert({ app_id: appId, type, recipient, status, provider, error_msg: errorMsg }); } catch (_) {}
+}
 
 async function verifyAdmin(req: Request): Promise<{ ok: boolean; userEmail?: string; error?: string }> {
   const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
@@ -178,7 +183,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (e) { console.error('sign_events insert failed (non-fatal):', (e as Error).message); }
 
-  // Fully executed email
+  // Fully executed email to tenant
   try {
     const leaseData = (app.lease_start_date || app.monthly_rent || app.move_in_costs) ? {
       startDate:  app.lease_start_date || undefined,
@@ -187,12 +192,24 @@ Deno.serve(async (req: Request) => {
       deposit:    app.security_deposit || undefined,
       moveInCost: app.move_in_costs    || undefined,
     } : undefined;
-    await sendEmail({
+    const execResult = await sendEmail({
       to:      app.email,
       subject: `\u{2713} Your Lease Has Been Fully Executed — Choice Properties (Ref: ${app.app_id})`,
       html:    leaseFullyExecutedHtml(app.first_name || 'Applicant', app.property_address || '', TENANT_LOGIN_URL, app.app_id, leaseData),
     });
+    await logEmail(app_id, 'lease_fully_executed', app.email, execResult.ok ? 'sent' : 'failed', execResult.provider, execResult.ok ? null : (execResult.error || 'failed'));
   } catch (e) { console.error('Fully executed email failed (non-fatal):', (e as Error).message); }
+
+  // Landlord notification — lease is fully executed
+  try {
+    const tenantName = `${app.first_name || ''} ${app.last_name || ''}`.trim();
+    await sendLandlordEmail(
+      supabase,
+      app.property_id,
+      `Lease Fully Executed — ${app.property_address || app_id}`,
+      landlordLeaseExecutedHtml('', tenantName, app.property_address || '', app.lease_start_date || undefined, app_id, getAdminUrl('/admin/leases.html')),
+    );
+  } catch (_) {}
 
   try {
     await supabase.from('admin_actions').insert({

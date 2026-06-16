@@ -18,6 +18,10 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
+async function logEmail(appId: string, type: string, recipient: string, status: string, provider = 'gas', errorMsg: string | null = null) {
+  try { await supabase.from('email_logs').insert({ app_id: appId, type, recipient, status, provider, error_msg: errorMsg }); } catch (_) {}
+}
+
 async function verifyAdmin(req: Request): Promise<{ ok: boolean; userEmail?: string; error?: string }> {
   const auth = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
   if (!auth) return { ok: false, error: 'Missing authorization header' };
@@ -104,8 +108,9 @@ Deno.serve(async (req: Request) => {
             app_id,
           )
         : signingEmailHtml(toName, app?.property_address || '', signingUrl, app_id);
-      await sendEmail({ to: toEmail, subject, html });
-      emailed = true;
+      const resendResult = await sendEmail({ to: toEmail, subject, html });
+      await logEmail(app_id, `resend_signing_link_${role}`, toEmail, resendResult.ok ? 'sent' : 'failed', resendResult.provider, resendResult.ok ? null : (resendResult.error || 'failed'));
+      emailed = resendResult.ok;
     } catch (e) {
       console.error('resend-signing-link email failed:', (e as Error).message);
     }

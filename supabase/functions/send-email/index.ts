@@ -11,10 +11,12 @@ import {
   leaseSigningReminderHtml,
   leaseExpiryAlertHtml,
   adminReviewSummaryHtml,
+  landlordAppStatusHtml,
   formatDate,
 } from '../_shared/email.ts';
-import { getAdminEmails, getTenantLoginUrl, getTenantPortalUrl, getSiteUrl } from '../_shared/config.ts';
+import { getAdminEmails, getAdminUrl, getTenantLoginUrl, getTenantPortalUrl, getSiteUrl } from '../_shared/config.ts';
 import { generateMagicLoginUrl } from '../_shared/magic-login.ts';
+import { sendLandlordEmail, getLandlordForProperty } from '../_shared/landlord-notify.ts';
 
 const ADMIN_EMAILS = getAdminEmails();
 const TENANT_PORTAL_URL = getTenantPortalUrl();
@@ -312,6 +314,41 @@ Deno.serve(async (req: Request) => {
     }
 
     await logAdminAction(app_id, `send_email_${type}`, actor);
+
+    // Landlord notification for key lifecycle events
+    if (type === 'approved' || type === 'denied' || type === 'waitlisted') {
+      try {
+        const applicantName = `${app.first_name || ''} ${app.last_name || ''}`.trim();
+        const landlordInfo = await getLandlordForProperty(supabase, app.property_id);
+        if (landlordInfo?.email) {
+          const lStatus = type as 'approved' | 'denied' | 'waitlisted';
+          await sendEmail({
+            to: landlordInfo.email,
+            subject: `Application ${type.charAt(0).toUpperCase() + type.slice(1)} — ${app.property_address || app_id}`,
+            html: landlordAppStatusHtml(landlordInfo.contact_name || '', applicantName, app.property_address || '', lStatus, app_id, getAdminUrl('/admin/applications.html')),
+          });
+        }
+      } catch (_) {}
+    }
+    if (type === 'movein_confirmed') {
+      try {
+        const landlordInfo = await getLandlordForProperty(supabase, app.property_id);
+        if (landlordInfo?.email) {
+          const moveDate = app.move_in_date_actual ? new Date(app.move_in_date_actual).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'To be confirmed';
+          await sendEmail({
+            to: landlordInfo.email,
+            subject: `Move-In Confirmed — ${app.property_address || app_id}`,
+            html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111">
+<h2 style="color:#1a5276">Move-In Date Confirmed</h2>
+<p>Hi ${landlordInfo.contact_name || 'there'},</p>
+<p>Move-in for <strong>${app.first_name || ''} ${app.last_name || ''}</strong> at <strong>${app.property_address || ''}</strong> has been confirmed for <strong>${moveDate}</strong>.</p>
+<p>Reference: <code>${app_id}</code></p>
+<p style="font-size:12px;color:#888">Choice Properties &middot; support@choiceproperties.com</p>
+</div>`,
+          });
+        }
+      } catch (_) {}
+    }
 
     const recipient = sendToAdmin ? ADMIN_EMAILS.join(', ') : app.email;
     return jsonOk({ success: true, to: recipient, type });

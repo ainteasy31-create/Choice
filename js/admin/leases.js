@@ -82,6 +82,7 @@
           <a class="btn btn-ghost btn-sm" href="/admin/lease-detail.html?app_id=${encodeURIComponent(app.app_id||'')}">Detail &amp; history</a>
           ${app.lease_pdf_url ? `<button class="btn btn-ghost btn-sm" data-action="download" data-app-id="${S.esc(app.app_id||'')}"><svg class="i i-sm"><use href="#i-out"/></svg> Download PDF</button>` : ''}
           ${app.lease_status === 'sent' ? `<button class="btn btn-ghost btn-sm" data-action="remind" data-app-id="${S.esc(app.app_id||'')}"><svg class="i i-sm"><use href="#i-bell"/></svg> Send reminder</button>` : ''}
+          ${app.lease_status === 'sent' ? `<button class="btn btn-ghost btn-sm" data-action="expiry-alert" data-app-id="${S.esc(app.app_id||'')}">&#9888; Expiry alert</button>` : ''}
           ${(app.lease_status === 'signed' || app.lease_status === 'co_signed') && !isCounter ? `<button class="btn btn-ghost btn-sm" data-action="cosign" data-id="${S.esc(app.id)}" data-app-id="${S.esc(app.app_id||'')}"><svg class="i i-sm"><use href="#i-check"/></svg> Countersign</button>` : ''}
           ${app.lease_status === 'sent' || app.lease_status === 'awaiting_co_sign' ? `<button class="btn btn-danger btn-sm" data-action="void" data-id="${S.esc(app.id)}">Void</button>` : ''}
           <button class="btn btn-ghost btn-sm" data-action="toggle-detail" data-id="${S.esc(app.id)}">Notes</button>
@@ -361,6 +362,23 @@
     } catch(e){ S.toast('Error: ' + e.message,'error'); }
   }
 
+  async function sendExpiryAlert(appId){
+    const ok = await S.confirm({ title:'Send unsigned-lease alert?', message:'An alert email will be sent to all admin addresses flagging this unsigned lease. Use when a lease has been pending signature too long.', ok:'Send alert' });
+    if(!ok) return;
+    const session = await CP.Auth.getSession();
+    const token = session?.access_token || CONFIG.SUPABASE_ANON_KEY;
+    try {
+      const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/send-email', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'apikey': CONFIG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + token },
+        body: JSON.stringify({ app_id: appId, type:'lease_expiry_alert' })
+      });
+      const json = await res.json().catch(() => ({}));
+      if(!res.ok || json.success === false){ S.toast('Alert failed: ' + (json.error || res.statusText),'error'); return; }
+      S.toast('Expiry alert sent to admin.','success');
+    } catch(e){ S.toast('Error: ' + e.message,'error'); }
+  }
+
   async function voidLease(id){
     const ok = await S.confirm({ title:'Void this lease?', message:'The tenant will no longer be able to sign. This cannot be undone.', ok:'Void lease', danger:true });
     if(!ok) return;
@@ -407,6 +425,7 @@
     S.on('generate',      (t) => openGenerateSheet(t.dataset.id, t.dataset.appId));
     S.on('cosign',        (t) => openCosignSheet(t.dataset.id, t.dataset.appId));
     S.on('remind',        (t) => sendReminder(t.dataset.appId));
+    S.on('expiry-alert',  (t) => sendExpiryAlert(t.dataset.appId));
     S.on('void',          (t) => voidLease(t.dataset.id));
     S.on('download',      (t) => downloadLease(t.dataset.appId));
     S.on('save-notes',    (t) => saveNotes(t.dataset.id));

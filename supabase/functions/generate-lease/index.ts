@@ -22,6 +22,10 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
+async function logEmail(appId: string, type: string, recipient: string, status: string, provider = 'gas', errorMsg: string | null = null) {
+  try { await supabase.from('email_logs').insert({ app_id: appId, type, recipient, status, provider, error_msg: errorMsg }); } catch (_) {}
+}
+
 async function verifyAdmin(req: Request): Promise<{ ok: boolean; userId?: string; userEmail?: string; error?: string }> {
   const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
   if (!token) return { ok: false, error: 'Missing authorization header' };
@@ -351,11 +355,12 @@ Deno.serve(async (req: Request) => {
   if (updatedApp?.email && updatedApp?.tenant_sign_token) {
     const signingUrl = `${getSiteUrl()}/lease-sign.html?token=${updatedApp.tenant_sign_token}`;
     try {
-      await sendEmail({
+      const sigResult = await sendEmail({
         to:      updatedApp.email,
         subject: `\u{1F4DC} Your Lease is Ready to Sign - Choice Properties (Ref: ${app_id})`,
         html:    signingEmailHtml(updatedApp.first_name || 'Applicant', updatedApp.property_address || '', signingUrl, app_id),
       });
+      await logEmail(app_id, 'lease_signing_invite', updatedApp.email, sigResult.ok ? 'sent' : 'failed', sigResult.provider, sigResult.ok ? null : (sigResult.error || 'failed'));
     } catch (e) { console.error('Signing email failed (non-fatal):', (e as Error).message); }
   }
 

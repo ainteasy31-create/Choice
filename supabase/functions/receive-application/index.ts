@@ -1,10 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { handleCors, jsonOk, jsonErr } from '../_shared/cors.ts';
 import { sendEmail } from '../_shared/send-email.ts';
-import { applicationConfirmationHtml, adminNotificationHtml } from '../_shared/email.ts';
-import { getAdminEmails, getTenantLoginUrl } from '../_shared/config.ts';
+import { applicationConfirmationHtml, adminNotificationHtml, landlordNewApplicationHtml } from '../_shared/email.ts';
+import { getAdminEmails, getAdminUrl, getTenantLoginUrl } from '../_shared/config.ts';
 import { generateMagicLoginUrl } from '../_shared/magic-login.ts';
 import { isDbRateLimited } from '../_shared/rate-limit.ts';
+import { sendLandlordEmail, getLandlordForProperty } from '../_shared/landlord-notify.ts';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -483,6 +484,24 @@ Deno.serve(async (req: Request) => {
           await logEmail('admin_notification', adminEmail, 'failed', 'none', err?.message || 'unknown error');
         })
     ),
+    // Landlord notification — new application on their property
+    (async () => {
+      try {
+        const landlordInfo = await getLandlordForProperty(supabase, submittedPropertyId);
+        if (landlordInfo?.email) {
+          await sendEmail({
+            to: landlordInfo.email,
+            subject: `New Application — ${propLabel.split(',')[0]} (Ref: ${appId})`,
+            html: landlordNewApplicationHtml(
+              landlordInfo.contact_name || '',
+              firstName, lastName, email, propLabel, appId,
+              getAdminUrl('/admin/applications.html'),
+            ),
+          }).then(result => logEmail('landlord_new_application', landlordInfo.email, result.ok ? 'sent' : 'failed', result.provider, result.ok ? null : (result.error || 'send failed')))
+            .catch(() => {});
+        }
+      } catch (_) {}
+    })(),
   ];
 
   await Promise.all(emailJobs);

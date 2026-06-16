@@ -1823,3 +1823,161 @@ export function depositDisputeAdminHtml(
 </body>
 </html>`;
 }
+
+// ─── Landlord notification templates ─────────────────────────────────────────
+// Compact, action-oriented emails sent directly to the property's landlord.
+
+function buildLandlordHeader(title: string, appId?: string): string {
+  return `
+  <div style="background:#fff;padding:24px 32px 16px;border-bottom:3px solid #1a5276">
+    <div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:2px">Choice Properties</div>
+    <div style="font-size:11px;color:#888;margin-bottom:12px">Landlord Notification</div>
+    <div style="font-size:18px;font-weight:700;color:#1a1a1a;line-height:1.3">${title}</div>
+    ${appId ? `<div style="font-size:11px;color:#888;font-family:monospace;margin-top:4px">Ref: ${appId}</div>` : ''}
+  </div>`;
+}
+
+const LANDLORD_FOOTER = `
+  <div style="background:#f8f8f8;border-top:1px solid #e0e0e0;padding:16px 32px;text-align:center;font-size:12px;color:#888;line-height:1.7">
+    Choice Properties &middot; 2265 Livernois, Suite 500, Troy MI 48083<br>
+    This notification was sent because you are the registered landlord for this property.
+  </div>`;
+
+function landlordWrap(content: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    * { margin:0;padding:0;box-sizing:border-box; }
+    body { background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a; }
+    .wrap { max-width:560px;margin:20px auto;background:#fff;border:1px solid #e0e0e0;border-radius:4px;overflow:hidden; }
+    .body { padding:28px 32px; }
+    .row { display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0;font-size:13px; }
+    .row:last-child { border-bottom:none; }
+    .lbl { color:#666;font-weight:600;width:40%;padding-right:8px; }
+    .val { color:#111;flex:1; }
+    .cta { display:inline-block;background:#1a5276;color:#fff !important;text-decoration:none;padding:12px 28px;border-radius:4px;font-size:13px;font-weight:700;margin-top:20px; }
+  </style>
+</head>
+<body>
+<div class="wrap">${content}${LANDLORD_FOOTER}</div>
+</body>
+</html>`;
+}
+
+export function landlordNewApplicationHtml(
+  landlordName: string,
+  applicantFirstName: string,
+  applicantLastName: string,
+  applicantEmail: string,
+  propertyAddress: string,
+  appId: string,
+  adminUrl: string,
+): string {
+  const greeting = landlordName ? `Hi ${landlordName},` : 'Hello,';
+  return landlordWrap(`
+  ${buildLandlordHeader('New Application Received', appId)}
+  <div class="body">
+    <p style="font-size:15px;font-weight:600;margin-bottom:16px">${greeting}</p>
+    <p style="font-size:13px;color:#444;line-height:1.7;margin-bottom:20px">
+      A new rental application has been submitted for your property. Our leasing team will review it and keep you informed of each step.
+    </p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:16px;margin-bottom:20px">
+      <div class="row"><span class="lbl">Applicant</span><span class="val"><strong>${applicantFirstName} ${applicantLastName}</strong></span></div>
+      <div class="row"><span class="lbl">Property</span><span class="val">${propertyAddress}</span></div>
+      <div class="row"><span class="lbl">Reference</span><span class="val" style="font-family:monospace">${appId}</span></div>
+      <div class="row"><span class="lbl">Status</span><span class="val">Under review</span></div>
+    </div>
+    <a href="${adminUrl}" class="cta">View in Admin Portal</a>
+    <p style="font-size:12px;color:#888;margin-top:16px;line-height:1.6">You will receive another notification once the application is approved or denied. Questions? Contact us at support@choiceproperties.com</p>
+  </div>`);
+}
+
+export function landlordAppStatusHtml(
+  landlordName: string,
+  applicantName: string,
+  propertyAddress: string,
+  status: 'approved' | 'denied' | 'waitlisted',
+  appId: string,
+  adminUrl: string,
+): string {
+  const greeting = landlordName ? `Hi ${landlordName},` : 'Hello,';
+  const statusLabel = status === 'approved' ? '✅ Approved' : status === 'denied' ? '❌ Denied' : '⏳ Waitlisted';
+  const statusColor = status === 'approved' ? '#166534' : status === 'denied' ? '#991b1b' : '#b45309';
+  const detail = status === 'approved'
+    ? 'The application has been approved. A lease will be generated and sent to the tenant for signature shortly.'
+    : status === 'denied'
+    ? 'The application has been denied. We will notify the applicant by email.'
+    : 'The applicant has been placed on the waitlist pending a unit becoming available.';
+  return landlordWrap(`
+  ${buildLandlordHeader('Application Status Update', appId)}
+  <div class="body">
+    <p style="font-size:15px;font-weight:600;margin-bottom:16px">${greeting}</p>
+    <p style="font-size:13px;color:#444;line-height:1.7;margin-bottom:20px">${detail}</p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:16px;margin-bottom:20px">
+      <div class="row"><span class="lbl">Applicant</span><span class="val"><strong>${applicantName}</strong></span></div>
+      <div class="row"><span class="lbl">Property</span><span class="val">${propertyAddress}</span></div>
+      <div class="row"><span class="lbl">Reference</span><span class="val" style="font-family:monospace">${appId}</span></div>
+      <div class="row"><span class="lbl">Decision</span><span class="val"><strong style="color:${statusColor}">${statusLabel}</strong></span></div>
+    </div>
+    <a href="${adminUrl}" class="cta">View in Admin Portal</a>
+  </div>`);
+}
+
+export function landlordTenantSignedHtml(
+  landlordName: string,
+  tenantName: string,
+  propertyAddress: string,
+  appId: string,
+  adminUrl: string,
+): string {
+  const greeting = landlordName ? `Hi ${landlordName},` : 'Hello,';
+  return landlordWrap(`
+  ${buildLandlordHeader('Tenant Has Signed Their Lease', appId)}
+  <div class="body">
+    <p style="font-size:15px;font-weight:600;margin-bottom:16px">${greeting}</p>
+    <p style="font-size:13px;color:#444;line-height:1.7;margin-bottom:20px">
+      Your tenant has signed their lease agreement. Our team will countersign shortly, after which the fully-executed lease will be sent to all parties.
+    </p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:16px;margin-bottom:20px">
+      <div class="row"><span class="lbl">Tenant</span><span class="val"><strong>${tenantName}</strong></span></div>
+      <div class="row"><span class="lbl">Property</span><span class="val">${propertyAddress}</span></div>
+      <div class="row"><span class="lbl">Reference</span><span class="val" style="font-family:monospace">${appId}</span></div>
+      <div class="row"><span class="lbl">Status</span><span class="val"><strong style="color:#1e40af">Pending countersignature</strong></span></div>
+    </div>
+    <a href="${adminUrl}" class="cta">View in Admin Portal</a>
+  </div>`);
+}
+
+export function landlordLeaseExecutedHtml(
+  landlordName: string,
+  tenantName: string,
+  propertyAddress: string,
+  leaseStart: string | undefined,
+  appId: string,
+  adminUrl: string,
+): string {
+  const greeting = landlordName ? `Hi ${landlordName},` : 'Hello,';
+  const startRow = leaseStart
+    ? `<div class="row"><span class="lbl">Lease start</span><span class="val">${formatDate(leaseStart)}</span></div>`
+    : '';
+  return landlordWrap(`
+  ${buildLandlordHeader('Lease Fully Executed', appId)}
+  <div class="body">
+    <p style="font-size:15px;font-weight:600;margin-bottom:16px">${greeting}</p>
+    <p style="font-size:13px;color:#444;line-height:1.7;margin-bottom:20px">
+      The lease for your property has been fully executed by all parties. A copy of the signed lease has been sent to the tenant. Your tenancy is now active.
+    </p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:16px;margin-bottom:20px">
+      <div class="row"><span class="lbl">Tenant</span><span class="val"><strong>${tenantName}</strong></span></div>
+      <div class="row"><span class="lbl">Property</span><span class="val">${propertyAddress}</span></div>
+      <div class="row"><span class="lbl">Reference</span><span class="val" style="font-family:monospace">${appId}</span></div>
+      ${startRow}
+      <div class="row"><span class="lbl">Status</span><span class="val"><strong style="color:#166534">✅ Active lease</strong></span></div>
+    </div>
+    <a href="${adminUrl}" class="cta">View in Admin Portal</a>
+  </div>`);
+}
+

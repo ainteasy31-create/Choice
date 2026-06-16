@@ -1,8 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { handleCors, jsonOk, jsonErr } from '../_shared/cors.ts';
 import { sendEmail }                   from '../_shared/send-email.ts';
-import { signedConfirmHtml, coApplicantInviteHtml } from '../_shared/email.ts';
+import { signedConfirmHtml, coApplicantInviteHtml, landlordTenantSignedHtml } from '../_shared/email.ts';
 import { getAdminEmails, getAdminUrl, getSiteUrl }  from '../_shared/config.ts';
+import { sendLandlordEmail } from '../_shared/landlord-notify.ts';
 import { resolveLeaseTemplate, finalizeAndStorePdf } from '../_shared/lease-render.ts';
 import { fetchAttachedAddenda, recordAddendaAcknowledgment } from '../_shared/lease-addenda.ts';
 import { isDbRateLimited }             from '../_shared/rate-limit.ts';
@@ -15,6 +16,10 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
+
+async function logEmail(appId: string, type: string, recipient: string, status: string, provider = 'gas', errorMsg: string | null = null) {
+  try { await supabase.from('email_logs').insert({ app_id: appId, type, recipient, status, provider, error_msg: errorMsg }); } catch (_) {}
+}
 
 // Phase 05 -- map raw RPC error messages back to user-friendly HTTP errors.
 // validate_signing_token raises with a structured MESSAGE (TOKEN_EXPIRED,
@@ -176,7 +181,7 @@ Deno.serve(async (req: Request) => {
           .eq('app_id', appSigned.app_id).maybeSingle();
         if (co?.email) {
           const signingUrl = `${getSiteUrl()}/lease-sign.html?token=${appSigned.co_applicant_lease_token}`;
-          await sendEmail({
+          const coResult = await sendEmail({
             to:      co.email,
             subject: `\u{1F4DD} Your Co-Applicant Lease is Ready to Sign - Choice Properties (Ref: ${appSigned.app_id})`,
             html:    coApplicantInviteHtml(
@@ -187,6 +192,7 @@ Deno.serve(async (req: Request) => {
               appSigned.app_id,
             ),
           });
+          await logEmail(appSigned.app_id, 'co_applicant_invite', co.email, coResult.ok ? 'sent' : 'failed', coResult.provider, coResult.ok ? null : (coResult.error || 'failed'));
         }
       } catch (e) { console.error('Co-applicant invite email failed (non-fatal):', (e as Error).message); }
     }
@@ -198,12 +204,24 @@ Deno.serve(async (req: Request) => {
         rent:        appSigned.monthly_rent     || undefined,
         moveInCost:  appSigned.move_in_costs    || undefined,
       } : undefined;
-      await sendEmail({
+      const tenantResult = await sendEmail({
         to:      appSigned.email,
         subject: `\u{1F389} Lease Signed - Welcome to Choice Properties (Ref: ${appSigned.app_id})`,
         html:    signedConfirmHtml(appSigned.first_name || 'Applicant', appSigned.property_address || '', appSigned.app_id, leaseData),
       });
+      await logEmail(appSigned.app_id, 'lease_signed_confirm', appSigned.email, tenantResult.ok ? 'sent' : 'failed', tenantResult.provider, tenantResult.ok ? null : (tenantResult.error || 'failed'));
     } catch (e) { console.error('Tenant confirm email failed:', (e as Error).message); }
+
+    // Landlord notification — tenant has signed, awaiting countersignature
+    try {
+      const tenantName = `${appSigned.first_name || ''} ${appSigned.last_name || ''}`.trim();
+      await sendLandlordEmail(
+        supabase,
+        appSigned.property_id,
+        `Lease Signed — ${appSigned.property_address || appSigned.app_id}`,
+        landlordTenantSignedHtml('', tenantName, appSigned.property_address || '', appSigned.app_id, getAdminUrl('/admin/leases.html')),
+      );
+    } catch (_) {}
 
     const adminSubject = `[Lease Signed] ${appSigned.first_name || ''} ${appSigned.last_name || ''} - ${appSigned.app_id}`;
     const adminHtml = `<p><strong>Lease signed</strong> by ${appSigned.first_name || ''} ${appSigned.last_name || ''} (${appSigned.email})</p>
@@ -213,7 +231,8 @@ Deno.serve(async (req: Request) => {
 
     for (const adminEmail of ADMIN_EMAILS) {
       try {
-        await sendEmail({ to: adminEmail, subject: adminSubject, html: adminHtml });
+        const adminResult = await sendEmail({ to: adminEmail, subject: adminSubject, html: adminHtml });
+        await logEmail(appSigned.app_id, 'lease_signed_admin', adminEmail, adminResult.ok ? 'sent' : 'failed', adminResult.provider, adminResult.ok ? null : (adminResult.error || 'failed'));
       } catch (e) { console.error('Admin notify failed:', (e as Error).message); }
     }
 

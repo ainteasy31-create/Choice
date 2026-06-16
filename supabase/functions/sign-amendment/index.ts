@@ -21,6 +21,10 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
+async function logEmail(appId: string, type: string, recipient: string, status: string, provider = 'gas', errorMsg: string | null = null) {
+  try { await supabase.from('email_logs').insert({ app_id: appId, type, recipient, status, provider, error_msg: errorMsg }); } catch (_) {}
+}
+
 function mapTokenError(message: string): { status: number; body: string } {
   if (/TOKEN_EXPIRED/.test(message))       return { status: 410, body: message.replace(/^TOKEN_EXPIRED:?\s*/, '') || 'This amendment link has expired.' };
   if (/TOKEN_REVOKED/.test(message))       return { status: 410, body: message.replace(/^TOKEN_REVOKED:?\s*/, '') || 'This amendment link has been revoked.' };
@@ -157,22 +161,24 @@ Deno.serve(async (req: Request) => {
 
   // Confirmation to tenant
   try {
-    await sendEmail({
+    const tenantResult = await sendEmail({
       to:      app.email,
       subject: `\u{2705} Amendment Signed -- Choice Properties (Ref: ${app.app_id})`,
       html:    amendmentSignedHtml(app.first_name || 'Applicant', app.property_address || '', amend.title, app.app_id),
     });
+    await logEmail(app.app_id, 'amendment_signed_confirm', app.email, tenantResult.ok ? 'sent' : 'failed', tenantResult.provider, tenantResult.ok ? null : (tenantResult.error || 'failed'));
   } catch (e) { console.error('Amendment confirm email failed:', (e as Error).message); }
 
   for (const adminEmail of ADMIN_EMAILS) {
     try {
-      await sendEmail({
+      const adminResult = await sendEmail({
         to: adminEmail,
         subject: `[Amendment Signed] ${amend.title} -- ${app.app_id}`,
         html: `<p><strong>Lease amendment signed</strong> by ${app.first_name || ''} ${app.last_name || ''} (${app.email})</p>
 <p>Application: ${app.app_id}<br>Amendment: ${amend.title} (${amend.kind})<br>Signed: ${new Date().toLocaleString('en-US')}</p>
 <p><a href="${getAdminUrl('/admin/leases.html')}">View in Admin Panel &rarr;</a></p>`,
       });
+      await logEmail(app.app_id, 'amendment_signed_admin', adminEmail, adminResult.ok ? 'sent' : 'failed', adminResult.provider, adminResult.ok ? null : (adminResult.error || 'failed'));
     } catch (_) {}
   }
 

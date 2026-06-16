@@ -11,6 +11,7 @@ import { handleCors, jsonOk, jsonErr } from '../_shared/cors.ts';
 import { sendEmail } from '../_shared/send-email.ts';
 import { coApplicantSignedHtml } from '../_shared/email.ts';
 import { getAdminEmails, getAdminUrl, getSiteUrl } from '../_shared/config.ts';
+
 import { resolveLeaseTemplate, finalizeAndStorePdf } from '../_shared/lease-render.ts';
 import { fetchAttachedAddenda } from '../_shared/lease-addenda.ts';
 import { isDbRateLimited } from '../_shared/rate-limit.ts';
@@ -23,6 +24,10 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
+
+async function logEmail(appId: string, type: string, recipient: string, status: string, provider = 'gas', errorMsg: string | null = null) {
+  try { await supabase.from('email_logs').insert({ app_id: appId, type, recipient, status, provider, error_msg: errorMsg }); } catch (_) {}
+}
 
 function mapTokenError(message: string): { status: number; body: string; already_signed?: boolean } {
   if (/TOKEN_EXPIRED/.test(message))       return { status: 410, body: message.replace(/^TOKEN_EXPIRED:?\s*/, '') || 'This signing link has expired.' };
@@ -175,11 +180,12 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      await sendEmail({
+      const coResult = await sendEmail({
         to:      co.email,
         subject: `\u{2705} Co-Applicant Signature Received -- Choice Properties (Ref: ${appSigned.app_id})`,
         html:    coApplicantSignedHtml(co.first_name || 'Co-Applicant', appSigned.property_address || '', appSigned.app_id),
       });
+      await logEmail(appSigned.app_id, 'co_applicant_signed_confirm', co.email, coResult.ok ? 'sent' : 'failed', coResult.provider, coResult.ok ? null : (coResult.error || 'failed'));
     } catch (e) { console.error('Co-applicant confirm email failed:', (e as Error).message); }
 
     const adminSubject = `[Co-Applicant Signed] ${co.first_name || ''} ${co.last_name || ''} -- ${appSigned.app_id}`;
@@ -188,8 +194,10 @@ Deno.serve(async (req: Request) => {
 <p>Status: <strong>${appSigned.lease_status}</strong> &middot; ready for management countersignature</p>
 <p><a href="${getAdminUrl('/admin/leases.html')}">View in Admin Panel &rarr;</a></p>`;
     for (const adminEmail of ADMIN_EMAILS) {
-      try { await sendEmail({ to: adminEmail, subject: adminSubject, html: adminHtml }); }
-      catch (e) { console.error('Admin notify failed:', (e as Error).message); }
+      try {
+        const adminResult = await sendEmail({ to: adminEmail, subject: adminSubject, html: adminHtml });
+        await logEmail(appSigned.app_id, 'co_applicant_signed_admin', adminEmail, adminResult.ok ? 'sent' : 'failed', adminResult.provider, adminResult.ok ? null : (adminResult.error || 'failed'));
+      } catch (e) { console.error('Admin notify failed:', (e as Error).message); }
     }
 
     try {

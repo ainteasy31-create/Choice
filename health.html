@@ -188,6 +188,19 @@
     </div>
   </div>
 
+  <!-- EMAIL HEALTH -->
+  <div class="card">
+    <div class="card-header">Email Health</div>
+    <div class="check" id="chk-email-relay">
+      <div><div class="check-label">GAS email relay (recent sends)</div><div class="check-detail" id="det-email-relay">—</div></div>
+      <span class="badge pending" id="bdg-email-relay">Waiting</span>
+    </div>
+    <div class="check" id="chk-email-logs">
+      <div><div class="check-label">email_logs table (last 5 entries)</div><div class="check-detail" id="det-email-logs">—</div></div>
+      <span class="badge pending" id="bdg-email-logs">Waiting</span>
+    </div>
+  </div>
+
   <p class="note">This page is not indexed by search engines.<br>Bookmark it and run it after every deploy or config change.</p>
 </div>
 
@@ -301,6 +314,59 @@ async function checkFunction(id, name) {
   }
 }
 
+async function checkEmailHealth() {
+  if (typeof CONFIG === 'undefined' || !CONFIG.SUPABASE_URL) { return; }
+  running('email-relay');
+  running('email-logs');
+  try {
+    const { createClient } = window.supabase || {};
+    if (!createClient) { warn('email-relay', 'Skipped', 'Supabase JS not loaded'); warn('email-logs', 'Skipped', 'Supabase JS not loaded'); return; }
+    const sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
+    // Check email_logs table — last 5 rows
+    const { data: logs, error: logsErr } = await sb
+      .from('email_logs')
+      .select('type, recipient, status, provider, created_at, error_msg')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (logsErr) {
+      fail('email-logs', 'Query failed', logsErr.message);
+    } else if (!logs || logs.length === 0) {
+      warn('email-logs', 'No entries', 'email_logs table is empty — no emails have been sent yet');
+    } else {
+      const lastFailed = logs.filter(l => l.status === 'failed');
+      const lastSent   = logs.find(l => l.status === 'sent');
+      if (lastFailed.length === logs.length) {
+        fail('email-logs', 'All recent failed', `Last ${logs.length} sends all failed. First error: ${lastFailed[0]?.error_msg || 'unknown'}`);
+      } else if (lastFailed.length > 0) {
+        warn('email-logs', `${lastFailed.length} recent failure${lastFailed.length > 1 ? 's' : ''}`, `Last sent: ${lastSent?.type || '—'} to ${lastSent?.recipient || '—'}`);
+      } else {
+        const ts = lastSent?.created_at ? new Date(lastSent.created_at).toLocaleString('en-US') : '—';
+        ok('email-logs', 'Healthy', `Last sent: ${lastSent?.type} to ${lastSent?.recipient} at ${ts}`);
+      }
+    }
+
+    // GAS relay: infer from last email_logs entry provider field
+    if (logs && logs.length > 0) {
+      const gasEntries = logs.filter(l => l.provider === 'gas' && l.status === 'sent');
+      const failedGas  = logs.filter(l => l.provider !== 'gas' || l.status === 'failed');
+      if (gasEntries.length > 0) {
+        ok('email-relay', 'GAS relay working', `${gasEntries.length} of last ${logs.length} sends succeeded via GAS relay`);
+      } else if (failedGas.length > 0) {
+        warn('email-relay', 'No recent GAS success', `Last ${logs.length} entries show no successful GAS relay sends. Check GAS_EMAIL_URL / GAS_RELAY_SECRET env vars.`);
+      } else {
+        warn('email-relay', 'No data', 'Cannot determine GAS relay status — email_logs empty');
+      }
+    } else {
+      warn('email-relay', 'No data', 'email_logs is empty');
+    }
+  } catch (e) {
+    fail('email-relay', 'Error', e.message);
+    fail('email-logs', 'Error', e.message);
+  }
+}
+
 async function runAll() {
   const btn = document.getElementById('runBtn');
   btn.disabled = true;
@@ -309,7 +375,8 @@ async function runAll() {
 
   const ids = ['config','supabase-url','anon-key','imagekit','company',
     'db-connect','schema','security','properties',
-    'fn-process','fn-inquiry','fn-lease','fn-sign','fn-status','fn-paid','fn-movein','fn-message','fn-imagekit'];
+    'fn-process','fn-inquiry','fn-lease','fn-sign','fn-status','fn-paid','fn-movein','fn-message','fn-imagekit',
+    'email-relay','email-logs'];
   ids.forEach(id => set(id, 'pending', 'Waiting', '—'));
 
   await checkConfig();
@@ -324,6 +391,7 @@ async function runAll() {
     checkFunction('movein',   'mark-movein'),
     checkFunction('message',  'send-message'),
     checkFunction('imagekit', 'imagekit-upload'),
+    checkEmailHealth(),
   ]);
 
   const badges = document.querySelectorAll('.badge');
