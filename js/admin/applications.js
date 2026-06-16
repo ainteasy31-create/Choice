@@ -145,6 +145,7 @@
           ${row('Income/mo', coapp.monthly_income)}
           ${row('Employment', coapp.employment_duration)}
           ${row('Status', coapp.employment_status)}
+          ${app.co_applicant_ssn ? row('SSN (last 4)', app.co_applicant_ssn) : ''}
         </div>
       </div>` : (app.has_co_applicant ? '<div class="coapp-card"><div class="coapp-title">Co-applicant (details not yet submitted)</div></div>' : '');
 

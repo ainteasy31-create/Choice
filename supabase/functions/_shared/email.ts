@@ -328,6 +328,7 @@ export function adminNotificationHtml(
         <tr><td>Lease Term</td><td>${fields?.['Desired Lease Term'] || 'Not specified'}</td></tr>
         <tr><td>Contact Preference</td><td>${fields?.['Preferred Contact Method'] || 'Not specified'}</td></tr>
         <tr><td>Best Time to Reach</td><td>${[fields?.['Preferred Time'], fields?.['Preferred Time Specific']].filter(Boolean).join(' — ') || 'Any'}</td></tr>
+        ${(String(fields?.['Has Co-Applicant']).toLowerCase() === 'true') ? `<tr><td>Co-Applicant</td><td><strong style="color:#7c3aed;">&#x1F465; ${[fields?.['Co-Applicant First Name'], fields?.['Co-Applicant Last Name']].filter(Boolean).join(' ') || 'Yes'}</strong>${fields?.['Co-Applicant Email'] ? ` &mdash; ${fields['Co-Applicant Email']}` : ''}</td></tr>` : ''}
         ${(() => { const docCount = fields ? Object.keys(fields).filter(k => k.startsWith('_docFile_') && k.endsWith('_name')).length : 0; return docCount > 0 ? `<tr><td>Documents Attached</td><td><strong style="color:#059669;">&#x1F4CE; ${docCount} file${docCount > 1 ? 's' : ''} — view in admin portal</strong></td></tr>` : ''; })()}
       </table>
     </div>

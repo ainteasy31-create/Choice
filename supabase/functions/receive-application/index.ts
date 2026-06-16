@@ -338,6 +338,7 @@ Deno.serve(async (req: Request) => {
     co_applicant_email: fv(fields['Co-Applicant Email']) || null,
     co_applicant_phone: fv(fields['Co-Applicant Phone']) || null,
     co_applicant_dob:   coDob || null,
+    co_applicant_ssn: (() => { const raw = fv(fields['Co-Applicant SSN']); if (!raw) return null; const d = raw.replace(/\D/g, ''); return d.length >= 4 ? 'XXX-XX-' + d.slice(-4) : '****'; })() || null,
     // Server-authoritative fee/rent/deposit (overrides anything from client)
     application_fee: enforcedFee,
     monthly_rent: enforcedRent,

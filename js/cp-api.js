@@ -865,18 +865,21 @@ async function updateNav() {
           'requested_move_in_date,desired_lease_term,' +
           'current_address,residency_duration,current_rent_amount,reason_for_leaving,' +
           'current_landlord_name,landlord_phone,' +
-          'previous_address,previous_landlord_name,previous_landlord_phone,' +
-          'employment_status,employer,employer_address,job_title,employment_duration,' +
+          'previous_address,previous_residency_duration,previous_landlord_name,previous_landlord_phone,' +
+          'employment_status,employer,employer_address,job_title,employment_start_date,employment_duration,' +
+          'supervisor_name,supervisor_phone,' +
           'monthly_income,other_income,' +
           'has_bankruptcy,bankruptcy_explanation,has_criminal_history,criminal_history_explanation,' +
           'government_id_type,government_id_number,' +
           'reference_1_name,reference_1_phone,reference_2_name,reference_2_phone,' +
           'emergency_contact_name,emergency_contact_phone,emergency_contact_relationship,' +
-          'primary_payment_method,alternative_payment_method,' +
+          'primary_payment_method,primary_payment_method_other,' +
+          'alternative_payment_method,alternative_payment_method_other,' +
+          'third_choice_payment_method,third_choice_payment_method_other,' +
           'has_pets,pet_details,total_occupants,additional_occupants,ever_evicted,smoker,' +
           'preferred_contact_method,preferred_time,' +
           'vehicle_make,vehicle_model,vehicle_year,vehicle_license_plate,' +
-          'has_co_applicant,landlord_email,document_urls,' +
+          'has_co_applicant,co_applicant_ssn,landlord_email,document_urls,' +
           'lease_status,lease_sent_date,lease_signed_date,lease_start_date,lease_end_date,' +
           'monthly_rent,security_deposit,move_in_costs,lease_notes,lease_pdf_url,' +
           'tenant_signature,signature_timestamp,' +
