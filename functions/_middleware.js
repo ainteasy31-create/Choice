@@ -65,6 +65,7 @@ const BLOCKED_PREFIXES = [
   '/scripts/',
   '/supabase/',
   '/.agents/',
+  '/.local/',
   '/.github/',
   '/.githooks/',
   '/db/',
