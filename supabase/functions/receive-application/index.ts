@@ -376,6 +376,51 @@ Deno.serve(async (req: Request) => {
     return jsonErr(500, 'Failed to save application');
   }
 
+  // ── Persist attached documents to storage ────────────────────────────────
+  // Frontend sends files as _docFile_0_name / _docFile_0_type / _docFile_0_data (base64).
+  // Process them non-blockingly so a storage hiccup never loses the application record.
+  try {
+    let docIdx = 0;
+    while (fields[`_docFile_${docIdx}_data`]) {
+      const origName  = fv(fields[`_docFile_${docIdx}_name`]) || `document_${docIdx}`;
+      const mimeType  = fv(fields[`_docFile_${docIdx}_type`]) || 'application/octet-stream';
+      const b64       = fields[`_docFile_${docIdx}_data`];
+
+      // Decode base64 → Uint8Array for storage upload
+      const binStr = atob(b64);
+      const bytes  = new Uint8Array(binStr.length);
+      for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+
+      // Safe path: application-docs/{appId}/applicant_upload/{ts}_{filename}
+      const safeName    = origName.replace(/[^a-zA-Z0-9._\-]/g, '_');
+      const storagePath = `${appId}/applicant_upload/${Date.now()}_${safeName}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('application-docs')
+        .upload(storagePath, bytes, { contentType: mimeType, upsert: false });
+
+      if (!uploadErr) {
+        await supabase.from('application_documents').insert({
+          app_id:              appId,
+          bucket:              'application-docs',
+          storage_path:        storagePath,
+          original_file_name:  origName,
+          mime_type:           mimeType,
+          doc_type:            'applicant_upload',
+          status:              'uploaded',
+          uploaded_by_email:   email,
+          metadata: { submitted_with_application: true, file_index: docIdx },
+        });
+      } else {
+        console.error(`[CP] Doc upload failed idx=${docIdx}:`, uploadErr.message);
+      }
+
+      docIdx++;
+    }
+  } catch (docErr) {
+    console.error('[CP] Document processing error (non-fatal):', docErr);
+  }
+
   // ── Append-only consent record ────────────────────────────────────────────
   try {
     await supabase.from('consent_log').insert({

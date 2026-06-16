@@ -706,13 +706,14 @@
     if(!container) return;
     container.innerHTML = '<span class="text-sm muted">Loading…</span>';
     try {
+      const folder = appId + '/applicant_upload';
       const { data: files, error } = await CP.sb().storage.from('application-docs')
-        .list(appId, { limit:50, sortBy:{ column:'created_at', order:'desc' } });
+        .list(folder, { limit:50, sortBy:{ column:'created_at', order:'desc' } });
       if(error){ container.innerHTML = '<span class="text-sm" style="color:var(--danger)">Error: ' + S.esc(error.message) + '</span>'; return; }
       if(!files || !files.length){ container.innerHTML = '<span class="text-sm muted">No documents uploaded yet.</span>'; return; }
       const rows = files.map(f => `<div class="doc-row">
         <span style="flex:1">${S.esc(f.name||'—')}</span>
-        <button class="btn-act" data-action="download-doc" data-path="${S.esc(appId + '/' + f.name)}">Download</button>
+        <button class="btn-act" data-action="download-doc" data-path="${S.esc(folder + '/' + f.name)}">Download</button>
       </div>`).join('');
       container.innerHTML = '<div style="margin-top:6px">' + rows + '</div>';
     } catch(e){ container.innerHTML = '<span class="text-sm" style="color:var(--danger)">Error loading docs.</span>'; }
