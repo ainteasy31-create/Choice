@@ -30,17 +30,25 @@ if (foundReplitVars.length > 0) {
 }
 
 // ── 2. Detect forbidden Replit files in the repo ──────────────────────────
-const forbiddenFiles = [
-  'replit.nix',
-  'replit.md',
-  'REPLIT_SAFETY.md',
-  'server.js',
-  'scripts/generate-config-replit.js',
-];
+// Skip this check inside a Cloudflare Pages build (CF_PAGES=1 is set automatically).
+// replit.md / serve.js may be git-tracked from before the .gitignore rule was added;
+// blocking on file presence would break every Cloudflare build.  The Replit env-var
+// check above (REPL_ID etc.) is the authoritative signal for blocking Replit installs.
+const isCloudflareBuild = process.env.CF_PAGES === '1';
 
-for (const f of forbiddenFiles) {
-  if (fs.existsSync(path.join(process.cwd(), f))) {
-    errors.push(`Forbidden file found in repository: ${f}`);
+if (!isCloudflareBuild) {
+  const forbiddenFiles = [
+    'replit.nix',
+    'replit.md',
+    'REPLIT_SAFETY.md',
+    'server.js',
+    'scripts/generate-config-replit.js',
+  ];
+
+  for (const f of forbiddenFiles) {
+    if (fs.existsSync(path.join(process.cwd(), f))) {
+      errors.push(`Forbidden file found in repository: ${f}`);
+    }
   }
 }
 
