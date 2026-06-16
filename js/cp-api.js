@@ -891,6 +891,7 @@ async function updateNav() {
         .order('created_at', { ascending: false });
 
       if (filters.status && filters.status !== 'all') q = q.eq('status', filters.status);
+      else q = q.neq('status', 'archived'); // hide archived from the default "All" view
       if (filters.lease_status && filters.lease_status !== 'all') q = q.eq('lease_status', filters.lease_status);
       if (filters.move_in_status && filters.move_in_status !== 'all') q = q.eq('move_in_status', filters.move_in_status);
       if (filters.payment_status) q = q.eq('payment_status', filters.payment_status);
