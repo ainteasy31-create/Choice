@@ -280,7 +280,7 @@ export function adminNotificationHtml(
   appId: string,
   fields?: ApplicationFields,
 ): string {
-  const adminUrl = getAdminUrl('/admin/applications.html');
+  const adminUrl = getAdminUrl();
   const fee = fields?.['Application Fee'];
   const feeDisplay = fee != null && Number(fee) > 0 ? `$${Number(fee).toFixed(0)}.00` : 'Per property terms';
   const payMethods = [
@@ -1197,7 +1197,7 @@ export function leaseExpiryAlertHtml(
   tenantEmail: string,
   tenantPhone?: string,
 ): string {
-  const adminUrl = getAdminUrl('/admin/applications.html');
+  const adminUrl = getAdminUrl();
 
   return `<!DOCTYPE html>
 <html lang="en">

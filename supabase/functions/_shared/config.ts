@@ -26,8 +26,10 @@ export function getTenantLoginUrl(appId?: string, email?: string): string {
   return qs ? `${base}?${qs}` : base;
 }
 
-export function getAdminUrl(path = '/admin/applications.html'): string {
-  return `${getSiteUrl()}${path.startsWith('/') ? path : `/${path}`}`;
+export function getAdminUrl(path?: string): string {
+  // Default path split to prevent CLI asset-scanner from treating the string as a local file
+  const p = path ?? ('/admin/' + 'applications.html');
+  return `${getSiteUrl()}${p.startsWith('/') ? p : `/${p}`}`;
 }
 
 export function getContactEmail(): string {
