@@ -649,7 +649,7 @@ export function holdingFeeRequestHtml(
       <div class="section-label">How to Pay</div>
       <div class="callout">
         <h4>A Leasing Team Member Will Contact You Directly</h4>
-        <p>Our leasing team will reach out to you shortly to coordinate collection of your holding fee. Do not send payment to any party or account without first speaking directly with our team — they will guide you through the process step by step.</p>
+        <p>Our leasing team will reach out to you shortly to coordinate collection of your holding fee.</p>
         ${applicantPaymentMethods && applicantPaymentMethods.length > 0 ? `
         <p style="margin-top:12px;font-size:13px;color:#555555;">Based on your application, you indicated a preference for:</p>
         <div style="margin-top:8px;">${applicantPaymentMethods.map(m => `<span class="pay-pill">${m}</span>`).join('')}</div>
