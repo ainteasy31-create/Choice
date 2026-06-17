@@ -557,7 +557,10 @@ function renderAddTile(roomKey, itemIdx) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*,.heic,.heif';
-  input.capture = 'environment';
+  // Do NOT set input.capture — on Android it would open the camera only and
+  // prevent the tenant from picking an existing photo from their gallery.
+  // The accept filter above is sufficient; the browser's native picker offers
+  // both camera and library options without the capture attribute.
   input.multiple = false;
   input.style.display = 'none';
   input.addEventListener('change', async e => {
@@ -744,9 +747,13 @@ function initSignaturePad() {
     _padInited = true;
   }
   // Always re-fit the canvas when the step is shown (it was display:none).
+  // Always restore saved signature data regardless of local hasInk state —
+  // hasInk is initialised from state.signaturePngDataUrl which means it is
+  // already true when a signature exists, so the old `&& !hasInk` guard
+  // prevented the restore from ever running on return visits to this step.
   setTimeout(() => {
     resize();
-    if (state.signaturePngDataUrl && !hasInk) {
+    if (state.signaturePngDataUrl) {
       const img = new Image();
       img.onload = () => { ctx.drawImage(img, 0, 0, canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height); hasInk = true; };
       img.src = state.signaturePngDataUrl;
