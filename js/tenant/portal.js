@@ -1290,6 +1290,13 @@ document.addEventListener('DOMContentLoaded',async()=>{
 
   const magicResult = await waitForMagicLinkSession(sb);
 
+  // Capture ?next= from the ORIGINAL URL before the auth-token cleanup below
+  // strips all params.  login.js embeds it in the magic-link redirectTo so that
+  // deposit.html / inspection.html deep-links survive the sign-in round-trip.
+  // Reading it after replaceState would always yield '' because the param is
+  // gone by then.
+  const nextRawBeforeClean = new URLSearchParams(window.location.search).get('next') || '';
+
   const hadAuthInUrl = !!(window.location.hash || /[\?&](code|token_hash|error)=/.test(window.location.search));
   if(hadAuthInUrl){
     const cleanUrl = window.location.pathname + (requestedAppId ? '?app_id='+encodeURIComponent(requestedAppId) : '');
@@ -1327,7 +1334,9 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // with ?redirect=…; login.js forwards that as ?next=… on the magic link.
   // Now that the session is live, send them to that page instead of the
   // portal home. Same-origin tenant paths only — anything else is ignored.
-  const nextRaw = new URLSearchParams(window.location.search).get('next') || '';
+  // NOTE: use nextRawBeforeClean captured above — by this point the URL has
+  // already been cleaned by history.replaceState and ?next= is gone.
+  const nextRaw = nextRawBeforeClean || new URLSearchParams(window.location.search).get('next') || '';
   const nextOk = typeof nextRaw === 'string'
     && nextRaw.startsWith('/')
     && !nextRaw.startsWith('//')
@@ -1508,6 +1517,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
     }
 
     // Live updates: subscribe to this application's row.
+    // Toast fires immediately on the first event so the tenant gets instant
+    // feedback. Re-renders are debounced so that a burst of rapid admin edits
+    // (e.g. setting rent + dates + status in quick succession) collapses into
+    // a single RPC call instead of stacking concurrent fetches that could race.
+    let _realtimeRenderTimer = null;
     setupRealtime(sb, fullApp.id, (payload) => {
       const next = payload && payload.new;
       if(!next) return;
@@ -1534,7 +1548,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
       }
       if(toastMsg) showToast(toastMsg, toastKind);
       // Re-render with the new row (this also rebuilds the activity feed).
-      loadAndRenderApp(appId);
+      // Debounced: waits 600 ms after the last event before fetching, so a
+      // rapid burst of admin saves collapses into one round-trip.
+      clearTimeout(_realtimeRenderTimer);
+      _realtimeRenderTimer = setTimeout(() => loadAndRenderApp(appId), 600);
     });
     window._portalAppSnapshot = fullApp;
   }
