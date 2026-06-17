@@ -3,6 +3,58 @@
 // All pages import this after config.js
 // ============================================================
 
+// ---- Dual-storage: persists the auth session in both localStorage AND a
+// 72-hour cookie. On iOS Safari and Android Chrome, localStorage can be
+// cleared by the browser's storage-pressure routines or when the user
+// switches away for a long time. Keeping a cookie copy means the session
+// survives those clears and the user stays logged in for the full 72 hours.
+const _dualStorage = {
+  _cn(key) {
+    // Derive a safe, predictable cookie name from the storage key.
+    return 'cpx_' + key.replace(/[^a-z0-9]/gi, '_');
+  },
+  getItem(key) {
+    try {
+      const v = localStorage.getItem(key);
+      if (v !== null) return v;
+    } catch {}
+    // localStorage miss — try cookie fallback
+    try {
+      const cn = this._cn(key);
+      const match = document.cookie.match('(?:^|; )' + cn + '=([^;]*)');
+      if (match) {
+        const v = decodeURIComponent(match[1]);
+        // Restore to localStorage so future reads stay fast
+        try { localStorage.setItem(key, v); } catch {}
+        return v;
+      }
+    } catch {}
+    return null;
+  },
+  setItem(key, value) {
+    try { localStorage.setItem(key, value); } catch {}
+    // Write cookie backup only if payload fits within safe cookie limit (~4 KB).
+    // Supabase session JSON is typically 1-2 KB encoded, well within this range.
+    try {
+      const encoded = encodeURIComponent(value);
+      if (encoded.length <= 3800) {
+        const cn = this._cn(key);
+        document.cookie =
+          cn + '=' + encoded +
+          '; max-age=' + (72 * 3600) +
+          '; path=/; SameSite=Lax';
+      }
+    } catch {}
+  },
+  removeItem(key) {
+    try { localStorage.removeItem(key); } catch {}
+    try {
+      const cn = this._cn(key);
+      document.cookie = cn + '=; max-age=0; path=/; SameSite=Lax';
+    } catch {}
+  },
+};
+
 // Supabase client (lazy singleton)
 // I-065: Guard against the defer/module race condition.
 // config.js and supabase.min.js are loaded with `defer`. ES modules also defer,
@@ -40,6 +92,9 @@ function sb() {
         // login page handles the recovery hash explicitly with setSession().
         // (Default storageKey kept so existing logged-in users aren't kicked.)
         detectSessionInUrl: false,
+        // Dual storage: writes session to localStorage AND a 72-h cookie so
+        // the session survives iOS/Android localStorage clears.
+        storage: _dualStorage,
       }
     });
     // I-406: autoRefreshToken fires on every page load. When a stored refresh token
@@ -78,66 +133,63 @@ const Auth = {
     return data?.user || null;
   },
   async getSession()    { const { data } = await sb().auth.getSession(); return data?.session || null; },
-  // Returns a server-verified access token, or null if the session is invalid.
-  // Strategy:
-  //   1. Force-refresh the token via refreshSession() to bypass any stale cached token.
-  //   2. Confirm the token actually works by calling getUser() (same check the edge function runs).
-  //   3. If either step fails, sign out locally to clear the broken session, then return null.
-  //      The caller should then redirect to the login page.
-  // I-407: Refresh-in-flight lock. Two simultaneous fetches both calling
-  // getAccessToken() used to each kick off their own refreshSession(); the
-  // second one's refresh-token use would race the first and one would fail
-  // with "refresh token already used". Coalesce into a single in-flight
-  // promise so concurrent callers share the result.
+  // Returns a valid access token, or null if the session is invalid/expired.
+  //
+  // Strategy (updated):
+  //   1. Read the cached session. If the access token has > 5 min remaining,
+  //      return it immediately — no network call needed.
+  //   2. Only call refreshSession() when the token is absent or within 5 min
+  //      of expiry. This eliminates the “refresh token already used” race that
+  //      caused random logouts when multiple tabs or concurrent API calls each
+  //      triggered their own refresh rotation simultaneously.
+  //   3. On network failure, fall back to the cached token rather than signing
+  //      out — a connectivity blip should not kill an active session.
+  //   4. Only sign out when Supabase explicitly rejects the refresh token
+  //      (confirmed auth failure), not on transient network errors.
+  //
+  // I-407: In-flight lock coalesces concurrent callers into a single refresh
+  // so they all share the result rather than each firing a separate rotation.
   _refreshLock: null,
   async getAccessToken() {
     if (Auth._refreshLock) return Auth._refreshLock;
     Auth._refreshLock = (async () => {
-    // Always force-refresh to avoid returning an expired cached access_token.
-    // getSession() can return a stale token on slow connections when auto-refresh timed out.
-    let token = null;
-    let refreshFailed = false;
-    try {
-      const { data: rd, error: re } = await sb().auth.refreshSession();
-      token = rd?.session?.access_token ?? null;
-      // I-064: Distinguish network failure from auth failure.
-      // refreshSession() throws on network error but returns { error } on auth error.
-      // Only flag as auth failure when the server actually rejected the token.
-      if (!token && re) refreshFailed = true;
-    } catch { /* network failure - fall through to cached session */ }
-
-    // Fall back to cached session if refresh failed (e.g. no network at all)
-    if (!token) {
+      // Step 1 — read cached session (no network call).
+      let session = null;
       try {
         const { data: sd } = await sb().auth.getSession();
-        token = sd?.session?.access_token ?? null;
-      } catch { /* ignore */ }
-    }
+        session = sd?.session ?? null;
+      } catch {}
 
-    if (!token) {
-      // I-064: Only sign out if we have confirmed the token is auth-rejected,
-      // not just because the network was slow or offline. Signing out on a
-      // network hiccup during upload destroys the session and loses form state.
-      if (refreshFailed) {
-        await sb().auth.signOut().catch(() => {}); // clear confirmed-invalid session
+      // Step 2 — return cached token if still fresh (> 5 min remaining).
+      // Avoids unnecessary refresh-token rotations on every API call.
+      if (session?.access_token && session.expires_at) {
+        const secsLeft = session.expires_at - Math.floor(Date.now() / 1000);
+        if (secsLeft > 300) return session.access_token;
       }
-      return null;
-    }
 
-    // Server-side verify: confirm the edge function will accept this token.
-    // This is the same check requireAuth() runs inside the edge function.
-    try {
-      const { data: ud, error: ue } = await sb().auth.getUser(token);
-      if (ue || !ud?.user) {
-        await sb().auth.signOut().catch(() => {}); // purge broken session
+      // Step 3 — token missing or near expiry: refresh it now.
+      let token = null;
+      let refreshFailed = false;
+      try {
+        const { data: rd, error: re } = await sb().auth.refreshSession();
+        token = rd?.session?.access_token ?? null;
+        // I-064: only flag auth failure when the server explicitly rejected the token.
+        if (!token && re) refreshFailed = true;
+      } catch { /* network failure — fall through */ }
+
+      // Step 4 — network failure fallback: return the cached token so the
+      // request can still attempt to proceed rather than killing the session.
+      if (!token && session?.access_token) {
+        token = session.access_token;
+      }
+
+      if (!token) {
+        // I-064: Only sign out on confirmed auth rejection, not network issues.
+        if (refreshFailed) await sb().auth.signOut().catch(() => {});
         return null;
       }
-    } catch {
-      // Network too slow to verify - trust the refreshed token and let the upload try.
-      // If it fails, the improved error handler will catch it.
-    }
 
-    return token;
+      return token;
     })();
     try { return await Auth._refreshLock; }
     finally { Auth._refreshLock = null; }
