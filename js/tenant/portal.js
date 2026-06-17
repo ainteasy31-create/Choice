@@ -1012,7 +1012,6 @@ function renderPortal(app){
   return `
     <div id="prop-hero-slot"><div class="prop-hero"><div class="prop-hero-skel"></div></div></div>
     ${heroHtml}
-    ${renderActivityFeed(app)}
     <div class="section">
       <div class="section-label">Your Application</div>
       <div class="card">
@@ -1046,6 +1045,7 @@ function renderPortal(app){
     ${renderPaymentStatus(app)}
     ${renderSubmittedDocs(app)}
     ${renderDocUpload(app)}
+    ${renderActivityFeed(app)}
     <div class="trust-strip" aria-label="Privacy and security">
       <span><svg class="ico"><use href="#i-shield"/></svg>Documents encrypted in transit &amp; at rest</span>
       <span><svg class="ico"><use href="#i-check"/></svg>Identity verified securely</span>
