@@ -74,6 +74,7 @@
   let _autosaveTimer = null;
   let _landlordCache = null;
   let _lastSavedAt = null;
+  let _editPendingPhotos = new Map(); // files queued in edit panel, upload on save
 
   // ── Status toggle ────────────────────────────────────────────────────────────
   const STATUS_OPTIONS = [
@@ -369,21 +370,16 @@
       ${renderStatusBar(p.status)}
     </div>`;
 
-    const extraBadges = (p.featured || p.property_type)
+    const extraBadges = p.property_type
       ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-          ${p.featured ? '<span class="pill pill-warning">Featured</span>' : ''}
-          ${p.property_type ? '<span class="pill pill-muted">' + esc(capitalize(p.property_type)) + '</span>' : ''}
+          <span class="pill pill-muted">${esc(capitalize(p.property_type))}</span>
         </div>`
       : '';
 
     const actionsHtml = `<div class="pd-actions">
-      <button class="btn btn-primary btn-sm" id="pd-btn-edit"><i class="fas fa-pen-to-square"></i> Edit property</button>
-      <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> ${_photos.length ? 'Photos ('+_photos.length+')' : 'Manage photos'}</button>
-      <button class="btn btn-ghost btn-sm pd-upload-shortcut" id="pd-btn-upload" title="Upload new photos to this property"><i class="fas fa-camera"></i> Upload photos</button>
-      <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">Public listing ↗</a>
-      <button class="btn btn-ghost btn-sm" id="pd-btn-featured" title="${p.featured ? 'Remove featured flag' : 'Mark as featured'}">
-        ${p.featured ? '<i class="fas fa-star" style="color:#f59e0b"></i> Unfeature' : '<i class="far fa-star"></i> Feature'}
-      </button>
+      <button class="btn btn-primary btn-sm" id="pd-btn-edit"><i class="fas fa-pen-to-square"></i> Edit &amp; Upload</button>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> ${_photos.length ? 'All photos ('+_photos.length+')' : 'Manage photos'}</button>
+      <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Public listing</a>
       <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft"><i class="fas fa-copy"></i> Duplicate</button>
     </div>
     ${_lastSavedAt ? `<div id="pd-lastsaved" class="pd-lastsaved">Last saved ${_lastSavedAt}</div>` : ''}`;
@@ -661,7 +657,7 @@
         showing_instructions: p.showing_instructions || null,
         lat: p.lat ?? null, lng: p.lng ?? null,
         landlord_id: p.landlord_id || null,
-        status: 'draft', featured: false,
+        status: 'draft',
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       };
       const { data: nd, error: ne } = await CP.sb().from('properties').insert([clone]).select('id').single();
@@ -670,20 +666,7 @@
       setTimeout(() => { location.href = '/admin/property-detail.html?id=' + encodeURIComponent(nd.id) + '&edit=1'; }, 700);
     });
 
-    // Featured toggle button
-    document.getElementById('pd-btn-featured')?.addEventListener('click', async () => {
-      const newFeatured = !p.featured;
-      const { error: fe } = await CP.sb().from('properties').update({ featured: newFeatured, updated_at: new Date().toISOString() }).eq('id', propId);
-      if (fe) { S.toast('Could not update featured: ' + fe.message, 'error'); return; }
-      p.featured = newFeatured;
-      const fBtn = document.getElementById('pd-btn-featured');
-      if (fBtn) {
-        fBtn.innerHTML = newFeatured ? '<i class="fas fa-star"></i> Featured' : '<i class="far fa-star"></i> Feature';
-        fBtn.classList.toggle('btn-warning', newFeatured);
-        fBtn.classList.toggle('btn-ghost', !newFeatured);
-      }
-      S.toast(newFeatured ? 'Marked as Featured' : 'Removed from Featured', 'success');
-    });
+    // (featured column removed from schema — no handler needed)
 
     // Inquiry message expand (click row → modal dialog)
     document.querySelectorAll('.pd-inq-row').forEach(row => {
@@ -725,6 +708,25 @@
         </div>
         <div class="pd-edit-body">
           <form id="pd-edit-form" autocomplete="off">
+
+            <!-- ── Photos section ── -->
+            <div class="pd-edit-group" id="pd-edit-photos-group">
+              <div class="pd-edit-group-title">Photos <span id="pd-edit-photo-count" style="font-weight:400;color:var(--muted)">(${_photos.length})</span></div>
+              <div id="pd-edit-thumbs" class="pd-edit-thumb-grid">
+                ${_photos.length ? _photos.map((ph, i) => `<div class="pd-edit-thumb-item" data-photo-id="${esc(ph.id)}">
+                  <img src="${esc(thumbUrl(ph.url))}" alt="Photo ${i+1}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+                  ${i === 0 ? '<span class="pd-cover-badge">Cover</span>' : ''}
+                </div>`).join('') : '<div style="font-size:.78rem;color:var(--muted);padding:8px 2px">No photos yet — add some below.</div>'}
+              </div>
+              <div id="pd-edit-pending-zone" class="pd-edit-thumb-grid" style="margin-top:${_photos.length ? '8px' : '0'}"></div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+                <label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+                  <i class="fas fa-camera"></i> Add photos
+                  <input type="file" id="pd-edit-file-input" accept="image/*" multiple style="display:none">
+                </label>
+                <span id="pd-edit-photo-status" style="font-size:.72rem;color:var(--brand);display:none"></span>
+              </div>
+            </div>
 
             <div class="pd-edit-group">
               <div class="pd-edit-group-title">Basic Information</div>
@@ -1126,6 +1128,59 @@
       }
     });
 
+    // ── Photo upload wiring (inside edit panel) ──
+    _editPendingPhotos.clear();
+    const _editFileInput   = document.getElementById('pd-edit-file-input');
+    const _editPendingZone = document.getElementById('pd-edit-pending-zone');
+    const _editPhotoStatus = document.getElementById('pd-edit-photo-status');
+
+    function _addEditPendingFile(file) {
+      if (!file.type.startsWith('image/')) return;
+      if (file.size > 10 * 1024 * 1024) { S.toast('"' + file.name + '" exceeds 10 MB.', 'error'); return; }
+      for (const f of _editPendingPhotos.values()) {
+        if (f.name === file.name && f.size === file.size) return;
+      }
+      const sid = 'ep' + Date.now() + Math.random().toString(36).slice(2, 6);
+      _editPendingPhotos.set(sid, file);
+
+      const item = document.createElement('div');
+      item.className = 'pd-edit-thumb-item pd-edit-thumb-pending';
+      item.dataset.pendingSid = sid;
+      item.style.cssText = 'position:relative;overflow:hidden;border-radius:6px;background:var(--surface-2);border:2px dashed var(--brand)';
+      item.innerHTML = `<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;z-index:2">
+        <i class="fas fa-clock" style="font-size:.9rem;color:var(--brand)"></i>
+        <span style="font-size:.6rem;color:var(--muted);text-align:center;padding:0 4px;word-break:break-all">${esc(file.name.length > 18 ? file.name.slice(0, 15) + '…' : file.name)}</span>
+        <button type="button" data-remove-sid="${sid}" style="font-size:.6rem;padding:1px 6px;border-radius:3px;background:rgba(220,38,38,.85);color:#fff;border:none;cursor:pointer">Remove</button>
+      </div>`;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = document.createElement('img');
+        img.src = ev.target.result; img.alt = 'Preview';
+        img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35;z-index:1';
+        item.insertBefore(img, item.firstChild);
+      };
+      reader.readAsDataURL(file);
+      _editPendingZone?.appendChild(item);
+      if (_editPhotoStatus) { _editPhotoStatus.style.display = ''; _editPhotoStatus.textContent = _editPendingPhotos.size + ' new photo' + (_editPendingPhotos.size > 1 ? 's' : '') + ' queued'; }
+    }
+
+    _editFileInput?.addEventListener('change', e => {
+      [...e.target.files].forEach(_addEditPendingFile);
+      _editFileInput.value = '';
+    });
+
+    _editPendingZone?.addEventListener('click', e => {
+      const btn = e.target.closest('[data-remove-sid]');
+      if (!btn) return;
+      const sid = btn.dataset.removeSid;
+      _editPendingPhotos.delete(sid);
+      _editPendingZone.querySelector(`[data-pending-sid="${sid}"]`)?.remove();
+      if (_editPhotoStatus) {
+        _editPhotoStatus.textContent = _editPendingPhotos.size > 0 ? _editPendingPhotos.size + ' new photo' + (_editPendingPhotos.size > 1 ? 's' : '') + ' queued' : '';
+        _editPhotoStatus.style.display = _editPendingPhotos.size > 0 ? '' : 'none';
+      }
+    });
+
     // ── Populate landlord dropdown (cached across panel opens) ──
     function _populateLandlordSel(rows) {
       const sel = document.getElementById('pd-landlord-select');
@@ -1180,6 +1235,37 @@
 
     const saveBtn = document.getElementById('pd-edit-save');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+
+    // ── Upload any photos queued in the edit panel ──
+    if (_editPendingPhotos.size > 0) {
+      const statusEl = document.getElementById('pd-edit-photo-status');
+      if (statusEl) { statusEl.style.display = ''; statusEl.textContent = 'Uploading photos…'; }
+      if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+
+      const entries = [..._editPendingPhotos.entries()];
+      const baseOrder = _photos.length ? Math.max(..._photos.map(ph => ph.display_order ?? 0)) + 1 : 0;
+      let uploadedCnt = 0;
+
+      for (let i = 0; i < entries.length; i++) {
+        const [, file] = entries[i];
+        if (statusEl) statusEl.textContent = `Uploading photo ${i + 1} of ${entries.length}…`;
+        try {
+          const result = await _uploadAdminPhoto(file, propId, () => {});
+          const { data: newPhoto } = await CP.sb()
+            .from('property_photos')
+            .insert([{ property_id: propId, url: result.url, file_id: result.fileId || null, display_order: baseOrder + uploadedCnt }])
+            .select('id,url,display_order,watermark_status,file_id')
+            .single();
+          if (newPhoto) { _photos.push(newPhoto); uploadedCnt++; }
+        } catch (uploadErr) {
+          S.toast('Photo upload failed: ' + (uploadErr.message || uploadErr), 'error');
+        }
+      }
+
+      _editPendingPhotos.clear();
+      if (statusEl) { statusEl.textContent = uploadedCnt > 0 ? `${uploadedCnt} photo${uploadedCnt > 1 ? 's' : ''} uploaded!` : ''; }
+      if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+    }
 
     // ── Auto-geocode if address filled but no coords yet ──
     let resolvedLat = latVal, resolvedLng = lngVal;
@@ -1247,7 +1333,6 @@
       pet_types_allowed:  getArr('pet_types_allowed'),
       pet_details:        get('pet_details') || null,
       smoking_allowed:    getBool('smoking_allowed'),
-      featured:           get('featured') === 'true',
       showing_instructions: get('showing_instructions') || null,
       lat:                resolvedLat,
       lng:                resolvedLng,
@@ -1905,7 +1990,14 @@
     }
 
     // Render immediately with empty apps/inqs (shows loading placeholders)
-    render(propRes.data, [], []);
+    try {
+      render(propRes.data, [], []);
+    } catch (renderErr) {
+      document.getElementById('pd-root').innerHTML =
+        `<div class="empty"><h3>Render error</h3><p>${String(renderErr && renderErr.message || renderErr)}</p></div>`;
+      console.error('property-detail render error:', renderErr);
+      return;
+    }
 
     // Phase 2: fetch apps & inquiries in the background
     const _loadAppsInqs = async () => {
