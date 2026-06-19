@@ -785,6 +785,8 @@
       cooling_type     : v('coolingType') || null,
       description      : v('description'),
       showing_instructions: v('showingInstructions') || null,
+      minimum_income_multiplier: v('minIncome') ? parseFloat(v('minIncome')) : null,
+      minimum_credit_score     : v('minCredit') ? parseInt(v('minCredit')) : null,
     };
 
 
