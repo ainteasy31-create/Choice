@@ -40,13 +40,12 @@
       p.monthly_rent ? fmtMoney(p.monthly_rent)+'/mo' : null,
       p.square_footage ? p.square_footage+' sqft' : null
     ].filter(Boolean).join(' · ');
-    const featuredBadge = p.featured ? ' <span class="pill pill-warning" style="font-size:.62rem">★ Featured</span>' : '';
     return ''
       + '<div class="prop-card" data-prop-id="'+S.esc(p.id)+'">'
       +   img
       +   '<div class="prop-body">'
-      +     '<div class="row-title">'+S.esc(p.title||'Untitled')+featuredBadge+'</div>'
-      +     '<div class="row-sub">'+S.esc(p.address||p.location||'No address')+'</div>'
+      +     '<div class="row-title">'+S.esc(p.title||'Untitled')+'</div>'
+      +     '<div class="row-sub">'+S.esc(p.address||'No address')+'</div>'
       +     '<div>'+pill(p.status)+(p.landlords ? ' <span class="pill pill-muted" style="font-size:.65rem">'+S.esc(p.landlords.business_name||p.landlords.contact_name||'')+'</span>' : '')+'</div>'
       +     '<div class="row-sub" style="color:var(--muted-2)">'+S.esc(meta)+'</div>'
       +     '<div class="prop-actions">'
@@ -92,7 +91,7 @@
     const grid = document.getElementById('prop-grid');
     let q = CP.sb()
       .from('properties')
-      .select('id,title,address,city,state,status,bedrooms,bathrooms,monthly_rent,square_footage,featured,landlord_id,created_at,updated_at,landlords(business_name,contact_name)')
+      .select('id,title,address,city,state,status,bedrooms,bathrooms,monthly_rent,square_footage,landlord_id,created_at,updated_at,landlords(business_name,contact_name)')
       .order('created_at',{ascending:false})
       .limit(300);
     if(_statusFilter !== 'all') q = q.eq('status', _statusFilter);
@@ -310,15 +309,12 @@
             {value:'rented',label:'Rented'},{value:'maintenance',label:'Maintenance'},
             {value:'draft',label:'Draft'},{value:'paused',label:'Paused'},{value:'archived',label:'Archived'}
           ]},
-        { name:'featured', label:'Featured listing', type:'select', value:p.featured?'true':'false',
-          options:[{value:'false',label:'No'},{value:'true',label:'Yes — show as featured'}] },
         { name:'monthly_rent', label:'Monthly rent ($)', type:'number', value:p.monthly_rent||'', placeholder:'1500' }
       ]
     });
     if(!data) return;
     const patch = {
       status:       data.status || p.status,
-      featured:     data.featured === 'true',
       monthly_rent: data.monthly_rent !== '' && data.monthly_rent != null ? Number(data.monthly_rent) : p.monthly_rent,
       updated_at:   new Date().toISOString()
     };
@@ -457,17 +453,7 @@
       }
     });
 
-    AdminShell.on('toggle-featured', async (target) => {
-      const id = target.getAttribute('data-id');
-      const isFeatured = target.getAttribute('data-featured') === '1';
-      if(!id) return;
-      const { error } = await CP.sb().from('properties').update({ featured: !isFeatured, updated_at: new Date().toISOString() }).eq('id', id);
-      if(error){ AdminShell.toast('Failed: '+error.message, 'error'); return; }
-      AdminShell.toast(isFeatured ? 'Removed featured flag' : 'Marked as featured', 'success');
-      const p = _allCache.find(x => x.id === id);
-      if(p){ p.featured = !isFeatured; _clearCache(); }
-      load(false);
-    });
+    // 'featured' column does not exist in properties table — handler removed
 
     document.querySelectorAll('#chips .chip').forEach(c => {
       c.classList.toggle('active', (c.dataset.status || 'all') === _statusFilter);
