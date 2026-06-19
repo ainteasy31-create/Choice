@@ -39,7 +39,9 @@
 .pd-photo-count{position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,.55);color:#fff;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:99px;pointer-events:none}
 .pd-expand-btn{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:.74rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s}
 .pd-expand-btn:hover{background:rgba(0,0,0,.85)}
-.pd-no-photo{height:180px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r-md);color:var(--muted);margin-bottom:4px;font-size:.82rem}
+.pd-no-photo{height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r-md);color:var(--muted);margin-bottom:4px;font-size:.82rem}
+.pd-no-photo-btn{cursor:pointer;border:2px dashed var(--border);transition:border-color .15s,background .15s;gap:8px}
+.pd-no-photo-btn:hover,.pd-no-photo-btn:focus{border-color:var(--brand);background:rgba(59,130,246,.05);outline:none;color:var(--brand)}
 
 /* ── Gallery strip ── */
 .pd-gallery-strip{display:flex;gap:6px;overflow-x:auto;padding:4px 2px;margin-bottom:16px;scrollbar-width:thin}
