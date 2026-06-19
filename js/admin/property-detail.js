@@ -1008,6 +1008,72 @@
     }
   }
 
+  // ── Admin photo upload helpers ────────────────────────────────────────────────
+  // Mirrors imagekit.js logic — inline here because property-detail.js is a
+  // non-module IIFE and cannot use ES-module imports.
+  async function _compressPhoto(file, maxPx = 2048, quality = 0.85) {
+    let bmp;
+    try { bmp = await createImageBitmap(file); }
+    catch {
+      if (file.size > 4 * 1024 * 1024)
+        throw new Error(`"${file.name}" is too large (${(file.size / 1048576).toFixed(1)} MB). Use a smaller image.`);
+      return file;
+    }
+    const scale = Math.min(1, maxPx / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.round(bmp.width  * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close?.();
+    return new Promise((res, rej) =>
+      canvas.toBlob(b => b ? res(b) : rej(new Error('Compression failed')), 'image/jpeg', quality)
+    );
+  }
+
+  function _blobToBase64(blob) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = () => res(r.result);
+      r.onerror = () => rej(new Error('Failed to read file'));
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function _uploadAdminPhoto(file, pid, onProgress) {
+    if (!window.CONFIG?.SUPABASE_URL || !window.CONFIG?.SUPABASE_ANON_KEY)
+      throw new Error('Upload service not configured');
+    const { data: { session } } = await CP.sb().auth.getSession();
+    if (!session?.access_token) throw new Error('Session expired — please log back in');
+    const userToken = session.access_token;
+    onProgress?.(5);
+    const compressed = await _compressPhoto(file);
+    onProgress?.(20);
+    const base64 = await _blobToBase64(compressed);
+    onProgress?.(35);
+    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const folder   = `/properties/${pid}`;
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress?.(40 + Math.round((e.loaded / e.total) * 45));
+      };
+      xhr.onload = () => {
+        onProgress?.(100);
+        let d; try { d = JSON.parse(xhr.responseText); } catch { d = {}; }
+        if (d.success) resolve({ url: d.url, fileId: d.fileId ?? null });
+        else reject(new Error(d.error || `Upload failed (HTTP ${xhr.status})`));
+      };
+      xhr.onerror   = () => reject(new Error('Network error — check your connection'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out — please try again'));
+      xhr.timeout   = 55_000;
+      xhr.open('POST', `${CONFIG.SUPABASE_URL}/functions/v1/imagekit-upload`);
+      xhr.setRequestHeader('apikey',        CONFIG.SUPABASE_ANON_KEY);
+      xhr.setRequestHeader('Authorization', `Bearer ${userToken}`);
+      xhr.setRequestHeader('Content-Type',  'application/json');
+      xhr.send(JSON.stringify({ fileData: base64, fileName: safeName, folder }));
+    });
+  }
+
   // ── Photo manager ────────────────────────────────────────────────────────────
   function openPhotoManager() {
     const existing = document.getElementById('pd-photo-manager');
@@ -1024,25 +1090,44 @@
           <button class="pd-edit-close" id="pd-pm-close" aria-label="Close">✕</button>
         </div>
         <div class="pd-edit-body">
-          <p class="pd-pm-hint"><i class="fas fa-grip-dots-vertical"></i> Drag photos to reorder them. The first photo is the cover image.</p>
+          <p class="pd-pm-hint"><i class="fas fa-grip-dots-vertical"></i> Drag to reorder &middot; First photo is the cover image.</p>
           <div class="pd-pm-grid" id="pd-pm-grid">
             ${_photos.map((ph, i) => `
               <div class="pd-pm-item" data-photo-id="${esc(String(ph.id || ''))}" data-url="${esc(ph.url || '')}" draggable="true">
                 <div class="pd-pm-handle" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></div>
-                <img src="${esc(thumbUrl(ph.url || ''))}" alt="Photo ${i+1}" loading="lazy">
+                <img src="${esc(thumbUrl(ph.url || ''))}" alt="Photo ${i + 1}" loading="lazy">
                 <div class="pd-pm-order">${i + 1}</div>
-                ${ph.watermark_status && ph.watermark_status !== 'applied' ? `<div class="pd-pm-badge">⚠</div>` : ''}
-                <button class="pd-pm-delete" data-photo-id="${esc(String(ph.id || ''))}" title="Delete photo" aria-label="Delete photo">
+                ${ph.watermark_status && ph.watermark_status !== 'applied' ? '<div class="pd-pm-badge">⚠</div>' : ''}
+                <button class="pd-pm-delete" data-photo-id="${esc(String(ph.id || ''))}" data-file-id="${esc(String(ph.file_id || ''))}" title="Delete photo" aria-label="Delete photo">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>`).join('')}
           </div>
-          ${!_photos.length ? '<div class="pd-empty-row" style="text-align:center;padding:32px">No photos uploaded yet.</div>' : ''}
+          ${!_photos.length ? '<div class="pd-empty-row" style="text-align:center;padding:24px 16px">No photos yet — add some below.</div>' : ''}
+
+          <div class="pd-pm-upload-zone" id="pd-pm-upload-zone">
+            <input type="file" id="pd-pm-file-input" accept="image/jpeg,image/png,image/webp,image/*" multiple>
+            <i class="fas fa-cloud-upload-alt"></i>
+            <strong>Add photos</strong>
+            <p>JPG, PNG or WEBP &middot; max 10 MB each &middot; drop files here or click to browse</p>
+          </div>
+
+          <div class="pd-pm-upload-progress" id="pd-pm-upload-progress">
+            <div class="pd-pm-upload-progress-row">
+              <span id="pd-pm-upload-text">Uploading…</span>
+              <span id="pd-pm-upload-pct">0%</span>
+            </div>
+            <div class="pd-pm-upload-bar-wrap">
+              <div class="pd-pm-upload-bar" id="pd-pm-upload-bar"></div>
+            </div>
+          </div>
+
+          <div class="pd-pm-grid" id="pd-pm-pending-grid" style="margin-top:10px"></div>
         </div>
         <div class="pd-edit-footer">
           <button class="btn btn-ghost" id="pd-pm-cancel">Cancel</button>
           <button class="btn btn-primary" id="pd-pm-save">
-            <i class="fas fa-check"></i> Save order
+            <i class="fas fa-check"></i> Save
           </button>
         </div>
       </div>`;
@@ -1054,13 +1139,13 @@
     document.getElementById('pd-pm-close').addEventListener('click', closePanel);
     document.getElementById('pd-pm-cancel').addEventListener('click', closePanel);
     document.getElementById('pd-pm-overlay').addEventListener('click', closePanel);
-    document.getElementById('pd-pm-save').addEventListener('click', () => savePhotoOrder(closePanel));
 
-    // Delete buttons
+    // ── Delete existing photos ────────────────────────────────────────────────
     panel.addEventListener('click', async e => {
-      const btn = e.target.closest('.pd-pm-delete');
+      const btn = e.target.closest('.pd-pm-delete[data-photo-id]');
       if (!btn) return;
-      const id = btn.dataset.photoId;
+      const id     = btn.dataset.photoId;
+      const fileId = btn.dataset.fileId || null;
       if (!id) return;
       const ok = await S.confirm({ title: 'Delete this photo?', message: 'This cannot be undone.', ok: 'Delete', cancel: 'Cancel', danger: true });
       if (!ok) return;
@@ -1071,6 +1156,21 @@
       if (item) item.remove();
       refreshOrderBadges();
       S.toast('Photo deleted', 'success');
+      // Best-effort CDN cleanup (fire-and-forget, never surfaced to user)
+      if (fileId && window.CONFIG?.SUPABASE_URL && window.CONFIG?.SUPABASE_ANON_KEY) {
+        CP.sb().auth.getSession().then(({ data: { session } }) => {
+          if (!session?.access_token) return;
+          fetch(`${CONFIG.SUPABASE_URL}/functions/v1/imagekit-delete`, {
+            method: 'POST',
+            headers: {
+              'Content-Type':  'application/json',
+              'apikey':        CONFIG.SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ fileId }),
+          }).catch(() => {});
+        }).catch(() => {});
+      }
       // Audit log (non-blocking)
       CP.sb().auth.getUser().then(({ data: ud }) => {
         CP.sb().from('admin_actions').insert([{
@@ -1084,6 +1184,152 @@
     });
 
     bindDragToReorder(document.getElementById('pd-pm-grid'));
+
+    // ── Upload zone ───────────────────────────────────────────────────────────
+    const fileInput   = document.getElementById('pd-pm-file-input');
+    const uploadZone  = document.getElementById('pd-pm-upload-zone');
+    const pendingGrid = document.getElementById('pd-pm-pending-grid');
+    const uploadProg  = document.getElementById('pd-pm-upload-progress');
+    const uploadBar   = document.getElementById('pd-pm-upload-bar');
+    const uploadText  = document.getElementById('pd-pm-upload-text');
+    const uploadPct   = document.getElementById('pd-pm-upload-pct');
+
+    // Map of safeId → File, preserving insertion order
+    const _pendingMap = new Map();
+    let _uploading    = false;
+
+    function _addPendingFile(file) {
+      if (['image/heic', 'image/heif'].includes(file.type.toLowerCase()) || /\.heic$/i.test(file.name)) {
+        S.toast(`"${file.name}" is HEIC format. Convert to JPG first.`, 'error'); return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        S.toast(`"${file.name}" exceeds the 10 MB limit.`, 'error'); return;
+      }
+      // Deduplicate by name+size
+      for (const f of _pendingMap.values()) {
+        if (f.name === file.name && f.size === file.size) return;
+      }
+      const sid  = `pp${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+      _pendingMap.set(sid, file);
+
+      const item = document.createElement('div');
+      item.className = 'pd-pm-uploading-item';
+      item.dataset.pendingId = sid;
+      item.innerHTML = `
+        <div class="pd-pm-uploading-overlay" id="pd-pm-ovl-${sid}">
+          <i class="fas fa-clock" style="color:rgba(255,255,255,.8)"></i>
+          <span style="color:#fff;font-size:.72rem;text-align:center;max-width:110px;word-break:break-word">${esc(file.name.length > 22 ? file.name.slice(0, 19) + '…' : file.name)}</span>
+          <button data-remove-pending="${sid}" style="padding:2px 10px;border-radius:4px;font-size:.7rem;background:rgba(220,38,38,.85);color:#fff;border:none;cursor:pointer;margin-top:2px">Remove</button>
+        </div>`;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = document.createElement('img');
+        img.src = ev.target.result; img.alt = 'Preview';
+        img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35';
+        item.insertBefore(img, item.firstChild);
+      };
+      reader.readAsDataURL(file);
+      pendingGrid.appendChild(item);
+    }
+
+    // Remove a pending file
+    pendingGrid.addEventListener('click', e => {
+      const btn = e.target.closest('[data-remove-pending]');
+      if (!btn || _uploading) return;
+      const sid = btn.dataset.removePending;
+      _pendingMap.delete(sid);
+      pendingGrid.querySelector(`[data-pending-id="${sid}"]`)?.remove();
+    });
+
+    fileInput.addEventListener('change', e => {
+      [...e.target.files].forEach(_addPendingFile);
+      fileInput.value = '';
+    });
+    uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault(); uploadZone.classList.remove('drag-over');
+      [...e.dataTransfer.files].forEach(_addPendingFile);
+    });
+
+    // ── Save / Upload handler ─────────────────────────────────────────────────
+    async function _onSave() {
+      if (_uploading) return;
+      if (!_pendingMap.size) { savePhotoOrder(closePanel); return; }
+
+      _uploading = true;
+      const saveBtn = document.getElementById('pd-pm-save');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…'; }
+      uploadProg.style.display = '';
+
+      const entries  = [..._pendingMap.entries()]; // [[sid, File], …]
+      const total    = entries.length;
+      let successCnt = 0;
+
+      for (let i = 0; i < total; i++) {
+        const [sid, file] = entries[i];
+        const itemEl = pendingGrid.querySelector(`[data-pending-id="${sid}"]`);
+        const ovlEl  = document.getElementById(`pd-pm-ovl-${sid}`);
+
+        if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--brand)"></i><span style="color:#fff;font-size:.72rem">Uploading…</span>';
+
+        try {
+          const result = await _uploadAdminPhoto(file, propId, (pct) => {
+            const overall = Math.round(((i + pct / 100) / total) * 100);
+            uploadBar.style.width = overall + '%';
+            uploadPct.textContent = overall + '%';
+            uploadText.textContent = `Uploading ${i + 1} of ${total}…`;
+          });
+
+          // Append to end of existing photos
+          const maxOrder = _photos.length
+            ? Math.max(..._photos.map(p => p.display_order ?? 0))
+            : -1;
+          const { error: insErr } = await CP.sb().from('property_photos').insert([{
+            property_id:   propId,
+            url:           result.url,
+            file_id:       result.fileId || null,
+            display_order: maxOrder + 1 + successCnt,
+          }]);
+          if (insErr) throw new Error(insErr.message);
+
+          successCnt++;
+          if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
+          if (itemEl) itemEl.style.borderColor = 'rgba(34,197,94,.6)';
+
+        } catch (err) {
+          const msg = String(err?.message || err).slice(0, 80);
+          if (ovlEl) ovlEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f87171"></i><span style="color:#f87171;font-size:.7rem">Failed</span><span style="color:rgba(255,255,255,.7);font-size:.64rem;text-align:center;max-width:110px;word-break:break-word">${esc(msg)}</span>`;
+          if (itemEl) itemEl.classList.add('error');
+        }
+      }
+
+      uploadBar.style.width = '100%';
+      uploadPct.textContent = '100%';
+      _uploading = false;
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-check"></i> Save'; }
+
+      if (successCnt > 0) {
+        S.toast(`${successCnt} photo${successCnt > 1 ? 's' : ''} uploaded!`, 'success');
+        // Audit log (non-blocking)
+        CP.sb().auth.getUser().then(({ data: ud }) => {
+          CP.sb().from('admin_actions').insert([{
+            user_id:     ud?.user?.id || null,
+            action:      'property.photo_upload',
+            target_type: 'property',
+            target_id:   String(propId),
+            metadata:    { count: successCnt }
+          }]).catch(() => {});
+        }).catch(() => {});
+        // Brief pause so user sees the Done state, then save order + close
+        setTimeout(() => { uploadProg.style.display = 'none'; savePhotoOrder(closePanel); }, 900);
+      } else {
+        S.toast('All uploads failed — see errors above.', 'error');
+        uploadProg.style.display = 'none';
+      }
+    }
+
+    document.getElementById('pd-pm-save').addEventListener('click', _onSave);
   }
 
   function refreshOrderBadges() {
