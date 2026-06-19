@@ -175,6 +175,45 @@ select.pd-edit-input{cursor:pointer}
 .pd-pm-uploading-item{position:relative;border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);border:2px solid var(--border);aspect-ratio:4/3}
 .pd-pm-uploading-item.error{border-color:rgba(220,38,38,.5)}
 .pd-pm-uploading-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:.76rem;color:var(--text);background:rgba(0,0,0,.55);padding:6px}
+
+/* ── Tag picker (amenities / appliances etc.) ── */
+.pd-tag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;margin-top:2px}
+.pd-tag{display:flex;align-items:center;gap:7px;font-size:.78rem;font-weight:500;color:var(--text);padding:6px 10px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-sm);cursor:pointer;user-select:none;transition:border-color .15s,background .15s;line-height:1.2}
+.pd-tag:hover{border-color:var(--brand)}
+.pd-tag input[type=checkbox]{accent-color:var(--brand);width:14px;height:14px;flex-shrink:0;cursor:pointer}
+.pd-tag:has(input:checked){border-color:var(--brand);background:rgba(59,130,246,.08)}
+
+/* ── Desc counter ── */
+.pd-char-counter{font-size:.65rem;font-weight:500;color:var(--muted);text-align:right;margin-top:2px}
+.pd-char-counter.over{color:#ef4444}
+
+/* ── Dirty indicator ── */
+.pd-dirty-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f59e0b;margin-left:6px;vertical-align:middle}
+
+/* ── Cover photo ── */
+.pd-pm-cover-btn{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:.62rem;font-weight:700;cursor:pointer;z-index:3;white-space:nowrap;transition:background .15s}
+.pd-pm-cover-btn:hover{background:rgba(59,130,246,.9)}
+.pd-pm-cover-btn.is-cover{background:rgba(34,197,94,.85);cursor:default}
+
+/* ── Mobile improvements ── */
+@media(max-width:480px){
+  .pd-edit-drawer{width:100%}
+  .pd-edit-row{grid-template-columns:1fr}
+  .pd-mosaic{grid-template-columns:1fr}
+  .pd-mosaic-side{display:none}
+  .pd-actions{flex-direction:column}
+  .pd-actions .btn{width:100%;justify-content:center}
+  .pd-status-toggle{gap:4px}
+  .pd-status-chip{padding:5px 10px;font-size:.72rem}
+  .pd-tag-grid{grid-template-columns:1fr 1fr}
+  .pd-pm-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}
+  .pd-edit-footer{padding:10px 14px;gap:8px}
+  .pd-edit-footer .btn{flex:1}
+}
+
+/* ── Draft auto-save indicator ── */
+#pd-autosave-badge{position:fixed;bottom:70px;right:16px;background:rgba(0,0,0,.7);color:#fff;font-size:.68rem;padding:4px 10px;border-radius:99px;pointer-events:none;opacity:0;transition:opacity .4s;z-index:10000}
+#pd-autosave-badge.show{opacity:1}
 </style>
 </head>
 <body data-page-title="Property Detail" data-page-sub="Loading…">

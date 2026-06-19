@@ -35,6 +35,44 @@
             reviewing:'pill-info',waitlisted:'pill-warning'}[s] || 'pill-muted';
   }
 
+  // ── Option constants ──────────────────────────────────────────────────────────
+  const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
+  const AMENITY_OPTIONS    = ['Pool','Gym / Fitness Center','Rooftop Access','Elevator','Doorman / Concierge','Storage Unit','Bike Room','BBQ / Grill Area','Courtyard / Garden','Balcony / Patio','In-unit Laundry','Washer/Dryer Hookups','Fireplace','EV Charging','Dog Run','High Ceilings','City Views','Smart Home'];
+  const APPLIANCE_OPTIONS  = ['Dishwasher','Refrigerator','Oven / Range','Microwave','Washer','Dryer','Garbage Disposal','Ice Maker'];
+  const FLOORING_OPTIONS   = ['Hardwood','Tile','Carpet','Vinyl / LVP','Laminate','Concrete','Marble'];
+  const UTILITY_OPTIONS    = ['Water','Trash','Electric','Gas','Internet','Cable / TV','Heat','Sewer'];
+  const LAUNDRY_OPTIONS    = ['','In-unit','Washer/Dryer Hookups','Shared (On-site)','Laundromat Nearby','None'];
+  const HEATING_OPTIONS    = ['','Central','Forced Air','Baseboard','Radiant','Heat Pump','Wall Unit','None'];
+  const COOLING_OPTIONS    = ['','Central AC','Window Units','Mini-Split','None'];
+  const PARKING_TYPE_OPTIONS = ['','None','Street Parking','Garage (Included)','Garage (Fee)','Carport','Parking Lot','Assigned Space'];
+
+  function _tagPicker(name, options, current) {
+    const currentSet = new Set((Array.isArray(current) ? current : []).map(s => s.trim()));
+    const known = options.filter(Boolean);
+    const unknown = [...currentSet].filter(v => !known.includes(v));
+    return `<div class="pd-tag-grid" id="pd-tags-${name}">
+      ${known.map(o => `<label class="pd-tag"><input type="checkbox" data-tag="${name}" value="${esc(o)}"${currentSet.has(o)?' checked':''}> ${esc(o)}</label>`).join('')}
+    </div>
+    <input class="pd-edit-input" name="${name}_other" type="text" value="${esc(unknown.join(', '))}" placeholder="Other (comma-separated)" style="margin-top:6px">`;
+  }
+
+  function _readTags(form, name, optionsList) {
+    const checked = [...form.querySelectorAll(`[data-tag="${name}"]:checked`)].map(el => el.value);
+    const other = (form.elements[name + '_other']?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+    return [...checked, ...other.filter(v => !optionsList.includes(v))];
+  }
+
+  function _makeSelect(name, options, current, labelFn) {
+    return `<select class="pd-edit-input" name="${name}">${options.map(v => {
+      const label = labelFn ? labelFn(v) : (v || '—');
+      return `<option value="${esc(v)}"${current===v?' selected':''}>${esc(label)}</option>`;
+    }).join('')}</select>`;
+  }
+
+  let _editOriginal = null;
+  let _formDirty = false;
+  let _autosaveTimer = null;
+
   // ── Status toggle ────────────────────────────────────────────────────────────
   const STATUS_OPTIONS = [
     { value:'active',      label:'Active',      cls:'pd-status-chip active' },
@@ -338,6 +376,7 @@
       <button class="btn btn-primary btn-sm" id="pd-btn-edit"><i class="fas fa-pen-to-square"></i> Edit property</button>
       <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> Manage photos</button>
       <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">Public listing ↗</a>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft"><i class="fas fa-copy"></i> Duplicate</button>
     </div>`;
 
     // ── Key fields grid ──
@@ -568,6 +607,50 @@
     // Manage photos button
     document.getElementById('pd-btn-photos')?.addEventListener('click', () => openPhotoManager());
 
+    // Duplicate property button
+    document.getElementById('pd-btn-duplicate')?.addEventListener('click', async () => {
+      const ok = await S.confirm({
+        title: 'Duplicate this property?',
+        message: 'Creates a new Draft copy of "' + (p.title || 'Untitled') + '" with all details but no photos.\nYou will be taken to the new listing.',
+        ok: 'Duplicate',
+        cancel: 'Cancel',
+        danger: false,
+      });
+      if (!ok) return;
+      const clone = {
+        title: (p.title || 'Untitled') + ' (Copy)',
+        address: p.address || null, city: p.city || null, state: p.state || null, zip: p.zip || null,
+        unit_number: p.unit_number || null, property_type: p.property_type || null,
+        bedrooms: p.bedrooms ?? null, bathrooms: p.bathrooms ?? null, half_bathrooms: p.half_bathrooms ?? null,
+        square_footage: p.square_footage ?? null, lot_size_sqft: p.lot_size_sqft ?? null,
+        year_built: p.year_built ?? null, floors: p.floors ?? null,
+        monthly_rent: p.monthly_rent ?? null, security_deposit: p.security_deposit ?? null,
+        application_fee: p.application_fee ?? null, admin_fee: p.admin_fee ?? null,
+        last_months_rent: p.last_months_rent ?? null, minimum_lease_months: p.minimum_lease_months ?? null,
+        minimum_income_multiplier: p.minimum_income_multiplier ?? null, minimum_credit_score: p.minimum_credit_score ?? null,
+        available_date: null, description: p.description || null, virtual_tour_url: p.virtual_tour_url || null,
+        amenities: Array.isArray(p.amenities) ? [...p.amenities] : [],
+        appliances: Array.isArray(p.appliances) ? [...p.appliances] : [],
+        flooring: Array.isArray(p.flooring) ? [...p.flooring] : [],
+        utilities_included: Array.isArray(p.utilities_included) ? [...p.utilities_included] : [],
+        lease_terms: Array.isArray(p.lease_terms) ? [...p.lease_terms] : [],
+        parking: p.parking || null, garage_spaces: p.garage_spaces ?? null, parking_fee: p.parking_fee ?? null,
+        laundry_type: p.laundry_type || null, heating_type: p.heating_type || null, cooling_type: p.cooling_type || null,
+        pets_allowed: p.pets_allowed ?? null, pet_deposit: p.pet_deposit ?? null,
+        pet_weight_limit: p.pet_weight_limit ?? null, pet_types_allowed: p.pet_types_allowed ?? [],
+        pet_details: p.pet_details || null, smoking_allowed: p.smoking_allowed ?? null,
+        showing_instructions: p.showing_instructions || null,
+        lat: p.lat ?? null, lng: p.lng ?? null,
+        landlord_id: p.landlord_id || null,
+        status: 'draft', featured: false,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      const { data: nd, error: ne } = await CP.sb().from('properties').insert([clone]).select('id').single();
+      if (ne) { S.toast('Duplicate failed: ' + ne.message, 'error'); return; }
+      S.toast('Property duplicated — opening new draft…', 'success');
+      setTimeout(() => { location.href = '/admin/property-detail.html?id=' + encodeURIComponent(nd.id) + '&edit=1'; }, 700);
+    });
+
     // Inquiry message expand (click row → modal dialog)
     document.querySelectorAll('.pd-inq-row').forEach(row => {
       row.addEventListener('click', () => {
@@ -619,7 +702,12 @@
               </label>
               <div class="pd-edit-row">
                 <label class="pd-edit-label">City <input class="pd-edit-input" name="city" type="text" value="${esc(p.city || '')}" placeholder="San Francisco"></label>
-                <label class="pd-edit-label">State <input class="pd-edit-input" name="state" type="text" value="${esc(p.state || '')}" placeholder="CA" maxlength="2"></label>
+                <label class="pd-edit-label">State
+                  <select class="pd-edit-input" name="state">
+                    <option value="">—</option>
+                    ${US_STATES.map(s => `<option value="${s}"${p.state===s?' selected':''}>${s}</option>`).join('')}
+                  </select>
+                </label>
                 <label class="pd-edit-label">Zip <input class="pd-edit-input" name="zip" type="text" value="${esc(p.zip || '')}" placeholder="94101"></label>
               </div>
               <label class="pd-edit-label">Unit number
@@ -668,7 +756,8 @@
                 </label>
               </div>
               <label class="pd-edit-label">Description
-                <textarea class="pd-edit-input" name="description" rows="4" placeholder="Describe the property…">${esc(p.description || '')}</textarea>
+                <textarea class="pd-edit-input" name="description" rows="4" placeholder="Describe the property…" id="pd-desc-textarea" maxlength="5000">${esc(p.description || '')}</textarea>
+                <span class="pd-char-counter" id="pd-desc-counter">${(p.description||'').length} / 5000</span>
               </label>
               <label class="pd-edit-label">Virtual tour URL
                 <input class="pd-edit-input" name="virtual_tour_url" type="url" value="${esc(p.virtual_tour_url || '')}" placeholder="https://…">
@@ -720,21 +809,21 @@
 
             <div class="pd-edit-group">
               <div class="pd-edit-group-title">Amenities & Features</div>
-              <label class="pd-edit-label">Amenities <span class="pd-edit-hint">comma-separated</span>
-                <input class="pd-edit-input" name="amenities" type="text" value="${esc((Array.isArray(p.amenities) ? p.amenities : []).join(', '))}" placeholder="Pool, Gym, Rooftop, In-unit Laundry">
+              <label class="pd-edit-label">Amenities <span class="pd-edit-hint">check all that apply, add others below</span>
+                ${_tagPicker('amenities', AMENITY_OPTIONS, p.amenities)}
               </label>
-              <label class="pd-edit-label">Appliances <span class="pd-edit-hint">comma-separated</span>
-                <input class="pd-edit-input" name="appliances" type="text" value="${esc((Array.isArray(p.appliances) ? p.appliances : []).join(', '))}" placeholder="Dishwasher, Refrigerator, Oven">
+              <label class="pd-edit-label">Appliances
+                ${_tagPicker('appliances', APPLIANCE_OPTIONS, p.appliances)}
               </label>
-              <label class="pd-edit-label">Flooring <span class="pd-edit-hint">comma-separated</span>
-                <input class="pd-edit-input" name="flooring" type="text" value="${esc((Array.isArray(p.flooring) ? p.flooring : []).join(', '))}" placeholder="Hardwood, Tile, Carpet">
+              <label class="pd-edit-label">Flooring
+                ${_tagPicker('flooring', FLOORING_OPTIONS, p.flooring)}
               </label>
-              <label class="pd-edit-label">Utilities included <span class="pd-edit-hint">comma-separated</span>
-                <input class="pd-edit-input" name="utilities_included" type="text" value="${esc((Array.isArray(p.utilities_included) ? p.utilities_included : []).join(', '))}" placeholder="Water, Trash, Internet">
+              <label class="pd-edit-label">Utilities included
+                ${_tagPicker('utilities_included', UTILITY_OPTIONS, p.utilities_included)}
               </label>
               <div class="pd-edit-row">
-                <label class="pd-edit-label">Parking
-                  <input class="pd-edit-input" name="parking" type="text" value="${esc(p.parking || '')}" placeholder="Street, Garage, Lot">
+                <label class="pd-edit-label">Parking type
+                  ${_makeSelect('parking', PARKING_TYPE_OPTIONS, p.parking || '')}
                 </label>
                 <label class="pd-edit-label">Garage spaces
                   <input class="pd-edit-input" name="garage_spaces" type="number" value="${esc(String(p.garage_spaces || ''))}" placeholder="1" min="0">
@@ -745,13 +834,13 @@
               </div>
               <div class="pd-edit-row">
                 <label class="pd-edit-label">Laundry
-                  <input class="pd-edit-input" name="laundry_type" type="text" value="${esc(p.laundry_type || '')}" placeholder="In-unit, Shared, None">
+                  ${_makeSelect('laundry_type', LAUNDRY_OPTIONS, p.laundry_type || '')}
                 </label>
                 <label class="pd-edit-label">Heating
-                  <input class="pd-edit-input" name="heating_type" type="text" value="${esc(p.heating_type || '')}" placeholder="Central, Forced air">
+                  ${_makeSelect('heating_type', HEATING_OPTIONS, p.heating_type || '')}
                 </label>
                 <label class="pd-edit-label">Cooling
-                  <input class="pd-edit-input" name="cooling_type" type="text" value="${esc(p.cooling_type || '')}" placeholder="Central AC, Window units">
+                  ${_makeSelect('cooling_type', COOLING_OPTIONS, p.cooling_type || '')}
                 </label>
               </div>
               <label class="pd-edit-label">Lease terms <span class="pd-edit-hint">comma-separated</span>
@@ -838,13 +927,112 @@
       </div>`;
 
     document.body.appendChild(panel);
+
+    // Insert autosave toast badge if not present
+    if (!document.getElementById('pd-autosave-badge')) {
+      const badge = document.createElement('div');
+      badge.id = 'pd-autosave-badge';
+      badge.textContent = 'Draft auto-saved';
+      document.body.appendChild(badge);
+    }
+
     requestAnimationFrame(() => panel.classList.add('open'));
 
-    const closePanel = () => { panel.classList.remove('open'); setTimeout(() => panel.remove(), 300); };
-    document.getElementById('pd-edit-close').addEventListener('click', closePanel);
-    document.getElementById('pd-edit-cancel').addEventListener('click', closePanel);
-    document.getElementById('pd-edit-overlay').addEventListener('click', closePanel);
-    document.getElementById('pd-edit-save').addEventListener('click', () => saveEdit(closePanel));
+    // ── Store original snapshot for diff audit log ──
+    _editOriginal = JSON.parse(JSON.stringify(_prop || {}));
+    _formDirty = false;
+
+    function _markDirty() {
+      if (_formDirty) return;
+      _formDirty = true;
+      const h3 = panel.querySelector('.pd-edit-header h3');
+      if (h3 && !h3.querySelector('.pd-dirty-dot')) {
+        const dot = document.createElement('span');
+        dot.className = 'pd-dirty-dot';
+        dot.title = 'Unsaved changes';
+        h3.appendChild(dot);
+      }
+    }
+
+    // Mark dirty on any input change
+    panel.querySelector('#pd-edit-form')?.addEventListener('input', _markDirty);
+    panel.querySelector('#pd-edit-form')?.addEventListener('change', _markDirty);
+
+    // ── Description character counter ──
+    const descTA = document.getElementById('pd-desc-textarea');
+    const descCtr = document.getElementById('pd-desc-counter');
+    if (descTA && descCtr) {
+      descTA.addEventListener('input', () => {
+        const len = descTA.value.length;
+        descCtr.textContent = len + ' / 5000';
+        descCtr.classList.toggle('over', len > 4800);
+      });
+    }
+
+    // ── localStorage autosave every 30 s ──
+    const _autoKey = 'pd_draft_' + propId;
+    if (_autosaveTimer) clearInterval(_autosaveTimer);
+    _autosaveTimer = setInterval(() => {
+      const form = document.getElementById('pd-edit-form');
+      if (!form || !_formDirty) return;
+      try {
+        const fd = new FormData(form);
+        const snap = {};
+        for (const [k, v] of fd.entries()) snap[k] = v;
+        localStorage.setItem(_autoKey, JSON.stringify({ ts: Date.now(), data: snap }));
+        const badge = document.getElementById('pd-autosave-badge');
+        if (badge) {
+          badge.classList.add('show');
+          setTimeout(() => badge.classList.remove('show'), 2000);
+        }
+      } catch (e) { /* storage unavailable */ }
+    }, 30_000);
+
+    // Check for a saved draft
+    try {
+      const saved = JSON.parse(localStorage.getItem(_autoKey) || 'null');
+      if (saved && saved.ts && Date.now() - saved.ts < 24 * 3600_000) {
+        const form = document.getElementById('pd-edit-form');
+        if (form) {
+          for (const [k, v] of Object.entries(saved.data || {})) {
+            const el = form.elements[k];
+            if (el && el.type !== 'checkbox') el.value = v;
+          }
+          _markDirty();
+          S.toast('Draft restored from auto-save', 'success');
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    const _guardedClose = async () => {
+      if (_formDirty) {
+        const leave = await S.confirm({
+          title: 'Discard changes?',
+          message: 'You have unsaved changes. Leave without saving?',
+          ok: 'Discard',
+          cancel: 'Keep editing',
+          danger: true,
+        });
+        if (!leave) return;
+      }
+      clearInterval(_autosaveTimer);
+      _autosaveTimer = null;
+      _formDirty = false;
+      panel.classList.remove('open');
+      setTimeout(() => panel.remove(), 300);
+    };
+
+    document.getElementById('pd-edit-close').addEventListener('click', _guardedClose);
+    document.getElementById('pd-edit-cancel').addEventListener('click', _guardedClose);
+    document.getElementById('pd-edit-overlay').addEventListener('click', _guardedClose);
+    document.getElementById('pd-edit-save').addEventListener('click', () => saveEdit(() => {
+      clearInterval(_autosaveTimer);
+      _autosaveTimer = null;
+      _formDirty = false;
+      try { localStorage.removeItem('pd_draft_' + propId); } catch(e) {}
+      panel.classList.remove('open');
+      setTimeout(() => panel.remove(), 300);
+    }));
 
     // ── Geocode button ──
     document.getElementById('pd-geocode-btn').addEventListener('click', async () => {
@@ -908,8 +1096,39 @@
       S.toast('Title and address are required', 'error'); return;
     }
 
+    // ── Coordinate validation ──
+    const latVal = getNum('lat');
+    const lngVal = getNum('lng');
+    if (latVal !== null && (latVal < -90 || latVal > 90)) {
+      S.toast('Latitude must be between −90 and 90', 'error'); return;
+    }
+    if (lngVal !== null && (lngVal < -180 || lngVal > 180)) {
+      S.toast('Longitude must be between −180 and 180', 'error'); return;
+    }
+
     const saveBtn = document.getElementById('pd-edit-save');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+
+    // ── Auto-geocode if address filled but no coords yet ──
+    let resolvedLat = latVal, resolvedLng = lngVal;
+    if (resolvedLat === null && resolvedLng === null && get('address')) {
+      const apiKey = window.CONFIG && CONFIG.GEOAPIFY_API_KEY;
+      if (apiKey) {
+        try {
+          const addr = [get('address'), get('city'), get('state'), get('zip')].filter(Boolean).join(', ');
+          const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(addr)}&limit=1&apiKey=${encodeURIComponent(apiKey)}`);
+          const json = await res.json();
+          const feat = json && json.features && json.features[0];
+          if (feat) {
+            resolvedLat = parseFloat(feat.geometry.coordinates[1].toFixed(6));
+            resolvedLng = parseFloat(feat.geometry.coordinates[0].toFixed(6));
+            // Update form fields so user sees the result
+            if (form.elements.lat) form.elements.lat.value = resolvedLat;
+            if (form.elements.lng) form.elements.lng.value = resolvedLng;
+          }
+        } catch (e) { /* geocode failure is non-fatal */ }
+      }
+    }
 
     const patch = {
       title:              get('title'),
@@ -939,10 +1158,10 @@
       minimum_income_multiplier:   getNum('minimum_income_multiplier'),
       minimum_credit_score:        getNum('minimum_credit_score'),
       move_in_special:             get('move_in_special') || null,
-      amenities:          getArr('amenities'),
-      appliances:         getArr('appliances'),
-      flooring:           getArr('flooring'),
-      utilities_included: getArr('utilities_included'),
+      amenities:          _readTags(form, 'amenities', AMENITY_OPTIONS),
+      appliances:         _readTags(form, 'appliances', APPLIANCE_OPTIONS),
+      flooring:           _readTags(form, 'flooring', FLOORING_OPTIONS),
+      utilities_included: _readTags(form, 'utilities_included', UTILITY_OPTIONS),
       parking:            get('parking') || null,
       garage_spaces:      getNum('garage_spaces'),
       parking_fee:        getNum('parking_fee'),
@@ -953,13 +1172,13 @@
       pets_allowed:       getBool('pets_allowed'),
       pet_deposit:        getNum('pet_deposit'),
       pet_weight_limit:   getNum('pet_weight_limit'),
-      pet_types_allowed:  getArr('pet_types_allowed'),
+      pet_types_allowed:  _readTags(form, 'pet_types_allowed', []),
       pet_details:        get('pet_details') || null,
       smoking_allowed:    getBool('smoking_allowed'),
       featured:           get('featured') === 'true',
       showing_instructions: get('showing_instructions') || null,
-      lat:                getNum('lat'),
-      lng:                getNum('lng'),
+      lat:                resolvedLat,
+      lng:                resolvedLng,
       landlord_id:        get('landlord_id') || null,
       updated_at:         new Date().toISOString(),
     };
@@ -981,16 +1200,29 @@
 
     closePanel();
 
-    // ── Audit log (non-blocking) ──
+    // ── Real-diff audit log (non-blocking) ──
     CP.sb().auth.getUser().then(({ data: ud }) => {
       const uid = ud && ud.user ? ud.user.id : null;
-      CP.sb().from('admin_actions').insert([{
-        user_id: uid,
-        action: 'property.edit',
-        target_type: 'property',
-        target_id: String(propId),
-        metadata: { title: patch.title, fields_changed: Object.keys(patch), updated_at: patch.updated_at }
-      }]).catch(() => {});
+      const orig = _editOriginal || {};
+      const changes = {};
+      const skip = new Set(['updated_at']);
+      for (const [k, v] of Object.entries(patch)) {
+        if (skip.has(k)) continue;
+        const oldV = orig[k];
+        const newV = v;
+        const oldS = JSON.stringify(oldV ?? null);
+        const newS = JSON.stringify(newV ?? null);
+        if (oldS !== newS) changes[k] = { from: oldV ?? null, to: newV ?? null };
+      }
+      if (Object.keys(changes).length) {
+        CP.sb().from('admin_actions').insert([{
+          user_id: uid,
+          action: 'property.edit',
+          target_type: 'property',
+          target_id: String(propId),
+          metadata: { title: patch.title, changes, updated_at: patch.updated_at }
+        }]).catch(() => {});
+      }
     }).catch(() => {});
 
     // Reload page data
@@ -1094,10 +1326,11 @@
           <div class="pd-pm-grid" id="pd-pm-grid">
             ${_photos.map((ph, i) => `
               <div class="pd-pm-item" data-photo-id="${esc(String(ph.id || ''))}" data-url="${esc(ph.url || '')}" draggable="true">
-                <div class="pd-pm-handle" title="Drag to reorder"><i class="fas fa-grip-vertical"></i></div>
+                <div class="pd-pm-handle" title="Drag (or touch the handle) to reorder"><i class="fas fa-grip-vertical"></i></div>
                 <img src="${esc(thumbUrl(ph.url || ''))}" alt="Photo ${i + 1}" loading="lazy">
                 <div class="pd-pm-order">${i + 1}</div>
                 ${ph.watermark_status && ph.watermark_status !== 'applied' ? '<div class="pd-pm-badge">⚠</div>' : ''}
+                <button class="pd-pm-cover-btn${i === 0 ? ' is-cover' : ''}" data-set-cover="${esc(String(ph.id || ''))}" title="${i === 0 ? 'Cover photo' : 'Set as cover'}">${i === 0 ? '★ Cover' : 'Set cover'}</button>
                 <button class="pd-pm-delete" data-photo-id="${esc(String(ph.id || ''))}" data-file-id="${esc(String(ph.file_id || ''))}" title="Delete photo" aria-label="Delete photo">
                   <i class="fas fa-trash"></i>
                 </button>
@@ -1181,6 +1414,25 @@
           metadata:    { photo_id: String(id) }
         }]).catch(() => {});
       }).catch(() => {});
+    });
+
+    // ── Set as cover (move to position 0) ────────────────────────────────────
+    panel.addEventListener('click', e => {
+      const btn = e.target.closest('[data-set-cover]');
+      if (!btn || btn.classList.contains('is-cover')) return;
+      const id = btn.dataset.setCover;
+      const grid = document.getElementById('pd-pm-grid');
+      const item = grid?.querySelector(`[data-photo-id="${id}"]`);
+      if (!item || !grid) return;
+      grid.insertBefore(item, grid.firstChild);
+      refreshOrderBadges();
+      // Update cover button states
+      grid.querySelectorAll('.pd-pm-cover-btn').forEach((cb, idx) => {
+        cb.classList.toggle('is-cover', idx === 0);
+        cb.textContent = idx === 0 ? '★ Cover' : 'Set cover';
+        cb.title = idx === 0 ? 'Cover photo' : 'Set as cover';
+      });
+      S.toast('Cover photo updated — tap Save to confirm', 'success');
     });
 
     bindDragToReorder(document.getElementById('pd-pm-grid'));
@@ -1344,6 +1596,7 @@
     let dragItem = null;
     let dragOver = null;
 
+    // ── Mouse drag ──
     grid.addEventListener('dragstart', e => {
       dragItem = e.target.closest('.pd-pm-item');
       if (dragItem) { dragItem.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
@@ -1360,7 +1613,6 @@
       if (dragOver && dragOver !== target) dragOver.classList.remove('drag-over');
       dragOver = target;
       dragOver.classList.add('drag-over');
-      // Determine insert position
       const rect = target.getBoundingClientRect();
       const after = e.clientY > rect.top + rect.height / 2 || e.clientX > rect.left + rect.width / 2;
       if (after) { grid.insertBefore(dragItem, target.nextSibling); }
@@ -1374,6 +1626,64 @@
       e.preventDefault();
       if (dragOver) dragOver.classList.remove('drag-over');
     });
+
+    // ── Touch drag (mobile) ──
+    let touchItem = null;
+    let touchClone = null;
+
+    function _touchItem(e) {
+      const item = e.target.closest('.pd-pm-item');
+      if (!item) return;
+      // Only start drag on handle touch or long-press simulation
+      touchItem = item;
+      touchItem.classList.add('dragging');
+      touchClone = touchItem.cloneNode(true);
+      touchClone.style.cssText = 'position:fixed;opacity:.7;pointer-events:none;z-index:99999;width:' + touchItem.offsetWidth + 'px;height:' + touchItem.offsetHeight + 'px;border-radius:8px;border:2px solid var(--brand)';
+      document.body.appendChild(touchClone);
+      const rect = touchItem.getBoundingClientRect();
+      const touch = e.touches[0];
+      const offsetX = touch.clientX - rect.left;
+      const offsetY = touch.clientY - rect.top;
+      touchClone._ox = offsetX;
+      touchClone._oy = offsetY;
+      _moveTouchClone(touch);
+    }
+
+    function _moveTouchClone(touch) {
+      if (!touchClone) return;
+      touchClone.style.left = (touch.clientX - touchClone._ox) + 'px';
+      touchClone.style.top  = (touch.clientY - touchClone._oy) + 'px';
+    }
+
+    grid.addEventListener('touchstart', e => {
+      const handle = e.target.closest('.pd-pm-handle');
+      if (!handle) return;
+      e.preventDefault();
+      _touchItem(e);
+    }, { passive: false });
+
+    grid.addEventListener('touchmove', e => {
+      if (!touchItem) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      _moveTouchClone(touch);
+      touchClone.style.display = 'none';
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      touchClone.style.display = '';
+      const target = el && el.closest('.pd-pm-item');
+      if (target && target !== touchItem) {
+        const rect = target.getBoundingClientRect();
+        const after = touch.clientY > rect.top + rect.height / 2 || touch.clientX > rect.left + rect.width / 2;
+        if (after) { grid.insertBefore(touchItem, target.nextSibling); }
+        else        { grid.insertBefore(touchItem, target); }
+        refreshOrderBadges();
+      }
+    }, { passive: false });
+
+    grid.addEventListener('touchend', () => {
+      if (touchItem) { touchItem.classList.remove('dragging'); touchItem = null; }
+      if (touchClone) { touchClone.remove(); touchClone = null; }
+    });
   }
 
   async function savePhotoOrder(closePanel) {
@@ -1383,37 +1693,32 @@
     const saveBtn = document.getElementById('pd-pm-save');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
 
-    const updates = Array.from(items).map((item, i) => ({
-      id: item.dataset.photoId,
-      display_order: i
-    }));
+    // ── Batch upsert: single DB call instead of N individual UPDATEs ──
+    const updates = Array.from(items)
+      .map((item, i) => ({ id: item.dataset.photoId, display_order: i }))
+      .filter(u => u.id);
 
-    const results = await Promise.all(
-      updates.filter(u => u.id).map(u =>
-        CP.sb().from('property_photos').update({ display_order: u.display_order }).eq('id', u.id)
-      )
-    );
-    const firstErr = results.find(r => r.error);
+    const { error } = await CP.sb()
+      .from('property_photos')
+      .upsert(updates, { onConflict: 'id' });
 
     if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-check"></i> Save order'; }
 
-    if (firstErr) { S.toast('Failed to save order: ' + firstErr.error.message, 'error'); return; }
+    if (error) { S.toast('Failed to save order: ' + error.message, 'error'); return; }
 
-    if (true) {
-      S.toast('Photo order saved!', 'success');
-      closePanel();
-      // Reload page
-      const { data } = await CP.sb()
-        .from('properties')
-        .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
-        .eq('id', propId).single();
-      if (data) {
-        const [appsRes, inqsRes] = await Promise.all([
-          CP.sb().from('applications').select('id,status,created_at,tenants(full_name,name,email)').eq('property_id', propId).order('created_at',{ascending:false}).limit(25),
-          CP.sb().from('inquiries').select('id,created_at,name,email,phone,message').eq('property_id', propId).order('created_at',{ascending:false}).limit(25)
-        ]);
-        render(data, appsRes.data || [], inqsRes.data || []);
-      }
+    S.toast('Photo order saved!', 'success');
+    closePanel();
+    // Reload page
+    const { data } = await CP.sb()
+      .from('properties')
+      .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
+      .eq('id', propId).single();
+    if (data) {
+      const [appsRes, inqsRes] = await Promise.all([
+        CP.sb().from('applications').select('id,status,created_at,tenants(full_name,name,email)').eq('property_id', propId).order('created_at',{ascending:false}).limit(25),
+        CP.sb().from('inquiries').select('id,created_at,name,email,phone,message').eq('property_id', propId).order('created_at',{ascending:false}).limit(25)
+      ]);
+      render(data, appsRes.data || [], inqsRes.data || []);
     }
   }
 

@@ -87,23 +87,32 @@
     function fields(p){
       p = p || {};
       return [
-        { name:'title',          label:'Title',         type:'text',     value:p.title||'',          required:true,  placeholder:'2BR/1BA Apartment' },
+        { name:'title',          label:'Title',         type:'text',     value:p.title||'',          required:true,  placeholder:'2BR/1BA Apartment in Downtown' },
         { name:'status',         label:'Status',        type:'select',   value:p.status||'draft', options:[
-            {value:'draft',label:'Draft'},{value:'active',label:'Active'},{value:'inactive',label:'Inactive'},
+            {value:'draft',label:'Draft (not visible)'},{value:'active',label:'Active'},{value:'inactive',label:'Inactive'},
             {value:'rented',label:'Rented'},{value:'maintenance',label:'Maintenance'},{value:'paused',label:'Paused'},{value:'archived',label:'Archived'}
           ]},
-        { name:'address',        label:'Address',       type:'text',     value:p.address||p.location||'', required:true, placeholder:'123 Main St, City, State 12345' },
+        { name:'address',        label:'Street address', type:'text',    value:p.address||p.location||'', required:true, placeholder:'123 Main St' },
+        { name:'city',           label:'City',          type:'text',     value:p.city||'',               placeholder:'San Francisco' },
+        { name:'state',          label:'State',         type:'select',   value:p.state||'', options:[
+            {value:'',label:'Select…'},
+            ...['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'].map(s=>({value:s,label:s}))
+          ]},
+        { name:'zip',            label:'Zip code',      type:'text',     value:p.zip||'',                placeholder:'94101' },
+        { name:'property_type',  label:'Property type', type:'select',   value:p.property_type||'', options:[
+            {value:'',label:'Select…'},{value:'apartment',label:'Apartment'},{value:'house',label:'House'},
+            {value:'condo',label:'Condo'},{value:'townhouse',label:'Townhouse'},{value:'studio',label:'Studio'},
+            {value:'duplex',label:'Duplex'},{value:'room',label:'Room'},{value:'land',label:'Land'}
+          ]},
         { name:'bedrooms',       label:'Bedrooms',      type:'number',   value:p.bedrooms!=null?p.bedrooms:'', placeholder:'2' },
         { name:'bathrooms',      label:'Bathrooms',     type:'number',   value:p.bathrooms!=null?p.bathrooms:'', placeholder:'1' },
-        { name:'monthly_rent',   label:'Monthly rent',  type:'number',   value:p.monthly_rent||'', placeholder:'1500' },
-        { name:'property_type',  label:'Type',          type:'select',   value:p.property_type||'', options:[
-            {value:'',label:'Select…'},{value:'apartment',label:'Apartment'},{value:'house',label:'House'},
-            {value:'condo',label:'Condo'},{value:'townhouse',label:'Townhouse'},{value:'studio',label:'Studio'},{value:'duplex',label:'Duplex'}
-          ]},
-        { name:'square_footage', label:'Sq ft',         type:'number',   value:p.square_footage||'', placeholder:'850' },
-        { name:'available_date', label:'Available',     type:'date',     value:p.available_date||'' },
-        { name:'description',    label:'Description',   type:'textarea', value:p.description||'', rows:3 },
-        { name:'amenities',      label:'Amenities',     type:'text',     value:(p.amenities||[]).join(', '), placeholder:'Parking, Laundry, AC, Pets OK', help:'Comma-separated' }
+        { name:'square_footage', label:'Square footage (sqft)', type:'number', value:p.square_footage||'', placeholder:'850' },
+        { name:'monthly_rent',   label:'Monthly rent ($)', type:'number', value:p.monthly_rent||'', placeholder:'1500' },
+        { name:'security_deposit', label:'Security deposit ($)', type:'number', value:p.security_deposit||'', placeholder:'1500' },
+        { name:'application_fee', label:'Application fee ($)',  type:'number', value:p.application_fee!=null?p.application_fee:'', placeholder:'50' },
+        { name:'available_date', label:'Available date', type:'date',    value:p.available_date||'' },
+        { name:'description',    label:'Description',   type:'textarea', value:p.description||'', rows:3, placeholder:'Describe the property…' },
+        { name:'amenities',      label:'Amenities',     type:'text',     value:(p.amenities||[]).join(', '), placeholder:'Pool, Gym, In-unit Laundry, AC', help:'Comma-separated — more can be added in the full editor' }
       ];
     }
 
@@ -137,15 +146,21 @@
       if(!data.title || !data.address){
         AdminShell.toast('Title and address are required','error'); return;
       }
+      const _n = (k) => data[k] !== '' && data[k] != null ? Number(data[k]) : null;
       const patch = {
         title: data.title.trim(),
         address: data.address.trim(),
-        status: data.status || 'active',
+        city: (data.city || '').trim() || null,
+        state: data.state || null,
+        zip: (data.zip || '').trim() || null,
+        status: data.status || 'draft',
         property_type: data.property_type || null,
-        bedrooms: data.bedrooms !== '' ? Number(data.bedrooms) : null,
-        bathrooms: data.bathrooms !== '' ? Number(data.bathrooms) : null,
-        monthly_rent: data.monthly_rent !== '' ? Number(data.monthly_rent) : null,
-        square_footage: data.square_footage !== '' ? Number(data.square_footage) : null,
+        bedrooms: _n('bedrooms'),
+        bathrooms: _n('bathrooms'),
+        monthly_rent: _n('monthly_rent'),
+        security_deposit: _n('security_deposit'),
+        application_fee: _n('application_fee'),
+        square_footage: _n('square_footage'),
         available_date: data.available_date || null,
         description: (data.description||'').trim() || null,
         amenities: data.amenities ? data.amenities.split(',').map(s => s.trim()).filter(Boolean) : [],
