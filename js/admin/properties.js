@@ -6,10 +6,16 @@
     let _debounce = null;
     let _allCache = [];
 
-    // ── Pre-seed from URL ──
+    // ── Pre-seed from URL, then sessionStorage fallback ──
     try {
       const usp = new URLSearchParams(location.search);
-      if(usp.get('status')) _statusFilter = usp.get('status');
+      if(usp.get('status')) {
+        _statusFilter = usp.get('status');
+      } else if(!usp.get('landlord')) {
+        // Restore last-used chip only when not filtering by landlord
+        const saved = sessionStorage.getItem('cp_prop_status');
+        if(saved) _statusFilter = saved;
+      }
       if(usp.get('landlord')) _landlordFilter = usp.get('landlord');
     } catch(e){}
 
@@ -344,12 +350,18 @@
         if(id) confirmAndDelete(id).catch(err => AdminShell.toast('Delete error: '+(err && err.message || err), 'error'));
       });
 
+      // Reflect pre-seeded filter on chips (URL or sessionStorage)
+      document.querySelectorAll('#chips .chip').forEach(c => {
+        c.classList.toggle('active', (c.dataset.status || 'all') === _statusFilter);
+      });
+
       document.getElementById('chips').addEventListener('click', e => {
         const c = e.target.closest('.chip');
         if(!c) return;
         document.querySelectorAll('#chips .chip').forEach(x => x.classList.remove('active'));
         c.classList.add('active');
-        _statusFilter = c.dataset.status;
+        _statusFilter = c.dataset.status || 'all';
+        try { sessionStorage.setItem('cp_prop_status', _statusFilter); } catch(e2){}
         load();
       });
       document.getElementById('search').addEventListener('input', e => {
