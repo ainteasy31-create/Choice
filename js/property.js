@@ -708,57 +708,48 @@ function _initLeafletMap(p) {
   container.innerHTML = '<div id="propertyMiniMap"></div>';
   const map = L.map('propertyMiniMap', { zoomControl: true, scrollWheelZoom: false }).setView([lat, lng], 15);
   const _geoKey = (typeof CONFIG !== 'undefined' && CONFIG.GEOAPIFY_API_KEY) || '';
-  L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${_geoKey}`, {
-        attribution: 'Powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a> | &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> | &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
-        maxZoom: 20
-      }).addTo(map);
+  L.tileLayer(`https://maps.geoapify.com/v1/tile/positron/{z}/{x}/{y}.png?apiKey=${_geoKey}`, {
+    attribution: 'Powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a> | &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> | &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+    maxZoom: 20
+  }).addTo(map);
   const icon = L.divIcon({
     className: '',
     html: `<div style="background:#0e0e0f;color:white;padding:6px 12px;border-radius:20px;font-weight:700;font-size:12px;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() + '/mo' : 'Rent TBD'}</div>`,
     iconAnchor: [45, 16], iconSize: [90, 32]
   });
   L.marker([lat, lng], { icon }).addTo(map).bindPopup(`<b>${p.title}</b><br>${p.address}`);
+
+  // Wire up "Open in Maps" button with OS-aware deep link
+  const mapAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const mapsUrl = isIOS
+    ? `maps://maps.apple.com/?q=${mapAddr}`
+    : `https://maps.google.com/maps?q=${mapAddr}`;
+  const openBtn = document.getElementById('mapOpenBtn');
+  if (openBtn) { openBtn.href = mapsUrl; openBtn.style.display = 'inline-flex'; }
+
+  // Neighbourhood reverse geocode → populate #mapNeighborhood label
+  if (_geoKey) {
+    fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&apiKey=${_geoKey}&format=json`)
+      .then(r => r.json())
+      .then(data => {
+        const hit = data?.results?.[0];
+        const nbName = hit?.suburb || hit?.neighbourhood || hit?.district || hit?.county;
+        const cityName = hit?.city || hit?.town;
+        const label = [nbName, cityName].filter(Boolean).join(', ');
+        if (label) {
+          const nbText = document.getElementById('mapNeighborhoodText');
+          const nbSection = document.getElementById('mapNeighborhood');
+          if (nbText && nbSection) { nbText.textContent = `Located in ${label}`; nbSection.style.display = 'block'; }
+        }
+      })
+      .catch(() => {});
+  }
 }
 
-function renderMap(p) {
-  const container = document.getElementById('mapContainer');
-  if (p.lat && p.lng) {
-    const lat = parseFloat(p.lat);
-    const lng = parseFloat(p.lng);
-    if (!isNaN(lat) && !isNaN(lng)) {
-      // Use IntersectionObserver to defer Leaflet load until map is in viewport
-      const observer = new IntersectionObserver((entries, obs) => {
-        if (!entries[0].isIntersecting) return;
-        obs.disconnect();
-        loadLeaflet()
-          .then(() => _initLeafletMap(p))
-          .catch(() => {
-            // Leaflet failed to load — fall back to styled address card
-            const _errAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
-            container.innerHTML = `
-              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;background:var(--surface-2,#f8f9fa);padding:32px 20px;text-align:center">
-                <div style="width:52px;height:52px;background:#e8f0fe;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;color:#1a73e8">
-                  <i class="fas fa-map-marker-alt"></i>
-                </div>
-                <div>
-                  <div style="font-weight:700;font-size:1rem;color:var(--text,#1a1a2e);margin-bottom:4px">${esc(p.address)}</div>
-                  <div style="color:var(--muted,#6b7280);font-size:.875rem">${esc(p.city)}, ${esc(p.state)} ${esc(p.zip||'')}</div>
-                </div>
-                <a href="https://maps.google.com/maps?q=${_errAddr}" target="_blank" rel="noopener noreferrer"
-                   style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:#1a73e8;color:#fff;border-radius:6px;font-size:.82rem;font-weight:600;text-decoration:none">
-                  <i class="fas fa-map"></i> Open in Google Maps
-                </a>
-              </div>`;
-          });
-      }, { rootMargin: '200px' });
-      observer.observe(container);
-      return;
-    }
-  }
-  // Fallback: styled address card (no lat/lng available — Google embed unreliable without key)
-  document.getElementById('mapAddressLabel').textContent = `${p.address}, ${p.city}`;
-  const _fbAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
-  container.innerHTML = `
+function _mapAddressCard(p, addr) {
+  return `
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;background:var(--surface-2,#f8f9fa);padding:32px 20px;text-align:center">
       <div style="width:52px;height:52px;background:#e8f0fe;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;color:#1a73e8">
         <i class="fas fa-map-marker-alt"></i>
@@ -767,11 +758,49 @@ function renderMap(p) {
         <div style="font-weight:700;font-size:1rem;color:var(--text,#1a1a2e);margin-bottom:4px">${esc(p.address)}</div>
         <div style="color:var(--muted,#6b7280);font-size:.875rem">${esc(p.city)}, ${esc(p.state)} ${esc(p.zip||'')}</div>
       </div>
-      <a href="https://maps.google.com/maps?q=${_fbAddr}" target="_blank" rel="noopener noreferrer"
+      <a href="https://maps.google.com/maps?q=${addr}" target="_blank" rel="noopener noreferrer"
          style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:#1a73e8;color:#fff;border-radius:6px;font-size:.82rem;font-weight:600;text-decoration:none">
         <i class="fas fa-map"></i> Open in Google Maps
       </a>
     </div>`;
+}
+
+function renderMap(p) {
+  const container = document.getElementById('mapContainer');
+  if (p.lat && p.lng) {
+    const lat = parseFloat(p.lat);
+    const lng = parseFloat(p.lng);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      const observer = new IntersectionObserver((entries, obs) => {
+        if (!entries[0].isIntersecting) return;
+        obs.disconnect();
+
+        // Show Geoapify static map immediately — no blank grey flash while Leaflet loads
+        const _geoKey = (typeof CONFIG !== 'undefined' && CONFIG.GEOAPIFY_API_KEY) || '';
+        if (_geoKey) {
+          const staticUrl = `https://maps.geoapify.com/v1/staticmap?style=positron&width=800&height=300`
+            + `&center=lonlat:${lng},${lat}&zoom=14`
+            + `&marker=lonlat:${lng},${lat};type:circle;color:%230e0e0f;size:x-large`
+            + `&apiKey=${_geoKey}`;
+          container.innerHTML = `<img src="${staticUrl}" alt="Property location" style="width:100%;height:100%;object-fit:cover;display:block">`;
+        }
+
+        // Load Leaflet over the static preview
+        loadLeaflet()
+          .then(() => _initLeafletMap(p))
+          .catch(() => {
+            const _errAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
+            container.innerHTML = _mapAddressCard(p, _errAddr);
+          });
+      }, { rootMargin: '200px' });
+      observer.observe(container);
+      return;
+    }
+  }
+  // No lat/lng — show address card
+  document.getElementById('mapAddressLabel').textContent = `${p.address}, ${p.city}`;
+  const _fbAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
+  container.innerHTML = _mapAddressCard(p, _fbAddr);
 }
 
 /* ── Gallery Mosaic ── */
