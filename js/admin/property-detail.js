@@ -148,7 +148,7 @@
   function renderGallery(photos) {
     const urls = photos.map(p => p.url).filter(Boolean);
     if (!urls.length) {
-      return '<div class="pd-no-photo"><span>No photos uploaded</span></div>';
+      return '<div class="pd-no-photo pd-no-photo-btn" id="pd-no-photo-zone" role="button" tabindex="0" title="Click to upload photos"><i class="fas fa-camera" style="font-size:1.4rem;color:var(--brand);margin-bottom:6px"></i><span>No photos — tap to upload</span></div>';
     }
     const main = `<div class="pd-mosaic">
       <div class="pd-mosaic-main" id="pd-mosaic-main" data-idx="0">
@@ -378,7 +378,8 @@
 
     const actionsHtml = `<div class="pd-actions">
       <button class="btn btn-primary btn-sm" id="pd-btn-edit"><i class="fas fa-pen-to-square"></i> Edit property</button>
-      <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> Manage photos (${_photos.length})</button>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> ${_photos.length ? 'Photos ('+_photos.length+')' : 'Manage photos'}</button>
+      <button class="btn btn-ghost btn-sm pd-upload-shortcut" id="pd-btn-upload" title="Upload new photos to this property"><i class="fas fa-camera"></i> Upload photos</button>
       <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">Public listing ↗</a>
       <button class="btn btn-ghost btn-sm" id="pd-btn-featured" title="${p.featured ? 'Remove featured flag' : 'Mark as featured'}">
         ${p.featured ? '<i class="fas fa-star" style="color:#f59e0b"></i> Unfeature' : '<i class="far fa-star"></i> Feature'}
@@ -535,7 +536,7 @@
       : '<tr><td colspan="5" class="pd-empty-row">No applications for this property.</td></tr>';
 
     const appsTitleSuffix = apps.length === 25 ? `${apps.length}+ <a href="/admin/applications.html?property=${esc(propId)}" style="font-size:.72rem;color:var(--brand);font-weight:500">View all ↗</a>` : String(apps.length);
-    const appsHtml = `<div class="pd-section">
+    const appsHtml = `<div class="pd-section" id="pd-apps-section">
       <div class="pd-section-title">Applications (${appsTitleSuffix})</div>
       <div style="overflow-x:auto"><table class="pd-table"><thead><tr>
         <th>Tenant</th><th>Email</th><th>Status</th><th>Submitted</th><th></th>
@@ -556,7 +557,7 @@
       : '<tr><td colspan="5" class="pd-empty-row">No inquiries yet.</td></tr>';
 
     const inqsTitleSuffix = inqs.length === 25 ? `${inqs.length}+` : String(inqs.length);
-    const inqsHtml = `<div class="pd-section">
+    const inqsHtml = `<div class="pd-section" id="pd-inqs-section">
       <div class="pd-section-title">Inquiries (${inqsTitleSuffix})</div>
       <div style="overflow-x:auto"><table class="pd-table"><thead><tr>
         <th>Name</th><th>Email</th><th>Phone</th><th>Date</th><th>Message (click to expand)</th>
@@ -614,6 +615,16 @@
 
     // Manage photos button
     document.getElementById('pd-btn-photos')?.addEventListener('click', () => openPhotoManager());
+
+    // Upload photos shortcut — opens photo manager focused on the upload zone
+    document.getElementById('pd-btn-upload')?.addEventListener('click', () => openPhotoManager(true));
+
+    // No-photo zone click → open photo manager for upload
+    const noPhotoZone = document.getElementById('pd-no-photo-zone');
+    if (noPhotoZone) {
+      noPhotoZone.addEventListener('click', () => openPhotoManager(true));
+      noPhotoZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPhotoManager(true); } });
+    }
 
     // Duplicate property button
     document.getElementById('pd-btn-duplicate')?.addEventListener('click', async () => {
@@ -1370,8 +1381,65 @@
     });
   }
 
+  // ── Incremental apps/inqs update (after deferred fetch) ─────────────────────
+  function _updateAppsInqs(apps, inqs) {
+    const appsSection = document.getElementById('pd-apps-section');
+    const inqsSection = document.getElementById('pd-inqs-section');
+
+    if (appsSection && apps !== null) {
+      const appRows = apps.length
+        ? apps.map(a => {
+            const t = a.tenants || {};
+            return `<tr>
+              <td>${esc(t.full_name || t.name || '—')}</td>
+              <td>${esc(t.email || '—')}</td>
+              <td><span class="pill ${pillCls(a.status)}">${esc(a.status || '—')}</span></td>
+              <td>${fmt(a.created_at)}</td>
+              <td><a class="btn btn-ghost btn-sm" href="/admin/applications.html?id=${esc(a.id)}" style="font-size:.72rem">Open</a></td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="5" class="pd-empty-row">No applications for this property.</td></tr>';
+      const suffix = apps.length === 25
+        ? `${apps.length}+ <a href="/admin/applications.html?property=${esc(propId)}" style="font-size:.72rem;color:var(--brand);font-weight:500">View all ↗</a>`
+        : String(apps.length);
+      appsSection.innerHTML = `<div class="pd-section-title">Applications (${suffix})</div>
+        <div style="overflow-x:auto"><table class="pd-table"><thead><tr>
+          <th>Tenant</th><th>Email</th><th>Status</th><th>Submitted</th><th></th>
+        </tr></thead><tbody>${appRows}</tbody></table></div>`;
+    }
+
+    if (inqsSection && inqs !== null) {
+      const inqRows = inqs.length
+        ? inqs.map(i =>
+            `<tr class="pd-inq-row" style="cursor:pointer" data-msg="${esc(i.message||'')}" title="Click to read message">
+              <td>${esc(i.name || '—')}</td>
+              <td>${esc(i.email || '—')}</td>
+              <td>${esc(i.phone || '—')}</td>
+              <td>${fmt(i.created_at)}</td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--brand)">${i.message ? '💬 ' + esc(i.message.slice(0,60)) + (i.message.length > 60 ? '…' : '') : '—'}</td>
+            </tr>`
+          ).join('')
+        : '<tr><td colspan="5" class="pd-empty-row">No inquiries yet.</td></tr>';
+      const inqSuffix = inqs.length === 25 ? `${inqs.length}+` : String(inqs.length);
+      inqsSection.innerHTML = `<div class="pd-section-title">Inquiries (${inqSuffix})</div>
+        <div style="overflow-x:auto"><table class="pd-table"><thead><tr>
+          <th>Name</th><th>Email</th><th>Phone</th><th>Date</th><th>Message (click to expand)</th>
+        </tr></thead><tbody>${inqRows}</tbody></table></div>`;
+      inqsSection.querySelectorAll('.pd-inq-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const msg = row.dataset.msg;
+          if (!msg) return;
+          const cells = row.querySelectorAll('td');
+          const name  = cells[0] ? cells[0].textContent.trim() : 'Inquiry';
+          const email = cells[1] ? cells[1].textContent.trim() : '';
+          S.confirm({ title: name + (email && email !== '—' ? ' — ' + email : ''), message: msg, ok: 'Close', cancel: '', danger: false });
+        });
+      });
+    }
+  }
+
   // ── Photo manager ────────────────────────────────────────────────────────────
-  function openPhotoManager() {
+  function openPhotoManager(focusUpload) {
     const existing = document.getElementById('pd-photo-manager');
     if (existing) existing.remove();
 
@@ -1430,7 +1498,18 @@
       </div>`;
 
     document.body.appendChild(panel);
-    requestAnimationFrame(() => panel.classList.add('open'));
+    requestAnimationFrame(() => {
+      panel.classList.add('open');
+      if (focusUpload) {
+        setTimeout(() => {
+          const zone = document.getElementById('pd-pm-upload-zone');
+          if (zone) zone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Trigger file picker on mobile for direct upload
+          const fi = document.getElementById('pd-pm-file-input');
+          if (fi && window.innerWidth < 768) fi.click();
+        }, 350);
+      }
+    });
 
     const closePanel = () => { panel.classList.remove('open'); setTimeout(() => panel.remove(), 300); };
     document.getElementById('pd-pm-close').addEventListener('click', closePanel);
@@ -1812,25 +1891,12 @@
     const ok = await S.requireAdmin();
     if (!ok) return;
 
-    const [propRes, appsRes, inqsRes] = await Promise.all([
-      CP.sb()
-        .from('properties')
-        .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
-        .eq('id', propId)
-        .single(),
-      CP.sb()
-        .from('applications')
-        .select('id,status,created_at,tenants(full_name,name,email)')
-        .eq('property_id', propId)
-        .order('created_at', { ascending: false })
-        .limit(25),
-      CP.sb()
-        .from('inquiries')
-        .select('id,created_at,name,email,phone,message')
-        .eq('property_id', propId)
-        .order('created_at', { ascending: false })
-        .limit(25)
-    ]);
+    // Phase 1: load property first for fast first paint
+    const propRes = await CP.sb()
+      .from('properties')
+      .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
+      .eq('id', propId)
+      .single();
 
     if (propRes.error || !propRes.data) {
       document.getElementById('pd-root').innerHTML =
@@ -1838,7 +1904,34 @@
       return;
     }
 
-    render(propRes.data, appsRes.data || [], inqsRes.data || []);
+    // Render immediately with empty apps/inqs (shows loading placeholders)
+    render(propRes.data, [], []);
+
+    // Phase 2: fetch apps & inquiries in the background
+    const _loadAppsInqs = async () => {
+      try {
+        const [appsRes, inqsRes] = await Promise.all([
+          CP.sb()
+            .from('applications')
+            .select('id,status,created_at,tenants(full_name,name,email)')
+            .eq('property_id', propId)
+            .order('created_at', { ascending: false })
+            .limit(25),
+          CP.sb()
+            .from('inquiries')
+            .select('id,created_at,name,email,phone,message')
+            .eq('property_id', propId)
+            .order('created_at', { ascending: false })
+            .limit(25)
+        ]);
+        _updateAppsInqs(appsRes.data || [], inqsRes.data || []);
+      } catch (e) { /* non-fatal */ }
+    };
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(_loadAppsInqs, { timeout: 3000 });
+    } else {
+      setTimeout(_loadAppsInqs, 300);
+    }
 
     // Auto-open edit panel if ?edit=1 in URL
     if (params.get('edit') === '1') {
