@@ -176,8 +176,9 @@
     if (appErr) { console.warn('warning query failed:', appErr.message); _warnings = []; return; }
     if (!needsReport || !needsReport.length) { _warnings = []; return; }
     const appIds = needsReport.map(a => a.id);
-    const { data: existing } = await sb.from('lease_inspections')
+    const { data: existing, error: existingErr } = await sb.from('lease_inspections')
       .select('app_id').eq('inspection_type', 'move_in').in('app_id', appIds);
+    if (existingErr) { console.warn('lease_inspections query failed:', existingErr.message); _warnings = []; return; }
     const haveMoveIn = new Set((existing || []).map(x => x.app_id));
     const today = Date.now();
     _warnings = needsReport

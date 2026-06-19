@@ -723,6 +723,12 @@
 
     const okAuth = await S.requireAdmin();
     if (!okAuth) return;
-    await loadAll();
+    try {
+      await loadAll();
+    } catch (e) {
+      console.error('lease-detail loadAll failed:', e);
+      const root = document.getElementById('lease-detail-root');
+      if (root) root.innerHTML = '<div class="empty"><h3>Failed to load lease</h3><p>' + (e.message || 'Unknown error') + '</p></div>';
+    }
   });
 })();

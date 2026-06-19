@@ -468,8 +468,12 @@
     $('#editorBg').addEventListener('click', e => { if (e.target.id === 'editorBg') closeEditor(); });
   }
 
+  let _bootAttempts = 0;
   function boot(){
-    if (!window.AdminShell || !window.CP || !window.CP.sb) { setTimeout(boot, 80); return; }
+    if (!window.AdminShell || !window.CP || !window.CP.sb) {
+      if (++_bootAttempts > 100) { console.error('deposit-accounting: dependencies never loaded'); return; }
+      setTimeout(boot, 80); return;
+    }
     AdminShell.requireAdmin().then(ok => {
       if (!ok) return;
       wire();

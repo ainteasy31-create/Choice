@@ -196,9 +196,12 @@
       return;
     }
     const perImage = [];
-    for(const url of imgs){
-      const { flag, score } = await analyzeImage(url);
-      perImage.push({ url, flag, score });
+    // Batch image analysis 3 at a time for speed (sequential was O(n) RTTs per property)
+    const BATCH = 3;
+    for(let i = 0; i < imgs.length; i += BATCH){
+      const slice = imgs.slice(i, i + BATCH);
+      const results = await Promise.all(slice.map(url => analyzeImage(url).then(r => ({ url, ...r }))));
+      perImage.push(...results);
     }
     const flagged    = perImage.filter(x => x.flag === 'watermark' || x.flag === 'branding').length;
     const allFlagged = flagged === perImage.length && perImage.length > 0;
