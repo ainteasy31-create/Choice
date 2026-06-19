@@ -183,6 +183,25 @@
         <div class="form-hint">Highlight any current promotions.</div>
       </div>
 
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label class="form-label" for="minIncome">Income Requirement <span class="muted">(optional)</span></label>
+          <select class="form-select" id="minIncome">
+            <option value="">No minimum</option>
+            ${[['2','2× monthly rent'],['2.5','2.5× monthly rent'],['3','3× monthly rent'],['3.5','3.5× monthly rent'],['4','4× monthly rent']].map(([vv,l])=>`<option value="${vv}" ${prop.minimum_income_multiplier==vv?'selected':''}>${l}</option>`).join('')}
+          </select>
+          <div class="form-hint">Standard is 2.5–3×.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="minCredit">Min. Credit Score <span class="muted">(optional)</span></label>
+          <select class="form-select" id="minCredit">
+            <option value="">No minimum</option>
+            ${[580,620,640,660,680,700,720,750].map(s=>`<option value="${s}" ${prop.minimum_credit_score==s?'selected':''}>${s}</option>`).join('')}
+          </select>
+          <div class="form-hint">Helps applicants self-screen.</div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="form-label" for="status">Listing Status</label>
         <select class="form-select" id="status">
@@ -688,6 +707,8 @@
           cooling_type        : v('coolingType') || null,
           description         : v('description'),
           showing_instructions: v('showingInstructions') || null,
+          minimum_income_multiplier: v('minIncome') ? parseFloat(v('minIncome')) : null,
+          minimum_credit_score     : v('minCredit') ? parseInt(v('minCredit')) : null,
           // photo_urls / photo_file_ids intentionally omitted — see Phase 3b note above.
           updated_at          : new Date().toISOString()
       })
