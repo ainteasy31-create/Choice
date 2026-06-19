@@ -556,12 +556,15 @@
     if (addressChanged || (!lat && !lng)) {
       try {
         const fullAddr = `${v('address')}, ${v('city')}, ${v('state')} ${v('zip')}`.trim();
-        const geoRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddr)}&limit=1&countrycodes=us`,
-          { headers: { 'User-Agent': 'ChoiceProperties/1.0' } }
-        );
-        const geoData = await geoRes.json();
-        if (geoData && geoData[0]) { lat = parseFloat(geoData[0].lat); lng = parseFloat(geoData[0].lon); }
+        const _geoKey = (typeof CONFIG !== 'undefined' && CONFIG.GEOAPIFY_API_KEY) || '';
+        if (_geoKey) {
+          const geoRes = await fetch(
+            `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(fullAddr)}&format=json&apiKey=${_geoKey}&filter=countrycode:us&limit=1`
+          );
+          const geoData = await geoRes.json();
+          const hit = geoData?.results?.[0];
+          if (hit) { lat = parseFloat(hit.lat); lng = parseFloat(hit.lon); }
+        }
       } catch (e) { /* silent */ }
     }
 
