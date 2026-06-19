@@ -6,7 +6,7 @@
   let _debounce = null;
 
   function pill(s){
-    const m = { active:'pill-success', draft:'pill-muted', paused:'pill-warning', rented:'pill-info', archived:'pill-muted' };
+    const m = { active:'pill-success', draft:'pill-muted', paused:'pill-warning', rented:'pill-info', inactive:'pill-muted', maintenance:'pill-warning', archived:'pill-muted' };
     return '<span class="pill '+(m[s]||'pill-muted')+'">'+AdminShell.esc(s||'—')+'</span>';
   }
   function fmtMoney(n){
@@ -61,7 +61,8 @@
     const { data, error } = await CP.sb()
       .from('properties')
       .select('*,landlords(contact_name,business_name)')
-      .order('created_at',{ascending:false});
+      .order('created_at',{ascending:false})
+      .limit(500);
     if(error){
       AdminShell.renderList('#list-list', { error: error.message });
       document.getElementById('page-sub').textContent = 'Error';
@@ -132,6 +133,16 @@
       const { error } = await CP.sb().from('properties').update({ status: data.status }).eq('id', id);
       if(error){ AdminShell.toast('Failed: '+error.message,'error'); return; }
       AdminShell.toast('Status updated to '+data.status,'success');
+      // Audit log (non-blocking)
+      CP.sb().auth.getUser().then(({ data: ud }) => {
+        CP.sb().from('admin_actions').insert([{
+          user_id: ud?.user?.id || null,
+          action: 'property.status_change',
+          target_type: 'property',
+          target_id: String(id),
+          metadata: { from: current, to: data.status, source: 'listings' }
+        }]).catch(() => {});
+      }).catch(() => {});
       await load();
     });
 

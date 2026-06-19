@@ -30,17 +30,19 @@
         p.monthly_rent ? fmtMoney(p.monthly_rent)+'/mo' : null,
         p.square_footage ? p.square_footage+' sqft' : null
       ].filter(Boolean).join(' · ');
+      const featuredBadge = p.featured ? ' <span class="pill pill-warning" style="font-size:.62rem">★ Featured</span>' : '';
       return ''
         + '<div class="prop-card" data-prop-id="'+S.esc(p.id)+'">'
         +   img
         +   '<div class="prop-body">'
-        +     '<div class="row-title">'+S.esc(p.title||'Untitled')+'</div>'
+        +     '<div class="row-title">'+S.esc(p.title||'Untitled')+featuredBadge+'</div>'
         +     '<div class="row-sub">'+S.esc(p.address||p.location||'No address')+'</div>'
         +     '<div>'+pill(p.status)+(p.landlords ? ' <span class="pill pill-muted" style="font-size:.65rem">'+S.esc(p.landlords.business_name||p.landlords.contact_name||'')+'</span>' : '')+'</div>'
         +     '<div class="row-sub" style="color:var(--muted-2)">'+S.esc(meta)+'</div>'
         +     '<div class="prop-actions">'
         +       '<a class="btn btn-ghost btn-sm" href="/admin/property-detail.html?id='+S.esc(p.id)+'&edit=1">Edit</a>'
         +       '<a class="btn btn-ghost btn-sm" href="/admin/property-detail.html?id='+S.esc(p.id)+'">View</a>'
+        +       '<button class="btn btn-ghost btn-sm" data-action="toggle-featured" data-id="'+S.esc(p.id)+'" data-featured="'+(p.featured?'1':'0')+'" title="'+(p.featured?'Remove featured flag':'Mark as featured')+'">'+(p.featured?'★ Unfeature':'☆ Feature')+'</button>'
         +       '<button class="btn btn-ghost btn-sm" data-action="delete-prop" data-id="'+S.esc(p.id)+'" style="color:#dc2626;margin-left:auto" title="Delete property forever" aria-label="Delete property forever">Delete</button>'
         +     '</div>'
         +   '</div>'
@@ -107,10 +109,29 @@
 
     async function openForm(p){
       const isEdit = !!(p && p.id);
+
+      // Pre-load landlords for new property creation
+      let landlordOptions = [{ value: '', label: '— Unassigned —' }];
+      if (!isEdit) {
+        try {
+          const { data: lData } = await CP.sb().rpc('admin_list_landlords', { p_page: 0, p_per_page: 200 });
+          const rows = (lData && lData.rows) || [];
+          if (rows.length) {
+            landlordOptions = [{ value: '', label: '— Unassigned —' },
+              ...rows.map(l => ({ value: l.id, label: l.business_name || l.contact_name || l.email || l.id }))];
+          }
+        } catch(e) { /* keep default — landlord can be set on detail page */ }
+      }
+
+      const allFields = fields(p);
+      if (!isEdit) {
+        allFields.push({ name: 'landlord_id', label: 'Assign to landlord', type: 'select', value: '', options: landlordOptions });
+      }
+
       const data = await AdminShell.formSheet({
         title: isEdit ? 'Edit property' : 'Add property',
         submit: isEdit ? 'Save changes' : 'Create property',
-        fields: fields(p)
+        fields: allFields
       });
       if(!data) return;
       if(!data.title || !data.address){
@@ -130,6 +151,7 @@
         amenities: data.amenities ? data.amenities.split(',').map(s => s.trim()).filter(Boolean) : [],
         updated_at: new Date().toISOString()
       };
+      if (!isEdit && data.landlord_id) patch.landlord_id = data.landlord_id;
       let error;
       if(isEdit){
         const r = await CP.sb().from('properties').update(patch).eq('id', p.id); error = r.error;
@@ -143,6 +165,16 @@
         if(error){ AdminShell.toast('Save failed: '+error.message,'error'); return; }
         AdminShell.toast('Property created — opening detail page…','success');
         const newId = r.data && r.data.id;
+        // Audit log (non-blocking)
+        CP.sb().auth.getUser().then(({ data: ud }) => {
+          CP.sb().from('admin_actions').insert([{
+            user_id: ud?.user?.id || null,
+            action: 'property.create',
+            target_type: 'property',
+            target_id: newId ? String(newId) : null,
+            metadata: { title: patch.title, address: patch.address, status: patch.status, landlord_id: patch.landlord_id || null, created_at: patch.created_at }
+          }]).catch(() => {});
+        }).catch(() => {});
         if(newId){
           setTimeout(() => { location.href = '/admin/property-detail.html?id='+encodeURIComponent(newId)+'&edit=1'; }, 600);
         } else {
@@ -259,6 +291,15 @@
       AdminShell.on('delete-prop', (target) => {
         const id = target.getAttribute('data-id');
         if(id) confirmAndDelete(id).catch(err => AdminShell.toast('Delete error: '+(err && err.message || err), 'error'));
+      });
+      AdminShell.on('toggle-featured', async (target) => {
+        const id = target.getAttribute('data-id');
+        const isFeatured = target.getAttribute('data-featured') === '1';
+        if(!id) return;
+        const { error } = await CP.sb().from('properties').update({ featured: !isFeatured, updated_at: new Date().toISOString() }).eq('id', id);
+        if(error){ AdminShell.toast('Failed: '+error.message, 'error'); return; }
+        AdminShell.toast(isFeatured ? 'Removed featured flag' : 'Marked as featured', 'success');
+        load();
       });
 
       // Belt-and-suspenders: also delegate clicks directly on the grid in case AdminShell.on

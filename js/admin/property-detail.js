@@ -445,7 +445,7 @@
         <div class="pd-section-title">Watermark scan</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           ${flagged > 0 ? `<span class="pill pill-warning">${flagged} photo${flagged===1?'':'s'} flagged</span>` : '<span class="pill pill-success">All clear</span>'}
-          <a class="btn btn-ghost btn-sm" href="/admin/watermark-review.html" style="font-size:.72rem">Open review</a>
+          <a class="btn btn-ghost btn-sm" href="/admin/watermark-review.html?property_id=${esc(propId)}" style="font-size:.72rem">Open review</a>
         </div>
       </div>`;
     }
@@ -466,7 +466,7 @@
             <div class="pd-landlord-name">${esc(name)} ${landlord.verified ? '<span class="pill pill-success" style="font-size:.6rem;padding:2px 8px">Verified</span>' : ''}</div>
             ${landlord.tagline ? `<div class="pd-landlord-tagline">${esc(landlord.tagline)}</div>` : ''}
             <div class="pd-landlord-meta">
-              <a href="/admin/landlords.html" style="font-size:.74rem;color:var(--brand)">View full profile →</a>
+              <a href="/admin/landlords.html?id=${esc(landlord.id)}" style="font-size:.74rem;color:var(--brand)">View full profile →</a>
             </div>
           </div>
         </div>
@@ -568,13 +568,21 @@
     // Manage photos button
     document.getElementById('pd-btn-photos')?.addEventListener('click', () => openPhotoManager());
 
-    // Inquiry message expand (click row to read full message)
+    // Inquiry message expand (click row → modal dialog)
     document.querySelectorAll('.pd-inq-row').forEach(row => {
       row.addEventListener('click', () => {
         const msg = row.dataset.msg;
         if (!msg) return;
-        const name = row.querySelector('td') ? row.querySelector('td').textContent : 'Inquiry';
-        S.toast(name + ': ' + msg, 'info', 8000);
+        const cells = row.querySelectorAll('td');
+        const name  = cells[0] ? cells[0].textContent.trim() : 'Inquiry';
+        const email = cells[1] ? cells[1].textContent.trim() : '';
+        S.confirm({
+          title:   name + (email && email !== '—' ? ' — ' + email : ''),
+          message: msg,
+          ok:      'Close',
+          cancel:  '',
+          danger:  false,
+        });
       });
     });
   }
@@ -1063,6 +1071,16 @@
       if (item) item.remove();
       refreshOrderBadges();
       S.toast('Photo deleted', 'success');
+      // Audit log (non-blocking)
+      CP.sb().auth.getUser().then(({ data: ud }) => {
+        CP.sb().from('admin_actions').insert([{
+          user_id:     ud?.user?.id || null,
+          action:      'property.photo_delete',
+          target_type: 'property',
+          target_id:   String(propId),
+          metadata:    { photo_id: String(id) }
+        }]).catch(() => {});
+      }).catch(() => {});
     });
 
     bindDragToReorder(document.getElementById('pd-pm-grid'));
@@ -1124,16 +1142,18 @@
       display_order: i
     }));
 
-    let hadError = false;
-    for (const u of updates) {
-      if (!u.id) continue;
-      const { error } = await CP.sb().from('property_photos').update({ display_order: u.display_order }).eq('id', u.id);
-      if (error) { S.toast('Failed to save order: ' + error.message, 'error'); hadError = true; break; }
-    }
+    const results = await Promise.all(
+      updates.filter(u => u.id).map(u =>
+        CP.sb().from('property_photos').update({ display_order: u.display_order }).eq('id', u.id)
+      )
+    );
+    const firstErr = results.find(r => r.error);
 
     if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-check"></i> Save order'; }
 
-    if (!hadError) {
+    if (firstErr) { S.toast('Failed to save order: ' + firstErr.error.message, 'error'); return; }
+
+    if (true) {
       S.toast('Photo order saved!', 'success');
       closePanel();
       // Reload page

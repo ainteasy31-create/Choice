@@ -543,5 +543,17 @@
     });
 
     await load();
+
+    // If launched from property-detail with ?property_id=, scroll to and highlight that property
+    const _focusPropId = new URLSearchParams(location.search).get('property_id');
+    if (_focusPropId) {
+      const card = document.getElementById('card-' + _focusPropId);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        card.style.outline = '2px solid var(--brand)';
+        card.style.borderRadius = 'var(--r-md, 8px)';
+        setTimeout(() => { card.style.outline = ''; card.style.borderRadius = ''; }, 3000);
+      }
+    }
   });
 })();

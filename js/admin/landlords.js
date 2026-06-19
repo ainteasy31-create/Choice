@@ -260,7 +260,11 @@
     S().on && S().on('refresh', () => load());
     document.addEventListener('cp:realtime', () => load().catch(()=>{}));
 
-    load().catch(err => {
+    // Deep-link: ?id= auto-opens the landlord detail slide-out
+    const _deepId = new URLSearchParams(location.search).get('id');
+    load().then(() => {
+      if (_deepId) openDetail(_deepId);
+    }).catch(err => {
       console.error('[landlords]', err);
       S().toast('Failed to load landlords', 'error');
     });
