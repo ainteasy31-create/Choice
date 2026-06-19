@@ -398,6 +398,36 @@
           <div class="form-hint">Highlight any current promotions.</div>
         </div>
 
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label" for="minIncome">Income Requirement <span style="color:var(--muted);font-weight:400;font-size:.78rem">(optional)</span></label>
+            <select class="form-select" id="minIncome">
+              <option value="">No minimum</option>
+              <option value="2">2× monthly rent</option>
+              <option value="2.5">2.5× monthly rent</option>
+              <option value="3">3× monthly rent</option>
+              <option value="3.5">3.5× monthly rent</option>
+              <option value="4">4× monthly rent</option>
+            </select>
+            <div class="form-hint">Industry standard is 2.5–3×. Helps applicants self-screen.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="minCredit">Min. Credit Score <span style="color:var(--muted);font-weight:400;font-size:.78rem">(optional)</span></label>
+            <select class="form-select" id="minCredit">
+              <option value="">No minimum</option>
+              <option value="580">580 (Fair)</option>
+              <option value="620">620</option>
+              <option value="640">640</option>
+              <option value="660">660 (Good)</option>
+              <option value="680">680</option>
+              <option value="700">700 (Good+)</option>
+              <option value="720">720 (Very Good)</option>
+              <option value="750">750 (Excellent)</option>
+            </select>
+            <div class="form-hint">Helps applicants self-screen before applying.</div>
+          </div>
+        </div>
+
         <div class="form-nav">
           <button class="btn btn-ghost" id="prev2">← Back</button>
           <button class="btn btn-primary" id="next2">Next: Features →</button>
