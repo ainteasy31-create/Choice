@@ -50,22 +50,24 @@
   let geocodedLng = null;
   let _geocodePromise = null;
 
-  // ── Geocode address via Nominatim ──
+  // ── Geocode address via Geoapify ──
   function geocodeAddress() {
     const addr = `${v('address')}, ${v('city')}, ${v('state')} ${v('zip')}`.trim();
     geocodedLat = null;
     geocodedLng = null;
     if (!addr || addr.length < 10) return;
+    const apiKey = (typeof CONFIG !== 'undefined' && CONFIG.GEOAPIFY_API_KEY) || '';
+    if (!apiKey) return;
     _geocodePromise = (async () => {
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1&countrycodes=us`,
-          { headers: { 'User-Agent': 'ChoiceProperties/1.0' } }
+          `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(addr)}&format=json&apiKey=${apiKey}&filter=countrycode:us&limit=1`
         );
         const data = await res.json();
-        if (data && data[0]) {
-          geocodedLat = parseFloat(data[0].lat);
-          geocodedLng = parseFloat(data[0].lon);
+        const hit = data?.results?.[0];
+        if (hit) {
+          geocodedLat = parseFloat(hit.lat);
+          geocodedLng = parseFloat(hit.lon);
         }
       } catch (e) { /* silent */ }
     })();
