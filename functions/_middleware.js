@@ -24,7 +24,7 @@ const CSP_TEMPLATE = [
   "script-src 'self' 'nonce-__NONCE__' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
   "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
-  "img-src 'self' data: blob: https://ik.imagekit.io https://*.supabase.co https://tile.openstreetmap.org https://*.basemaps.cartocdn.com https://images.unsplash.com",
+  "img-src 'self' data: blob: https://ik.imagekit.io https://*.supabase.co https://tile.openstreetmap.org https://*.basemaps.cartocdn.com https://maps.geoapify.com https://images.unsplash.com",
   "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co https://script.google.com https://script.googleusercontent.com https://api.ipify.org https://api.my-ip.io https://ipapi.co https://nominatim.openstreetmap.org https://api.geoapify.com https://upload.imagekit.io https://api.imagekit.io",
   "frame-src https://maps.google.com https://www.google.com",
   // H-9: heic2any spawns a libheif Web Worker via a Blob URL, so the
