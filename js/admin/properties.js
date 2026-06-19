@@ -21,8 +21,10 @@
 
     function card(p){
       const S = AdminShell;
-      const img = (p.photo_urls && p.photo_urls[0])
-        ? '<img class="prop-img" src="'+S.esc(p.photo_urls[0])+'" alt="" loading="lazy">'
+      const rawUrl = p.photo_urls && p.photo_urls[0];
+      const imgSrc = rawUrl && window.CONFIG && CONFIG.img ? CONFIG.img(rawUrl, 'card') : rawUrl;
+      const img = imgSrc
+        ? '<img class="prop-img" src="'+S.esc(imgSrc)+'" alt="" loading="lazy">'
         : '<div class="prop-img-ph"><svg class="i"><use href="#i-property"/></svg></div>';
       const meta = [
         p.bedrooms!=null ? p.bedrooms+'bd' : null,
@@ -53,13 +55,9 @@
       const grid = document.getElementById('prop-grid');
       grid.innerHTML = '<div class="skeleton sk-line lg" style="height:220px;border-radius:12px"></div>'.repeat(3);
       document.getElementById('page-sub').textContent = 'Loading…';
-      let q = CP.sb().from('properties').select('*, landlords(business_name,contact_name), property_photos(url,display_order)').order('created_at',{ascending:false});
+      let q = CP.sb().from('properties').select('*, landlords(business_name,contact_name), property_photos(url,display_order)').order('created_at',{ascending:false}).limit(200);
       if(_statusFilter !== 'all') q = q.eq('status', _statusFilter);
       if(_landlordFilter) q = q.eq('landlord_id', _landlordFilter);
-      if(_q.trim()){
-        const s = _q.trim().replace(/'/g,"''");
-        q = q.or('title.ilike.%'+s+'%,address.ilike.%'+s+'%');
-      }
       const { data, error } = await q;
       if(error){
         grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><svg class="i"><use href="#i-alert"/></svg><h3>Error</h3><p>'+AdminShell.esc(error.message)+'</p></div>';
@@ -76,12 +74,30 @@
         }
         return p;
       });
-      document.getElementById('page-sub').textContent = _allCache.length+' propert'+(_allCache.length===1?'y':'ies');
-      if(!_allCache.length){
-        grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><svg class="i"><use href="#i-property"/></svg><h3>No properties</h3><p>Tap + to add one.</p></div>';
+      _renderFiltered();
+    }
+
+    function _renderFiltered() {
+      const grid = document.getElementById('prop-grid');
+      if (!grid) return;
+      const q = _q.trim().toLowerCase();
+      const filtered = q
+        ? _allCache.filter(p =>
+            (p.title || '').toLowerCase().includes(q) ||
+            (p.address || '').toLowerCase().includes(q) ||
+            (p.city || '').toLowerCase().includes(q) ||
+            (p.landlords && ((p.landlords.business_name || '') + ' ' + (p.landlords.contact_name || '')).toLowerCase().includes(q)))
+        : _allCache;
+      const countEl = document.getElementById('page-sub');
+      if (!filtered.length) {
+        grid.innerHTML = q
+          ? `<div class="empty" style="grid-column:1/-1"><svg class="i"><use href="#i-search"/></svg><h3>No results</h3><p>No properties match "<em>${AdminShell.esc(q)}</em>".</p></div>`
+          : '<div class="empty" style="grid-column:1/-1"><svg class="i"><use href="#i-property"/></svg><h3>No properties</h3><p>Tap + to add one.</p></div>';
+        if (countEl) countEl.textContent = q ? '0 results' : '0 properties';
         return;
       }
-      grid.innerHTML = _allCache.map(card).join('');
+      grid.innerHTML = filtered.map(card).join('');
+      if (countEl) countEl.textContent = filtered.length + ' propert' + (filtered.length === 1 ? 'y' : 'ies') + (q ? ' (filtered)' : '');
     }
 
     function fields(p){
@@ -272,10 +288,11 @@
 
       S.toast('Property deleted', 'success');
       _allCache = _allCache.filter(x => x.id !== id);
-      // Remove the card immediately for snappy UX, then reload to resync counts
       const cardEl = document.querySelector('[data-prop-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
       if(cardEl && cardEl.parentNode) cardEl.parentNode.removeChild(cardEl);
-      load();
+      const remaining = document.querySelectorAll('#prop-grid [data-prop-id]').length;
+      const countElDel = document.getElementById('page-sub');
+      if (countElDel) countElDel.textContent = remaining + ' propert' + (remaining === 1 ? 'y' : 'ies');
     }
 
     function readyDeps(){ return window.AdminShell && window.CP && CP.sb && CP.Auth; }
@@ -337,7 +354,7 @@
       });
       document.getElementById('search').addEventListener('input', e => {
         _q = e.target.value;
-        clearTimeout(_debounce); _debounce = setTimeout(load, 300);
+        clearTimeout(_debounce); _debounce = setTimeout(_renderFiltered, 100);
       });
 
       // Show landlord filter banner if ?landlord= is set

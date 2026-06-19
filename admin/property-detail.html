@@ -214,6 +214,44 @@ select.pd-edit-input{cursor:pointer}
 /* ── Draft auto-save indicator ── */
 #pd-autosave-badge{position:fixed;bottom:70px;right:16px;background:rgba(0,0,0,.7);color:#fff;font-size:.68rem;padding:4px 10px;border-radius:99px;pointer-events:none;opacity:0;transition:opacity .4s;z-index:10000}
 #pd-autosave-badge.show{opacity:1}
+
+/* ── Last saved indicator ── */
+.pd-lastsaved{font-size:.7rem;color:var(--muted);margin-top:4px;margin-bottom:8px}
+
+/* ── Status toggle: horizontal scroll on mobile instead of wrapping ── */
+@media(max-width:700px){
+  .pd-status-toggle{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .pd-status-toggle::-webkit-scrollbar{display:none}
+  .pd-status-chip{flex-shrink:0}
+}
+
+/* ── Responsive tables on mobile (apps / inquiries) ── */
+@media(max-width:600px){
+  .pd-table thead{display:none}
+  .pd-table tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:10px 4px;border-bottom:1px solid var(--border)}
+  .pd-table tbody tr:last-child{border-bottom:none}
+  .pd-table td{border:none;padding:2px 6px;font-size:.77rem;line-height:1.4}
+  .pd-table td:first-child{grid-column:1/-1;font-weight:700;font-size:.84rem;color:var(--text)}
+  .pd-table td:last-child{grid-column:1/-1}
+  .pd-map-wrap{height:180px}
+  .pd-actions{gap:6px}
+  .pd-actions .btn{font-size:.75rem;padding:6px 10px}
+}
+
+/* ── Photo manager: 2-col on very small screens ── */
+@media(max-width:380px){
+  .pd-pm-grid{grid-template-columns:1fr 1fr}
+}
+
+/* ── Lightbox: bigger touch targets on mobile ── */
+@media(max-width:640px){
+  .pd-lb-thumb{width:64px;height:50px}
+  .pd-lb-prev,.pd-lb-next{width:44px;height:44px;font-size:1.5rem}
+  .pd-lb-inner{padding:50px 10px 90px}
+}
+
+/* ── Edit drawer swipe support ── */
+.pd-edit-drawer{touch-action:pan-y}
 </style>
 </head>
 <body data-page-title="Property Detail" data-page-sub="Loading…">

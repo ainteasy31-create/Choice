@@ -72,6 +72,8 @@
   let _editOriginal = null;
   let _formDirty = false;
   let _autosaveTimer = null;
+  let _landlordCache = null;
+  let _lastSavedAt = null;
 
   // ── Status toggle ────────────────────────────────────────────────────────────
   const STATUS_OPTIONS = [
@@ -242,8 +244,10 @@
       document.getElementById('pd-lb-overlay').addEventListener('click', closeLightbox);
       document.getElementById('pd-lb-prev').addEventListener('click', () => lbNav(-1, urls));
       document.getElementById('pd-lb-next').addEventListener('click', () => lbNav(1, urls));
-      document.addEventListener('keydown', lbKeyHandler);
     }
+    // Always refresh keydown listener so it captures the current urls closure
+    document.removeEventListener('keydown', lbKeyHandler);
+    document.addEventListener('keydown', lbKeyHandler);
     lb.classList.add('open');
     document.body.style.overflow = 'hidden';
     buildLbThumbs(urls);
@@ -255,6 +259,7 @@
     const lb = document.getElementById('pd-lightbox');
     if (lb) lb.classList.remove('open');
     document.body.style.overflow = '';
+    document.removeEventListener('keydown', lbKeyHandler);
   }
 
   function lbKeyHandler(e) {
@@ -277,8 +282,7 @@
 
   function buildLbThumbs(urls) {
     const el = document.getElementById('pd-lb-thumbs');
-    if (!el || el.dataset.built) return;
-    el.dataset.built = '1';
+    if (!el) return;
     el.innerHTML = urls.map((u, i) =>
       `<button class="pd-lb-thumb" data-idx="${i}"><img src="${esc(thumbUrl(u))}" alt="" loading="lazy"></button>`
     ).join('');
@@ -374,10 +378,14 @@
 
     const actionsHtml = `<div class="pd-actions">
       <button class="btn btn-primary btn-sm" id="pd-btn-edit"><i class="fas fa-pen-to-square"></i> Edit property</button>
-      <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> Manage photos</button>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> Manage photos (${_photos.length})</button>
       <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">Public listing ↗</a>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-featured" title="${p.featured ? 'Remove featured flag' : 'Mark as featured'}">
+        ${p.featured ? '<i class="fas fa-star" style="color:#f59e0b"></i> Unfeature' : '<i class="far fa-star"></i> Feature'}
+      </button>
       <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft"><i class="fas fa-copy"></i> Duplicate</button>
-    </div>`;
+    </div>
+    ${_lastSavedAt ? `<div id="pd-lastsaved" class="pd-lastsaved">Last saved ${_lastSavedAt}</div>` : ''}`;
 
     // ── Key fields grid ──
     const fields = [
@@ -649,6 +657,21 @@
       if (ne) { S.toast('Duplicate failed: ' + ne.message, 'error'); return; }
       S.toast('Property duplicated — opening new draft…', 'success');
       setTimeout(() => { location.href = '/admin/property-detail.html?id=' + encodeURIComponent(nd.id) + '&edit=1'; }, 700);
+    });
+
+    // Featured toggle button
+    document.getElementById('pd-btn-featured')?.addEventListener('click', async () => {
+      const newFeatured = !p.featured;
+      const { error: fe } = await CP.sb().from('properties').update({ featured: newFeatured, updated_at: new Date().toISOString() }).eq('id', propId);
+      if (fe) { S.toast('Could not update featured: ' + fe.message, 'error'); return; }
+      p.featured = newFeatured;
+      const fBtn = document.getElementById('pd-btn-featured');
+      if (fBtn) {
+        fBtn.innerHTML = newFeatured ? '<i class="fas fa-star"></i> Featured' : '<i class="far fa-star"></i> Feature';
+        fBtn.classList.toggle('btn-warning', newFeatured);
+        fBtn.classList.toggle('btn-ghost', !newFeatured);
+      }
+      S.toast(newFeatured ? 'Marked as Featured' : 'Removed from Featured', 'success');
     });
 
     // Inquiry message expand (click row → modal dialog)
@@ -938,6 +961,23 @@
 
     requestAnimationFrame(() => panel.classList.add('open'));
 
+    // ── Swipe-to-dismiss: drag down > 100px to close ──
+    let _swipeY0 = 0;
+    panel.addEventListener('touchstart', e => { _swipeY0 = e.touches[0].clientY; }, { passive: true });
+    panel.addEventListener('touchmove', e => {
+      const dy = e.touches[0].clientY - _swipeY0;
+      if (dy > 0) panel.style.transform = `translateY(${Math.min(dy, 260)}px)`;
+    }, { passive: true });
+    panel.addEventListener('touchend', e => {
+      const dy = e.changedTouches[0].clientY - _swipeY0;
+      panel.style.transform = '';
+      if (dy > 100) {
+        panel.classList.remove('open');
+        setTimeout(() => { if (panel.parentNode) panel.parentNode.removeChild(panel); }, 300);
+        stopAutosave();
+      }
+    }, { passive: true });
+
     // ── Store original snapshot for diff audit log ──
     _editOriginal = JSON.parse(JSON.stringify(_prop || {}));
     _formDirty = false;
@@ -979,6 +1019,10 @@
         const fd = new FormData(form);
         const snap = {};
         for (const [k, v] of fd.entries()) snap[k] = v;
+        // Capture tag picker states — checkboxes have no `name` so FormData misses them
+        for (const [tn, opts] of [['amenities', AMENITY_OPTIONS], ['appliances', APPLIANCE_OPTIONS], ['flooring', FLOORING_OPTIONS], ['utilities_included', UTILITY_OPTIONS]]) {
+          snap['_tags_' + tn] = _readTags(form, tn, opts);
+        }
         localStorage.setItem(_autoKey, JSON.stringify({ ts: Date.now(), data: snap }));
         const badge = document.getElementById('pd-autosave-badge');
         if (badge) {
@@ -997,6 +1041,11 @@
           for (const [k, v] of Object.entries(saved.data || {})) {
             const el = form.elements[k];
             if (el && el.type !== 'checkbox') el.value = v;
+          }
+          // Restore tag picker checkboxes
+          for (const tn of ['amenities', 'appliances', 'flooring', 'utilities_included']) {
+            const vals = new Set(saved.data['_tags_' + tn] || []);
+            form.querySelectorAll(`[data-tag="${tn}"]`).forEach(cb => { cb.checked = vals.has(cb.value); });
           }
           _markDirty();
           S.toast('Draft restored from auto-save', 'success');
@@ -1065,22 +1114,33 @@
       }
     });
 
-    // ── Populate landlord dropdown ──
-    CP.sb().rpc('admin_list_landlords', { p_page: 0, p_per_page: 200 }).then(({ data, error }) => {
+    // ── Populate landlord dropdown (cached across panel opens) ──
+    function _populateLandlordSel(rows) {
       const sel = document.getElementById('pd-landlord-select');
       if (!sel) return;
-      if (error || !data) { sel.innerHTML = '<option value="">— Could not load landlords —</option>'; return; }
-      const rows = data.rows || [];
       sel.innerHTML = '<option value="">— Unassigned —</option>' +
         rows.map(l => {
           const label = esc(l.business_name || l.contact_name || l.id);
           const selected = l.id === p.landlord_id ? ' selected' : '';
           return `<option value="${esc(l.id)}"${selected}>${label}</option>`;
         }).join('');
-    }).catch(() => {
-      const sel = document.getElementById('pd-landlord-select');
-      if (sel) sel.innerHTML = '<option value="">— Could not load landlords —</option>';
-    });
+    }
+    if (_landlordCache) {
+      _populateLandlordSel(_landlordCache);
+    } else {
+      CP.sb().rpc('admin_list_landlords', { p_page: 0, p_per_page: 200 }).then(({ data, error }) => {
+        if (error || !data) {
+          const sel = document.getElementById('pd-landlord-select');
+          if (sel) sel.innerHTML = '<option value="">— Could not load landlords —</option>';
+          return;
+        }
+        _landlordCache = data.rows || [];
+        _populateLandlordSel(_landlordCache);
+      }).catch(() => {
+        const sel = document.getElementById('pd-landlord-select');
+        if (sel) sel.innerHTML = '<option value="">— Could not load landlords —</option>';
+      });
+    }
   }
 
   async function saveEdit(closePanel) {
@@ -1172,7 +1232,7 @@
       pets_allowed:       getBool('pets_allowed'),
       pet_deposit:        getNum('pet_deposit'),
       pet_weight_limit:   getNum('pet_weight_limit'),
-      pet_types_allowed:  _readTags(form, 'pet_types_allowed', []),
+      pet_types_allowed:  getArr('pet_types_allowed'),
       pet_details:        get('pet_details') || null,
       smoking_allowed:    getBool('smoking_allowed'),
       featured:           get('featured') === 'true',
@@ -1190,6 +1250,9 @@
     if (error) { S.toast('Save failed: ' + error.message, 'error'); return; }
 
     S.toast('Property saved!', 'success');
+    _lastSavedAt = Date.now();
+    const lsi = document.getElementById('pd-lastsaved');
+    if (lsi) { const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); lsi.textContent = 'Saved at ' + t; }
 
     // Refresh the inline status toggle if status changed
     if (patch.status && patch.status !== _prop.status) {
@@ -1518,42 +1581,39 @@
       const total    = entries.length;
       let successCnt = 0;
 
-      for (let i = 0; i < total; i++) {
-        const [sid, file] = entries[i];
-        const itemEl = pendingGrid.querySelector(`[data-pending-id="${sid}"]`);
-        const ovlEl  = document.getElementById(`pd-pm-ovl-${sid}`);
-
-        if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--brand)"></i><span style="color:#fff;font-size:.72rem">Uploading…</span>';
-
-        try {
-          const result = await _uploadAdminPhoto(file, propId, (pct) => {
-            const overall = Math.round(((i + pct / 100) / total) * 100);
-            uploadBar.style.width = overall + '%';
-            uploadPct.textContent = overall + '%';
-            uploadText.textContent = `Uploading ${i + 1} of ${total}…`;
-          });
-
-          // Append to end of existing photos
-          const maxOrder = _photos.length
-            ? Math.max(..._photos.map(p => p.display_order ?? 0))
-            : -1;
-          const { error: insErr } = await CP.sb().from('property_photos').insert([{
-            property_id:   propId,
-            url:           result.url,
-            file_id:       result.fileId || null,
-            display_order: maxOrder + 1 + successCnt,
-          }]);
-          if (insErr) throw new Error(insErr.message);
-
-          successCnt++;
-          if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
-          if (itemEl) itemEl.style.borderColor = 'rgba(34,197,94,.6)';
-
-        } catch (err) {
-          const msg = String(err?.message || err).slice(0, 80);
-          if (ovlEl) ovlEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f87171"></i><span style="color:#f87171;font-size:.7rem">Failed</span><span style="color:rgba(255,255,255,.7);font-size:.64rem;text-align:center;max-width:110px;word-break:break-word">${esc(msg)}</span>`;
-          if (itemEl) itemEl.classList.add('error');
-        }
+      // Upload in parallel batches of 2 for speed
+      const BATCH_SIZE = 2;
+      const baseOrder = _photos.length ? Math.max(..._photos.map(ph => ph.display_order ?? 0)) + 1 : 0;
+      for (let batch = 0; batch < total; batch += BATCH_SIZE) {
+        const chunk = entries.slice(batch, batch + BATCH_SIZE);
+        await Promise.all(chunk.map(async ([sid, file], j) => {
+          const idx = batch + j;
+          const itemEl = pendingGrid.querySelector(`[data-pending-id="${sid}"]`);
+          const ovlEl  = document.getElementById(`pd-pm-ovl-${sid}`);
+          if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--brand)"></i><span style="color:#fff;font-size:.72rem">Uploading…</span>';
+          try {
+            const result = await _uploadAdminPhoto(file, propId, (pct) => {
+              const overall = Math.round(((successCnt + pct / 100) / total) * 100);
+              uploadBar.style.width = overall + '%';
+              uploadPct.textContent = overall + '%';
+              uploadText.textContent = `Uploading ${Math.min(batch + j + 1, total)} of ${total}…`;
+            });
+            const { error: insErr } = await CP.sb().from('property_photos').insert([{
+              property_id:   propId,
+              url:           result.url,
+              file_id:       result.fileId || null,
+              display_order: baseOrder + idx,
+            }]);
+            if (insErr) throw new Error(insErr.message);
+            successCnt++;
+            if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
+            if (itemEl) itemEl.style.borderColor = 'rgba(34,197,94,.6)';
+          } catch (err) {
+            const msg = String(err?.message || err).slice(0, 80);
+            if (ovlEl) ovlEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f87171"></i><span style="color:#f87171;font-size:.7rem">Failed</span><span style="color:rgba(255,255,255,.7);font-size:.64rem;text-align:center;max-width:110px;word-break:break-word">${esc(msg)}</span>`;
+            if (itemEl) itemEl.classList.add('error');
+          }
+        }));
       }
 
       uploadBar.style.width = '100%';

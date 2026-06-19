@@ -28,7 +28,15 @@
   .prop-img-ph{width:100%;height:140px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--muted-2)}
   .prop-img-ph .i{width:36px;height:36px}
   .prop-body{padding:var(--sp-4);display:flex;flex-direction:column;gap:6px;flex:1}
-  .prop-actions{display:flex;gap:8px;margin-top:auto;padding-top:8px}
+  .prop-actions{display:flex;gap:8px;margin-top:auto;padding-top:8px;flex-wrap:wrap}
+  /* chip bar: single-row horizontal scroll on all screen sizes */
+  .chip-row{overflow-x:auto;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;gap:6px}
+  .chip-row::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0}
+  @media(max-width:480px){
+    .prop-img,.prop-img-ph{height:120px}
+    .prop-body{padding:var(--sp-3)}
+  }
 </style>
 </head>
 <body data-page-title="Properties" data-page-sub="Loading…">
