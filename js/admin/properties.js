@@ -92,7 +92,7 @@
     const grid = document.getElementById('prop-grid');
     let q = CP.sb()
       .from('properties')
-      .select('id,title,address,location,city,state,status,bedrooms,bathrooms,monthly_rent,square_footage,featured,landlord_id,created_at,updated_at,landlords(business_name,contact_name)')
+      .select('id,title,address,city,state,status,bedrooms,bathrooms,monthly_rent,square_footage,featured,landlord_id,created_at,updated_at,landlords(business_name,contact_name)')
       .order('created_at',{ascending:false})
       .limit(300);
     if(_statusFilter !== 'all') q = q.eq('status', _statusFilter);
