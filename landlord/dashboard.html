@@ -277,7 +277,7 @@
     tbody.innerHTML = listings.map(l => {
       const photo = l.photo_urls?.[0] ? CONFIG.img(l.photo_urls[0], 'thumb') : '';
       return `
-        <tr style="cursor:pointer" onclick="if(!event.target.closest('a,button'))window.open('/property.html?id=${l.id}','_blank')" title="Click to view property">
+        <tr data-listing-id="${l.id}" style="cursor:pointer" onclick="if(!event.target.closest('a,button'))window.open('/property.html?id=${l.id}','_blank')" title="Click to view property">
           <td>
             <div style="display:flex;align-items:center;gap:12px">
               ${photo
@@ -347,23 +347,21 @@
 
   // ── Listing status actions ────────────────────────────────
   function updateListingRow(id, newStatus) {
-    const rows = document.querySelectorAll('#listingsTable tbody tr');
-    rows.forEach(row => {
-      if (!row.innerHTML.includes(`'${id}'`)) return;
+    const row = document.querySelector(`#listingsTable tbody tr[data-listing-id="${id}"]`);
+    if (!row) return;
 
-      const badgeCell = row.cells[1];
-      if (badgeCell) badgeCell.innerHTML = statusPill(newStatus);
+    const badgeCell = row.cells[1];
+    if (badgeCell) badgeCell.innerHTML = statusPill(newStatus);
 
-      const actionsCell = row.cells[row.cells.length - 1];
-      if (actionsCell) {
-        const wrap = actionsCell.querySelector('.lt-actions');
-        if (wrap) {
-          const viewBtn = wrap.querySelector('a[href*="property.html"]')?.outerHTML || '';
-          const editBtn = wrap.querySelector('a[href*="edit-listing.html"]:not(.btn-primary)')?.outerHTML || '';
-          wrap.innerHTML = viewBtn + editBtn + rowActions({ id, status: newStatus });
-        }
+    const actionsCell = row.cells[row.cells.length - 1];
+    if (actionsCell) {
+      const wrap = actionsCell.querySelector('.lt-actions');
+      if (wrap) {
+        const viewBtn = wrap.querySelector('a[href*="property.html"]')?.outerHTML || '';
+        const editBtn = wrap.querySelector('a[href*="edit-listing.html"]:not(.btn-primary)')?.outerHTML || '';
+        wrap.innerHTML = viewBtn + editBtn + rowActions({ id, status: newStatus });
       }
-    });
+    }
   }
 
   window.pauseListing = async (event, id) => {

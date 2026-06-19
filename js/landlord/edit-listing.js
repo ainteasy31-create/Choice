@@ -75,7 +75,7 @@
   // Photo state
   let currentPhotoUrls    = [...(prop.photo_urls    || [])];
   let currentPhotoFileIds = [...(prop.photo_file_ids || [])];
-  const originalPhotoFileIds = [...currentPhotoFileIds];
+  let originalPhotoFileIds = [...currentPhotoFileIds];
   let pendingNewFiles     = [];
 
   const chk = (arr, val) => arr && arr.includes(val) ? 'checked' : '';
@@ -728,6 +728,7 @@
 
     currentPhotoUrls    = finalPhotoUrls;
     currentPhotoFileIds = finalPhotoFileIds;
+    originalPhotoFileIds = [...finalPhotoFileIds]; // keep in sync so re-saves don't re-fire CDN deletes
     pendingNewFiles     = [];
     document.getElementById('newPhotosGrid').innerHTML = '';
     renderExistingPhotos();

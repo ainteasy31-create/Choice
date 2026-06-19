@@ -430,32 +430,29 @@ async function loadApplications(){
 
   const propertyIds=(props||[]).map(p=>p.id);
 
-  let apps=[];
-  if(propertyIds.length){
-    const {data,error}=await CP.sb()
-      .from('applications')
-      .select(
-        'id,app_id,created_at,status,payment_status,payment_date,application_fee,'+
-        'property_id,property_address,'+
-        'first_name,last_name,email,phone,dob,'+
-        'requested_move_in_date,desired_lease_term,'+
-        'employment_status,employer,job_title,monthly_income,'+
-        'has_bankruptcy,has_criminal_history,ever_evicted,smoker,'+
-        'has_pets,pet_details,total_occupants,'+
-        'has_co_applicant,admin_notes,'+
-        'lease_status,monthly_rent,move_in_status,move_in_date_actual'
-      )
-      .or(`property_id.in.(${propertyIds.map(id=>`"${id}"`).join(',')}),landlord_id.eq.${_landlord.id}`)
-      .order('created_at',{ascending:false});
-    if(!error)apps=data||[];
-  } else {
-    const {data}=await CP.sb()
-      .from('applications')
-      .select('id,app_id,created_at,status,payment_status,application_fee,property_id,property_address,first_name,last_name,email,phone,dob,requested_move_in_date,desired_lease_term,employment_status,employer,job_title,monthly_income,has_bankruptcy,has_criminal_history,ever_evicted,smoker,has_pets,pet_details,total_occupants,has_co_applicant,admin_notes,lease_status,monthly_rent,move_in_status')
-      .eq('landlord_id',_landlord.id)
-      .order('created_at',{ascending:false});
-    apps=data||[];
-  }
+  const FIELDS='id,app_id,created_at,status,payment_status,payment_date,application_fee,'+
+    'property_id,property_address,'+
+    'first_name,last_name,email,phone,dob,'+
+    'requested_move_in_date,desired_lease_term,'+
+    'employment_status,employer,job_title,monthly_income,'+
+    'has_bankruptcy,has_criminal_history,ever_evicted,smoker,'+
+    'has_pets,pet_details,total_occupants,'+
+    'has_co_applicant,admin_notes,'+
+    'lease_status,monthly_rent,move_in_status,move_in_date_actual';
+
+  // Primary query by landlord_id. For any legacy apps where landlord_id was not
+  // set at creation time, a secondary .in('property_id') query picks them up.
+  // Using two clean queries instead of a fragile string-template .or() call.
+  const [{data:primaryApps},{data:legacyApps}]=await Promise.all([
+    CP.sb().from('applications').select(FIELDS)
+      .eq('landlord_id',_landlord.id).order('created_at',{ascending:false}),
+    propertyIds.length
+      ? CP.sb().from('applications').select(FIELDS)
+          .in('property_id',propertyIds).is('landlord_id',null)
+          .order('created_at',{ascending:false})
+      : Promise.resolve({data:[]}),
+  ]);
+  const apps=[...(primaryApps||[]),...(legacyApps||[])];
 
   _allApps=apps;
   updateStats(_allApps);

@@ -496,7 +496,11 @@ function initSignaturePad(){
     resize();
     if (state.signaturePngDataUrl && !hasInk) {
       const img = new Image();
-      img.onload = () => { ctx.drawImage(img, 0, 0, canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height); hasInk = true; };
+      img.onload = () => {
+        const ratio = window.devicePixelRatio || 1;
+        ctx.drawImage(img, 0, 0, canvas.width / ratio, canvas.height / ratio);
+        hasInk = true;
+      };
       img.src = state.signaturePngDataUrl;
     }
   }, 60);
