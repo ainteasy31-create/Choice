@@ -5,7 +5,7 @@
 // state_lease_law (no PII; values are statute-derived public
 // information). No mutations possible from this page.
 
-import { sb } from '/js/cp-api.js';
+import { supabase as sb } from '/js/cp-api.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const tbody = $('#sl-tbody');
@@ -189,7 +189,26 @@ async function load() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Wait for AdminShell (loaded by cp-shell.js, a classic defer script).
+  // Then verify admin role before showing any data.
+  try {
+    await new Promise((res, rej) => {
+      const start = Date.now();
+      (function tick() {
+        if (window.AdminShell) return res();
+        if (Date.now() - start > 8000) return rej(new Error('Admin tools failed to load.'));
+        setTimeout(tick, 80);
+      })();
+    });
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="12" class="sl-empty" style="color:#f08491">${escapeHtml(e.message)}</td></tr>`;
+    if (meta) meta.textContent = '';
+    return;
+  }
+  const ok = await AdminShell.requireAdmin();
+  if (!ok) return;
+
   $('#sl-search').addEventListener('input', render);
   $('#sl-filter-cap').addEventListener('change', render);
   $('#sl-filter-jc').addEventListener('change', render);

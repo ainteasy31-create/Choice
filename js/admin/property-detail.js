@@ -412,6 +412,8 @@
     if (p.pet_weight_limit) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-weight-scale"></i>Pet Weight Limit: ${esc(String(p.pet_weight_limit))} lbs max</div>`);
     if (p.pet_details) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1"><i class="fas fa-paw"></i><span><strong>Pet Policy:</strong> ${esc(p.pet_details)}</span></div>`);
     if (p.smoking_allowed != null) leaseItems.push(`<div class="pd-amenity-item"><i class="fas ${p.smoking_allowed ? 'fa-smoking' : 'fa-ban'}"></i>${p.smoking_allowed ? 'Smoking Permitted' : 'No Smoking'}</div>`);
+    if (p.minimum_income_multiplier) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-coins"></i>Min. Income: ${p.minimum_income_multiplier}× rent/mo</div>`);
+    if (p.minimum_credit_score) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-chart-line"></i>Min. Credit Score: ${p.minimum_credit_score}</div>`);
     if (p.move_in_special) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1"><i class="fas fa-tag"></i><strong>Move-in Special:</strong> ${esc(p.move_in_special)}</div>`);
     if (p.showing_instructions) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1"><i class="fas fa-key"></i><strong>Showings:</strong> ${esc(p.showing_instructions)}</div>`);
 
@@ -694,6 +696,15 @@
                   <input class="pd-edit-input" name="minimum_lease_months" type="number" value="${esc(String(p.minimum_lease_months || ''))}" placeholder="12" min="1">
                 </label>
               </div>
+              <div class="pd-edit-row">
+                <label class="pd-edit-label">Min. income multiplier
+                  <span class="pd-edit-hint">e.g. 3 = tenant must earn 3× monthly rent</span>
+                  <input class="pd-edit-input" name="minimum_income_multiplier" type="number" value="${esc(String(p.minimum_income_multiplier || ''))}" placeholder="3" min="1" max="10" step="0.5">
+                </label>
+                <label class="pd-edit-label">Min. credit score
+                  <input class="pd-edit-input" name="minimum_credit_score" type="number" value="${esc(String(p.minimum_credit_score || ''))}" placeholder="620" min="300" max="850">
+                </label>
+              </div>
               <label class="pd-edit-label">Move-in special
                 <input class="pd-edit-input" name="move_in_special" type="text" value="${esc(p.move_in_special || '')}" placeholder="First month free!">
               </label>
@@ -916,8 +927,10 @@
       admin_fee:          getNum('admin_fee'),
       last_months_rent:   getNum('last_months_rent'),
       available_date:     get('available_date') || null,
-      minimum_lease_months: getNum('minimum_lease_months'),
-      move_in_special:    get('move_in_special') || null,
+      minimum_lease_months:        getNum('minimum_lease_months'),
+      minimum_income_multiplier:   getNum('minimum_income_multiplier'),
+      minimum_credit_score:        getNum('minimum_credit_score'),
+      move_in_special:             get('move_in_special') || null,
       amenities:          getArr('amenities'),
       appliances:         getArr('appliances'),
       flooring:           getArr('flooring'),

@@ -1,5 +1,3 @@
-'use strict';
-
 // ─────────────────────────────────────────────────────────────────────
 // admin/inspections.js — Phase 08 chunk 4/N + closeout
 // Admin index of all condition reports across all applications. Filters
@@ -236,10 +234,14 @@
     });
   }
 
-  // Wait for cp-api to expose CP global, then load
+  // Wait for AdminShell + CP, enforce admin role, then load
   function ready(){
-    if (window.CP && CP.sb) { wire(); load(); return; }
-    setTimeout(ready, 80);
+    if (!window.AdminShell || !window.CP || !CP.sb) { setTimeout(ready, 80); return; }
+    AdminShell.requireAdmin().then(ok => {
+      if (!ok) return;
+      wire();
+      load();
+    });
   }
   document.addEventListener('DOMContentLoaded', ready);
 })();

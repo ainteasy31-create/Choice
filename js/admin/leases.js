@@ -349,11 +349,11 @@
     const ok = await S.confirm({ title:'Send signing reminder?', message:'A reminder email will be sent to the tenant.', ok:'Send reminder' });
     if(!ok) return;
     const session = await CP.Auth.getSession();
-    const token = session?.access_token || CONFIG.SUPABASE_ANON_KEY;
+    const token = session?.access_token || window.CONFIG?.SUPABASE_ANON_KEY;
     try {
-      const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/send-email', {
+      const res = await fetch(window.CONFIG.SUPABASE_URL + '/functions/v1/send-email', {
         method:'POST',
-        headers:{ 'Content-Type':'application/json', 'apikey': CONFIG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + token },
+        headers:{ 'Content-Type':'application/json', 'apikey': window.CONFIG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + token },
         body: JSON.stringify({ app_id: appId, type:'lease_signing_reminder' })
       });
       const json = await res.json().catch(() => ({}));
@@ -366,11 +366,11 @@
     const ok = await S.confirm({ title:'Send unsigned-lease alert?', message:'An alert email will be sent to all admin addresses flagging this unsigned lease. Use when a lease has been pending signature too long.', ok:'Send alert' });
     if(!ok) return;
     const session = await CP.Auth.getSession();
-    const token = session?.access_token || CONFIG.SUPABASE_ANON_KEY;
+    const token = session?.access_token || window.CONFIG?.SUPABASE_ANON_KEY;
     try {
-      const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/send-email', {
+      const res = await fetch(window.CONFIG.SUPABASE_URL + '/functions/v1/send-email', {
         method:'POST',
-        headers:{ 'Content-Type':'application/json', 'apikey': CONFIG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + token },
+        headers:{ 'Content-Type':'application/json', 'apikey': window.CONFIG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + token },
         body: JSON.stringify({ app_id: appId, type:'lease_expiry_alert' })
       });
       const json = await res.json().catch(() => ({}));

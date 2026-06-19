@@ -83,34 +83,6 @@
     });
   }
 
-  AdminShell && AdminShell.on && AdminShell.on('status', async (target) => {
-    const rowEl = target.closest('.list-row');
-    if(!rowEl) return;
-    const id = rowEl.dataset.id;
-    const current = rowEl.dataset.status;
-    const data = await AdminShell.formSheet({
-      title: 'Change status',
-      submit: 'Save',
-      fields: [{
-        name: 'status', label: 'New status', type: 'select', value: current,
-        options: [
-          {value:'active',label:'Active'},
-          {value:'draft',label:'Draft'},
-          {value:'paused',label:'Paused'},
-          {value:'rented',label:'Rented'},
-          {value:'inactive',label:'Inactive'},
-          {value:'maintenance',label:'Maintenance'},
-          {value:'archived',label:'Archived'}
-        ]
-      }]
-    });
-    if(!data) return;
-    const { error } = await CP.sb().from('properties').update({ status: data.status }).eq('id', id);
-    if(error){ AdminShell.toast('Failed: '+error.message,'error'); return; }
-    AdminShell.toast('Status updated to '+data.status,'success');
-    await load();
-  });
-
   document.addEventListener('cp:realtime', () => load().catch(()=>{}));
   document.addEventListener('DOMContentLoaded', async () => {
     try { await waitReady(8000); }
@@ -133,6 +105,34 @@
     document.getElementById('search').addEventListener('input', e => {
       _q = e.target.value.toLowerCase();
       clearTimeout(_debounce); _debounce = setTimeout(applyFilter, 200);
+    });
+
+    AdminShell.on('status', async (target) => {
+      const rowEl = target.closest('.list-row');
+      if(!rowEl) return;
+      const id = rowEl.dataset.id;
+      const current = rowEl.dataset.status;
+      const data = await AdminShell.formSheet({
+        title: 'Change status',
+        submit: 'Save',
+        fields: [{
+          name: 'status', label: 'New status', type: 'select', value: current,
+          options: [
+            {value:'active',label:'Active'},
+            {value:'draft',label:'Draft'},
+            {value:'paused',label:'Paused'},
+            {value:'rented',label:'Rented'},
+            {value:'inactive',label:'Inactive'},
+            {value:'maintenance',label:'Maintenance'},
+            {value:'archived',label:'Archived'}
+          ]
+        }]
+      });
+      if(!data) return;
+      const { error } = await CP.sb().from('properties').update({ status: data.status }).eq('id', id);
+      if(error){ AdminShell.toast('Failed: '+error.message,'error'); return; }
+      AdminShell.toast('Status updated to '+data.status,'success');
+      await load();
     });
 
     AdminShell.on('refresh', () => load());

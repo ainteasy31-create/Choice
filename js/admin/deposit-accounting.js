@@ -1,5 +1,3 @@
-'use strict';
-
 // ─────────────────────────────────────────────────────────────────────
 // admin/deposit-accounting.js — Phase 09 chunk 4/5
 //
@@ -348,12 +346,9 @@
 
   // ── Server actions: dry-run + finalize ───────────────────────────
   async function callEdge(payload){
-    if (window.CP && typeof window.CP.callEdgeFunction === 'function') {
-      return await window.CP.callEdgeFunction('generate-deposit-letter', payload);
-    }
-    // Fallback: hand-roll the call using the supabase client + token
+    // callEdgeFunction is not on window.CP — hand-roll the call directly.
     const token = await window.CP.Auth.getAccessToken();
-    const url = (window.CP_CONFIG?.SUPABASE_URL || '') + '/functions/v1/generate-deposit-letter';
+    const url = (window.CONFIG?.SUPABASE_URL || '') + '/functions/v1/generate-deposit-letter';
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
@@ -474,9 +469,12 @@
   }
 
   function boot(){
-    if (!window.CP || !window.CP.sb) { setTimeout(boot, 80); return; }
-    wire();
-    load();
+    if (!window.AdminShell || !window.CP || !window.CP.sb) { setTimeout(boot, 80); return; }
+    AdminShell.requireAdmin().then(ok => {
+      if (!ok) return;
+      wire();
+      load();
+    });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

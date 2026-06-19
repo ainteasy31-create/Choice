@@ -432,6 +432,16 @@
       const { error } = await CP.sb().from('properties').delete().eq('id', id);
       if(error){ console.error('Delete error', id, error); failed++; }
       else{
+        // Log to admin_actions for audit trail (non-blocking)
+        CP.sb().auth.getUser().then(({ data: ud }) => {
+          CP.sb().from('admin_actions').insert([{
+            user_id:     ud?.user?.id || null,
+            action:      'property.hard_delete',
+            target_type: 'property',
+            target_id:   id,
+            metadata:    { source: 'watermark-review' }
+          }]).then(() => {}).catch(() => {});
+        }).catch(() => {});
         succeeded++;
         allProperties = allProperties.filter(p => p.id !== id);
         delete scanResults[id];
