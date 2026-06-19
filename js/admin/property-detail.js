@@ -974,7 +974,8 @@
       if (dy > 100) {
         panel.classList.remove('open');
         setTimeout(() => { if (panel.parentNode) panel.parentNode.removeChild(panel); }, 300);
-        stopAutosave();
+        // stopAutosave inline — no separate function needed
+        clearInterval(_autosaveTimer); _autosaveTimer = null; _formDirty = false;
       }
     }, { passive: true });
 
@@ -1250,9 +1251,9 @@
     if (error) { S.toast('Save failed: ' + error.message, 'error'); return; }
 
     S.toast('Property saved!', 'success');
-    _lastSavedAt = Date.now();
+    _lastSavedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const lsi = document.getElementById('pd-lastsaved');
-    if (lsi) { const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); lsi.textContent = 'Saved at ' + t; }
+    if (lsi) lsi.textContent = 'Last saved ' + _lastSavedAt;
 
     // Refresh the inline status toggle if status changed
     if (patch.status && patch.status !== _prop.status) {
@@ -1767,6 +1768,16 @@
     if (error) { S.toast('Failed to save order: ' + error.message, 'error'); return; }
 
     S.toast('Photo order saved!', 'success');
+    // Audit log (non-blocking)
+    CP.sb().auth.getUser().then(({ data: ud }) => {
+      CP.sb().from('admin_actions').insert([{
+        user_id:     ud?.user?.id || null,
+        action:      'property.photo_reorder',
+        target_type: 'property',
+        target_id:   String(propId),
+        metadata:    { count: updates.length }
+      }]).catch(() => {});
+    }).catch(() => {});
     closePanel();
     // Reload page
     const { data } = await CP.sb()

@@ -61,7 +61,7 @@
       const grid = document.getElementById('prop-grid');
       grid.innerHTML = '<div class="skeleton sk-line lg" style="height:220px;border-radius:12px"></div>'.repeat(3);
       document.getElementById('page-sub').textContent = 'Loading…';
-      let q = CP.sb().from('properties').select('*, landlords(business_name,contact_name), property_photos(url,display_order)').order('created_at',{ascending:false}).limit(200);
+      let q = CP.sb().from('properties').select('*, landlords(business_name,contact_name), property_photos(url,display_order)').order('created_at',{ascending:false}).limit(500);
       if(_statusFilter !== 'all') q = q.eq('status', _statusFilter);
       if(_landlordFilter) q = q.eq('landlord_id', _landlordFilter);
       const { data, error } = await q;
