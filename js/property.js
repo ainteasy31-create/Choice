@@ -385,6 +385,19 @@ function renderProperty(p) {
   allPhotos = p.photo_urls?.length ? p.photo_urls : ['/assets/placeholder-property.jpg'];
   renderGallery(allPhotos);
 
+  // Move-in special banner — inject between gallery strip and detail content
+  if (p.move_in_special) {
+    const _existingBanner = document.getElementById('moveInSpecialBanner');
+    if (!_existingBanner) {
+      const _banner = document.createElement('div');
+      _banner.id = 'moveInSpecialBanner';
+      _banner.style.cssText = 'background:linear-gradient(90deg,#065f46,#059669);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:10px;font-size:.875rem;font-weight:600;margin:0;';
+      _banner.innerHTML = `<i class="fas fa-tag" style="font-size:1rem;opacity:.9"></i><span>Move-in Special: ${esc(p.move_in_special)}</span>`;
+      const _galleryStrip = document.getElementById('galleryStrip');
+      if (_galleryStrip) _galleryStrip.insertAdjacentElement('afterend', _banner);
+    }
+  }
+
   // Header
   document.getElementById('detailPrice').innerHTML = `${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() : 'TBD'}<span>/month</span>`;
   document.getElementById('detailTitle').textContent = p.title;
@@ -509,6 +522,8 @@ function renderProperty(p) {
   if (p.pet_details) leaseItems.push(`<div class="amenity-item" style="grid-column:1/-1"><i class="fas fa-paw icon-teal"></i><span><strong>Pet Policy:</strong> ${esc(p.pet_details)}</span></div>`);
   if (p.smoking_allowed != null) leaseItems.push(`<div class="amenity-item"><i class="fas ${p.smoking_allowed ? 'fa-smoking icon-amber' : 'fa-ban icon-rose'}"></i>${p.smoking_allowed ? 'Smoking Permitted' : 'No Smoking'}</div>`);
   if (p.showing_instructions) leaseItems.push(`<div class="amenity-item" style="grid-column:1/-1"><i class="fas fa-key"></i><span><strong>Showings:</strong> ${esc(p.showing_instructions)}</span></div>`);
+  if (p.minimum_income_multiplier) leaseItems.push(`<div class="amenity-item"><i class="fas fa-coins icon-amber"></i>Min. Income: ${p.minimum_income_multiplier}× rent/mo</div>`);
+  if (p.minimum_credit_score) leaseItems.push(`<div class="amenity-item"><i class="fas fa-chart-line icon-sky"></i>Min. Credit Score: ${p.minimum_credit_score}</div>`);
   if (leaseItems.length) {
     hasLease = true;
     document.getElementById('leaseGrid').innerHTML = leaseItems.join('');
@@ -550,7 +565,8 @@ function renderProperty(p) {
   const mapOpenBtn = document.getElementById('mapOpenBtn');
   if (mapOpenBtn) {
     const mapAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     mapOpenBtn.href = isIOS
       ? `maps://maps.apple.com/?q=${mapAddr}`
       : `https://maps.google.com/maps?q=${mapAddr}`;
@@ -561,10 +577,21 @@ function renderProperty(p) {
 
   // Sidebar
   document.getElementById('sidebarPrice').innerHTML = `${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() : 'TBD'}<span>/month</span>`;
-  document.getElementById('sidebarAvail').innerHTML = `<i class="fas fa-circle" style="color:${availNow?'#10b981':'#d4a017'}"></i> ${availNow ? 'Available Now' : 'Available ' + formatDate(p.available_date)}`;
+  const _availEl = document.getElementById('sidebarAvail');
+  if (_availEl) {
+    _availEl.innerHTML = `<i class="fas fa-circle" style="color:${availNow?'#10b981':'#d4a017'}"></i> ${availNow ? 'Available Now' : 'Available ' + formatDate(p.available_date)}`;
+    _availEl.style.display = '';
+  }
   document.getElementById('sidebarRent').textContent    = `${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() : 'TBD'}`;
   document.getElementById('sidebarDeposit').textContent = p.security_deposit ? `$${Number(p.security_deposit).toLocaleString()}` : 'Contact landlord';
   document.getElementById('sidebarFee').textContent     = (p.application_fee != null && p.application_fee > 0) ? `$${Number(p.application_fee).toLocaleString()}` : 'Free';
+  // Update apply disclaimer fee amount dynamically
+  const _feeAmtEl = document.getElementById('applyFeeAmt');
+  if (_feeAmtEl) {
+    _feeAmtEl.textContent = (p.application_fee != null && p.application_fee > 0)
+      ? `$${Number(p.application_fee).toLocaleString()} application fee`
+      : 'a free application';
+  }
   if (p.available_date) {
     document.getElementById('sidebarMoveInRow').style.display = '';
     document.getElementById('sidebarMoveIn').textContent = formatDate(p.available_date);
@@ -705,19 +732,45 @@ function renderMap(p) {
         loadLeaflet()
           .then(() => _initLeafletMap(p))
           .catch(() => {
-            // Leaflet failed to load — fall back to Google embed
-            const mapAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip}`);
-            container.innerHTML = `<iframe src="https://maps.google.com/maps?q=${mapAddr}&output=embed&z=15" title="Property location" loading="lazy" style="width:100%;height:100%;border:none"></iframe>`;
+            // Leaflet failed to load — fall back to styled address card
+            const _errAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
+            container.innerHTML = `
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;background:var(--surface-2,#f8f9fa);padding:32px 20px;text-align:center">
+                <div style="width:52px;height:52px;background:#e8f0fe;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;color:#1a73e8">
+                  <i class="fas fa-map-marker-alt"></i>
+                </div>
+                <div>
+                  <div style="font-weight:700;font-size:1rem;color:var(--text,#1a1a2e);margin-bottom:4px">${esc(p.address)}</div>
+                  <div style="color:var(--muted,#6b7280);font-size:.875rem">${esc(p.city)}, ${esc(p.state)} ${esc(p.zip||'')}</div>
+                </div>
+                <a href="https://maps.google.com/maps?q=${_errAddr}" target="_blank" rel="noopener noreferrer"
+                   style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:#1a73e8;color:#fff;border-radius:6px;font-size:.82rem;font-weight:600;text-decoration:none">
+                  <i class="fas fa-map"></i> Open in Google Maps
+                </a>
+              </div>`;
           });
       }, { rootMargin: '200px' });
       observer.observe(container);
       return;
     }
   }
-  // Fallback: Google embed (no lat/lng available)
-  const mapAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip}`);
+  // Fallback: styled address card (no lat/lng available — Google embed unreliable without key)
   document.getElementById('mapAddressLabel').textContent = `${p.address}, ${p.city}`;
-  container.innerHTML = `<iframe src="https://maps.google.com/maps?q=${mapAddr}&output=embed&z=15" title="Property location" loading="lazy" style="width:100%;height:100%;border:none"></iframe>`;
+  const _fbAddr = encodeURIComponent(`${p.address}, ${p.city}, ${p.state} ${p.zip || ''}`);
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;background:var(--surface-2,#f8f9fa);padding:32px 20px;text-align:center">
+      <div style="width:52px;height:52px;background:#e8f0fe;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;color:#1a73e8">
+        <i class="fas fa-map-marker-alt"></i>
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text,#1a1a2e);margin-bottom:4px">${esc(p.address)}</div>
+        <div style="color:var(--muted,#6b7280);font-size:.875rem">${esc(p.city)}, ${esc(p.state)} ${esc(p.zip||'')}</div>
+      </div>
+      <a href="https://maps.google.com/maps?q=${_fbAddr}" target="_blank" rel="noopener noreferrer"
+         style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:#1a73e8;color:#fff;border-radius:6px;font-size:.82rem;font-weight:600;text-decoration:none">
+        <i class="fas fa-map"></i> Open in Google Maps
+      </a>
+    </div>`;
 }
 
 /* ── Gallery Mosaic ── */
