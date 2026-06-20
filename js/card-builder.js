@@ -50,20 +50,16 @@
   }
 
   // ── Availability chip ───────────────────────────────────────
-  // Returns a small inline chip HTML string for the address line.
-  // "Now" (green) when available immediately; "Aug 1" (amber) for future date.
+  // Only shown when the available date is in the future — "Avail. Sep 1".
+  // "Available Now" is implied for any listed property and is omitted.
   function availChipHtml(p) {
     if (p.available_date) {
       var avail = new Date(p.available_date + 'T00:00:00');
       var diffDays = Math.ceil((avail - Date.now()) / 864e5);
-      if (diffDays <= 0) {
-        return '<span class="property-card-avail avail-now">Available Now</span>';
+      if (diffDays > 0) {
+        var label = avail.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+        return '<span class="property-card-avail">Avail. ' + label + '</span>';
       }
-      var label = avail.toLocaleString('en-US', { month: 'short', day: 'numeric' });
-      return '<span class="property-card-avail">Avail. ' + label + '</span>';
-    }
-    if (p.status === 'active') {
-      return '<span class="property-card-avail avail-now">Available Now</span>';
     }
     return '';
   }
@@ -107,19 +103,10 @@
       );
     }).join('');
 
-    // ── Amenity tags ──────────────────────────────────────────
-    var tags = [];
-    if (p.pets_allowed) tags.push('<span class="property-card-tag tag-pet"><i class="fas fa-paw"></i> Pets OK</span>');
-    if (p.parking)      tags.push('<span class="property-card-tag tag-parking"><i class="fas fa-car"></i> Parking</span>');
-    if (Array.isArray(p.utilities_included) ? p.utilities_included.length > 0 : !!p.utilities_included) {
-      tags.push('<span class="property-card-tag tag-utilities"><i class="fas fa-bolt"></i> Utilities</span>');
-    }
-
-    // ── Specs row ─────────────────────────────────────────────
+    // ── Specs row — beds + baths only (sqft lives on detail page) ─
     var specParts = [];
     if (p.bedrooms != null) specParts.push('<span class="property-card-spec-item"><i class="fas fa-bed"></i>' + (p.bedrooms === 0 ? 'Studio' : p.bedrooms + ' Bed') + '</span>');
     if (p.bathrooms)        specParts.push('<span class="property-card-spec-item"><i class="fas fa-bath"></i>' + p.bathrooms + ' Bath</span>');
-    if (p.square_footage)   specParts.push('<span class="property-card-spec-item">' + Number(p.square_footage).toLocaleString() + ' sqft</span>');
     var specsHtml = specParts.map(function (s, i) {
       return i === 0 ? s : '<span class="property-card-spec-sep">·</span>' + s;
     }).join('');
@@ -134,13 +121,7 @@
 
     var freshChipHtml = '';
 
-    // ── Property type chip (bottom-left of image) ─────────────
-    var typeMap = { apartment: 'Apartment', house: 'House', condo: 'Condo', townhouse: 'Townhouse',
-                    townhome: 'Townhome', studio: 'Studio', loft: 'Loft', room: 'Room', duplex: 'Duplex' };
-    var typeLabel = p.property_type ? (typeMap[String(p.property_type).toLowerCase()] || esc(p.property_type)) : '';
-    var typeChipHtml = typeLabel
-      ? '<div class="property-card-type-chip">' + typeLabel + '</div>'
-      : '';
+    // Type chip removed from card — type is in the title and the filter bar.
 
     // ── P2-B: Dots (≤6 photos) OR count pill (>6 photos) — never both ──
     var dotsHtml = '';
@@ -180,15 +161,10 @@
           dotsHtml +
           // Photo count — bottom-right (only when >6 photos)
           photoCountHtml +
-          // Property type chip — bottom-left
-          typeChipHtml +
-          // Save + Share — top-right, both inside .property-card-actions
+          // Save heart — top-right, sole action on the photo
           '<div class="property-card-actions">' +
             '<button class="property-card-save" type="button" data-id="' + id + '" aria-label="Save property">' +
               '<i class="far fa-heart"></i>' +
-            '</button>' +
-            '<button class="property-card-share" type="button" data-id="' + id + '" data-title="' + title + '" data-url="' + escAttr(propUrl) + '" aria-label="Share property">' +
-              '<i class="fas fa-share-nodes"></i>' +
             '</button>' +
           '</div>' +
         '</div>' +
@@ -202,11 +178,9 @@
             '<i class="fas fa-location-dot"></i>' + addrLine +
             (avail ? '<span class="property-card-addr-sep">·</span>' + avail : '') +
           '</div>' +
-          // 3. Specs
+          // 3. Specs — beds + baths only
           (specsHtml ? '<div class="property-card-specs">' + specsHtml + '</div>' : '') +
-          // 4. Amenity tags
-          (tags.length ? '<div class="property-card-tags">' + tags.join('') + '</div>' : '') +
-          // 5. Footer — price pinned to bottom with divider
+          // 4. Footer — price pinned to bottom (no divider)
           '<div class="property-card-footer">' +
             '<div class="property-card-price">' + rentHtml + rentUnit + '</div>' +
           '</div>' +

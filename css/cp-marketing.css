@@ -1172,8 +1172,7 @@ body[data-portal="public"] .property-card-avail.avail-now {
 }
 body[data-portal="public"] .property-card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
 body[data-portal="public"] .property-card-footer {
-  margin-top: auto; padding-top: 10px;
-  border-top: 1px solid var(--m-border);
+  margin-top: auto; padding-top: 8px;
   display: flex; align-items: center;
 }
 body[data-portal="public"] .property-card-price {
