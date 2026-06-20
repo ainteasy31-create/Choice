@@ -617,14 +617,15 @@ def _run_zillow(location, args, started_at):
 
     try:
         records, blocked = _zillow_scrape(
-            location  = location,
-            limit     = args.limit,
-            beds_min  = args.beds_min,
-            beds_max  = args.beds_max,
-            price_min = args.price_min,
-            price_max = args.price_max,
-            min_score = args.min_score,
-            verbose   = True,
+            location      = location,
+            limit         = args.limit,
+            beds_min      = args.beds_min,
+            beds_max      = args.beds_max,
+            price_min     = args.price_min,
+            price_max     = args.price_max,
+            min_score     = args.min_score,
+            fetch_details = not getattr(args, "no_details", False),
+            verbose       = True,
         )
     except Exception as e:
         print(f"❌  Zillow scrape error: {e}")
@@ -684,16 +685,17 @@ def _run_location(location, args, started_at):
 # ── Main runner ───────────────────────────────────────────────────────────────
 
 def run(args):
-    print("\n🏠  Choice Properties — Scraper v3")
-    print(f"   Source     : {args.source}")
-    print(f"   Past days  : {args.past_days}")
-    print(f"   Price/mo   : ${args.price_min or 0} – ${args.price_max or '∞'}")
-    print(f"   Beds       : {args.beds_min or 'any'} – {args.beds_max or 'any'}")
-    print(f"   Limit/loc  : {args.limit}")
-    print(f"   Min score  : {args.min_score}")
-    print(f"   Upsert     : {args.upsert}")
-    print(f"   Extra data : {args.extra}")
-    print(f"   Dry run    : {args.dry_run}")
+    print("\n🏠  Choice Properties — Scraper v4")
+    print(f"   Source       : {args.source}")
+    print(f"   Past days    : {args.past_days}")
+    print(f"   Price/mo     : ${args.price_min or 0} – ${args.price_max or 'no max'}")
+    print(f"   Beds         : {args.beds_min or 'any'} – {args.beds_max or 'any'}")
+    print(f"   Limit/loc    : {args.limit}")
+    print(f"   Min score    : {args.min_score}")
+    print(f"   Upsert       : {args.upsert}")
+    print(f"   Extra data   : {args.extra}")
+    print(f"   Zillow details: {'DISABLED (--no-details)' if getattr(args, 'no_details', False) else 'ENABLED (Phase 2 full enrichment)'}")
+    print(f"   Dry run      : {args.dry_run}")
 
     # ── Collect locations ─────────────────────────────────────────────────────
     locations = list(args.location) if args.location else []
@@ -747,14 +749,16 @@ def _build_parser():
     p = argparse.ArgumentParser(
         prog="scraper",
         description=(
-            "Choice Properties — Scraper v3\n"
-            "Stages Realtor.com and/or Zillow for-rent listings into pipeline.pipeline_properties."
+            "Choice Properties -- Scraper v4\n"
+            "Stages Realtor.com and/or Zillow for-rent listings into pipeline.pipeline_properties.\n"
+            "Zillow now runs in two phases: search (fast) + detail pages (full data)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python scraper.py --location "Austin, TX"
   python scraper.py --location "Dallas, TX" --source zillow
+  python scraper.py --location "Dallas, TX" --source zillow --no-details
   python scraper.py --location "Dallas, TX" --source both
   python scraper.py --location "Dallas, TX" --location "Houston, TX" --source both
   python scraper.py --locations-file cities.txt --source both --min-score 40
@@ -809,6 +813,14 @@ Examples:
     p.add_argument(
         "--extra", action="store_true",
         help="Realtor.com only: fetch extra data per property (schools, tax history). Slower.",
+    )
+    p.add_argument(
+        "--no-details", action="store_true",
+        help=(
+            "Zillow only: skip Phase 2 detail-page enrichment. "
+            "Faster but leaves many fields empty (no heating/cooling/laundry/appliances/etc). "
+            "Use when you only need basic listing data quickly."
+        ),
     )
     p.add_argument(
         "--dry-run", action="store_true",

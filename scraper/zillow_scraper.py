@@ -1,25 +1,33 @@
 #!/usr/bin/env python3
 """
-Choice Properties — Zillow Scraper Module
-==========================================
-Scrapes for-rent listings from Zillow by parsing the __NEXT_DATA__ JSON
-embedded in Zillow's Next.js search result pages.
+Choice Properties -- Zillow Scraper Module (v4 -- Two-Phase)
+=============================================================
+Phase 1 (Search): Fetch Zillow for-rent search pages, extract listing IDs +
+         basic data from the __NEXT_DATA__ JSON on each search result page.
 
-How it works:
-  1. Fetch Zillow's rental search HTML page (e.g. /homes/for_rent/Dallas,-TX/)
-  2. Extract the <script id="__NEXT_DATA__"> JSON blob from the HTML
-  3. Navigate the nested JSON to pull the listing array
-  4. Map Zillow field names to the pipeline_properties schema
-  5. Batch-insert into Supabase (handled by scraper.py)
+Phase 2 (Detail): Visit each individual listing page concurrently and extract
+         the full gdpClientCache property object, which contains every field
+         that Zillow's own app uses -- amenities, appliances, utilities,
+         heating/cooling/laundry, actual security deposit, pet fee,
+         application fee, parking details, available date, virtual tour,
+         high-resolution full photo gallery, and much more.
 
 Bot-detection notes:
-  • Works best from residential IPs (home/office network).
-  • Datacenter IPs (cloud servers, Replit) may receive a 403 or CAPTCHA
-    page from Zillow's DataDome protection layer.
-  • If blocked, run the scraper locally from your machine.
-  • Setting HTTP_PROXY / HTTPS_PROXY to a residential proxy will also work.
+  * Requires a residential IP (home/office WiFi or mobile data).
+  * Datacenter IPs (Replit, AWS, GCP) will receive 403 from DataDome.
+  * Run from iSH on iPhone using mobile data or home WiFi.
+  * User-agents are rotated across requests to reduce fingerprint.
+  * Inter-page and inter-detail delays are randomised to mimic human browsing.
+  * Use --no-details flag to skip Phase 2 if speed matters more than completeness.
 
-This module is imported by scraper.py and is not meant to be run directly.
+This module is imported by scraper.py. Do NOT run it directly.
+
+iSH / Python 3.9 compatibility:
+  * ASCII quotes only in all string literals.
+  * No walrus operator (:=).
+  * No match/case statements.
+  * No dict-union operator (|).
+  * f-strings use ASCII quotes only.
 """
 
 import re
@@ -27,7 +35,9 @@ import json
 import time
 import uuid
 import random
+import threading
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     import requests as _req
@@ -37,50 +47,85 @@ except ImportError:
     raise ImportError("requests not installed. Run: pip install requests")
 
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-ZILLOW_BASE = "https://www.zillow.com"
-MAX_PAGES   = 20              # Zillow caps search results at 20 pages
-PAGE_DELAY  = (2.0, 4.5)     # random delay (seconds) between page requests
+# -- Constants -----------------------------------------------------------------
 
-# Realistic Chrome 124 browser headers — minimises bot-detection fingerprint
-_HEADERS = {
-    "User-Agent": (
+ZILLOW_BASE     = "https://www.zillow.com"
+MAX_PAGES       = 20              # Zillow caps search results at 20 pages
+PAGE_DELAY      = (2.5, 5.0)     # random delay (s) between search page fetches
+DETAIL_DELAY    = (1.2, 3.0)     # random delay (s) between detail page fetches
+DETAIL_WORKERS  = 5              # concurrent detail-page fetchers
+DETAIL_TIMEOUT  = 22             # seconds per detail request
+MAX_DETAIL_RETRY = 1             # retries per detail page (0 = no retry)
+ENRICH_SKIP_SCORE = 80           # skip detail fetch for records already >= this score
+
+# Rotate through realistic Chrome user-agent strings to reduce fingerprinting.
+# These cover Chrome 122-125 on Windows + macOS + Linux.
+_USER_AGENTS = [
+    (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
+        "Chrome/125.0.0.0 Safari/537.36"
     ),
-    "Accept":                   "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language":          "en-US,en;q=0.9",
-    "Accept-Encoding":          "gzip, deflate, br",
-    "Referer":                  "https://www.zillow.com/",
-    "sec-ch-ua":                '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-    "sec-ch-ua-mobile":         "?0",
-    "sec-ch-ua-platform":       '"Windows"',
-    "sec-fetch-dest":           "document",
-    "sec-fetch-mode":           "navigate",
-    "sec-fetch-site":           "same-origin",
-    "sec-fetch-user":           "?1",
-    "upgrade-insecure-requests":"1",
-    "DNT":                      "1",
-    "Cache-Control":            "max-age=0",
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.6367.202 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+    ),
+    (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.6261.128 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+]
+
+_BASE_HEADERS = {
+    "Accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language":           "en-US,en;q=0.9",
+    "Accept-Encoding":           "gzip, deflate, br",
+    "Referer":                   "https://www.zillow.com/",
+    "sec-ch-ua":                 '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "sec-ch-ua-mobile":          "?0",
+    "sec-ch-ua-platform":        '"Windows"',
+    "sec-fetch-dest":            "document",
+    "sec-fetch-mode":            "navigate",
+    "sec-fetch-site":            "same-origin",
+    "sec-fetch-user":            "?1",
+    "upgrade-insecure-requests": "1",
+    "DNT":                       "1",
+    "Cache-Control":             "max-age=0",
 }
 
-# Zillow homeType → pipeline property_type
+# Zillow homeType -> pipeline property_type
 _TYPE_MAP = {
-    "SINGLE_FAMILY":  "SINGLE_FAMILY",
-    "MULTI_FAMILY":   "MULTI_FAMILY",
-    "CONDO":          "CONDOS",
-    "CONDO_TOWNHOME": "CONDOS",
-    "TOWNHOUSE":      "TOWNHOMES",
-    "APARTMENT":      "APARTMENT",
-    "MANUFACTURED":   "MOBILE",
-    "MOBILE":         "MOBILE",
-    "LOT":            "LAND",
-    "LAND":           "LAND",
-    "FARM":           "FARM",
+    "SINGLE_FAMILY":   "SINGLE_FAMILY",
+    "MULTI_FAMILY":    "MULTI_FAMILY",
+    "CONDO":           "CONDOS",
+    "CONDO_TOWNHOME":  "CONDOS",
+    "TOWNHOUSE":       "TOWNHOMES",
+    "APARTMENT":       "APARTMENT",
+    "MANUFACTURED":    "MOBILE",
+    "MOBILE":          "MOBILE",
+    "LOT":             "LAND",
+    "LAND":            "LAND",
+    "FARM":            "FARM",
 }
 
-# Fields used for quality scoring (must match scraper.py scoring logic)
+# Quality scoring fields (mirrors scraper.py)
 _IMPORTANT = [
     "address", "city", "state", "zip", "lat", "lng",
     "bedrooms", "bathrooms", "square_footage", "monthly_rent",
@@ -97,46 +142,67 @@ _TRACKABLE_MISSING = [
 ]
 
 
-# ── HTTP session ──────────────────────────────────────────────────────────────
+# -- HTTP session --------------------------------------------------------------
 
 def _make_session():
+    """Create an HTTP session with a random UA and retry adapter."""
     s = _req.Session()
     adapter = HTTPAdapter(
-        max_retries=Retry(total=2, backoff_factor=1.0, status_forcelist=[500, 502, 503, 504]),
-        pool_connections=5,
-        pool_maxsize=10,
+        max_retries=Retry(
+            total=2,
+            backoff_factor=1.2,
+            status_forcelist=[500, 502, 503, 504],
+        ),
+        pool_connections=10,
+        pool_maxsize=20,
     )
     s.mount("https://", adapter)
     s.mount("http://",  adapter)
-    s.headers.update(_HEADERS)
+    ua = random.choice(_USER_AGENTS)
+    headers = dict(_BASE_HEADERS)
+    headers["User-Agent"] = ua
+    s.headers.update(headers)
     return s
 
 
-# ── URL helpers ───────────────────────────────────────────────────────────────
+def _rotate_ua(session):
+    """Swap the session's User-Agent to a new random value."""
+    session.headers["User-Agent"] = random.choice(_USER_AGENTS)
+
+
+# -- URL helpers ---------------------------------------------------------------
 
 def _location_to_slug(location):
     """
-    Convert a human location string to the Zillow URL slug format.
-      'Dallas, TX'       → 'Dallas,-TX'
-      'Los Angeles, CA'  → 'Los-Angeles,-CA'
-      '90210'            → '90210'
-      'Austin TX'        → 'Austin-TX'
+    Convert a human location string to Zillow URL slug format.
+      'Dallas, TX'       -> 'Dallas,-TX'
+      'Los Angeles, CA'  -> 'Los-Angeles,-CA'
+      '90210'            -> '90210'
     """
     s = location.strip()
-    s = s.replace(", ", ",-")    # "Dallas, TX" → "Dallas,-TX"
-    s = s.replace(",", ",-")     # handle no-space commas
-    s = s.replace(" ", "-")      # spaces → hyphens
-    s = re.sub(r"-{2,}", "-", s) # collapse double hyphens
+    s = s.replace(", ", ",-")
+    s = s.replace(",", ",-")
+    s = s.replace(" ", "-")
+    s = re.sub(r"-{2,}", "-", s)
     return s
 
 
 def _build_search_url(slug, page):
     if page <= 1:
-        return f"{ZILLOW_BASE}/homes/for_rent/{slug}/"
-    return f"{ZILLOW_BASE}/homes/for_rent/{slug}/{page}_p/"
+        return ZILLOW_BASE + "/homes/for_rent/" + slug + "/"
+    return ZILLOW_BASE + "/homes/for_rent/" + slug + "/" + str(page) + "_p/"
 
 
-# ── __NEXT_DATA__ extraction ──────────────────────────────────────────────────
+def _build_detail_url(detail_path):
+    """Turn a Zillow detailUrl (relative or absolute) into a full URL."""
+    if not detail_path:
+        return None
+    if detail_path.startswith("http"):
+        return detail_path
+    return ZILLOW_BASE + detail_path
+
+
+# -- __NEXT_DATA__ extraction --------------------------------------------------
 
 def _extract_next_data(html):
     """Pull the __NEXT_DATA__ JSON from a Zillow HTML page."""
@@ -148,22 +214,43 @@ def _extract_next_data(html):
         return None
     try:
         return json.loads(m.group(1))
-    except json.JSONDecodeError:
+    except (ValueError, TypeError):
         return None
+
+
+def _is_bot_page(html, status):
+    """Return True if the response looks like a bot-detection page."""
+    if status in (403, 429):
+        return True
+    if not html:
+        return True
+    lower = html[:3000].lower()
+    bot_signals = [
+        "datadome",
+        "please enable js",
+        "robot or human",
+        "are you a robot",
+        "captcha",
+        "access denied",
+        "blocked",
+    ]
+    for sig in bot_signals:
+        if sig in lower:
+            return True
+    return False
 
 
 def _get_listings_array(nd):
     """
-    Try multiple known paths inside __NEXT_DATA__ to locate the listing array.
-    Zillow periodically restructures the JSON but these paths cover all known variants.
+    Try multiple known paths inside search __NEXT_DATA__ to locate the listing array.
+    Zillow periodically restructures this JSON; these paths cover all known variants.
     Returns (list_of_listings, total_count).
     """
     total = 0
 
-    # Try to find total count first
     for total_path in [
-        ("props","pageProps","searchPageState","cat1","searchList","totalCount"),
-        ("props","pageProps","searchPageState","cat2","searchList","totalCount"),
+        ("props", "pageProps", "searchPageState", "cat1", "searchList", "totalCount"),
+        ("props", "pageProps", "searchPageState", "cat2", "searchList", "totalCount"),
     ]:
         try:
             v = nd
@@ -174,13 +261,12 @@ def _get_listings_array(nd):
         except (KeyError, TypeError, ValueError):
             pass
 
-    # Try listing arrays in order of likelihood
     list_paths = [
-        ("props","pageProps","searchPageState","cat1","searchResults","listResults"),
-        ("props","pageProps","searchPageState","cat1","searchResults","relaxedResults"),
-        ("props","pageProps","searchPageState","cat2","searchResults","mapResults"),
-        ("props","pageProps","componentProps","listResults"),
-        ("props","pageProps","searchResults","listResults"),
+        ("props", "pageProps", "searchPageState", "cat1", "searchResults", "listResults"),
+        ("props", "pageProps", "searchPageState", "cat1", "searchResults", "relaxedResults"),
+        ("props", "pageProps", "searchPageState", "cat2", "searchResults", "mapResults"),
+        ("props", "pageProps", "componentProps", "listResults"),
+        ("props", "pageProps", "searchResults", "listResults"),
     ]
     for path in list_paths:
         try:
@@ -195,7 +281,74 @@ def _get_listings_array(nd):
     return [], total
 
 
-# ── Field helpers ─────────────────────────────────────────────────────────────
+def _extract_detail_property(nd):
+    """
+    Parse the full property object from a detail page __NEXT_DATA__.
+    The data lives inside a JSON-encoded string called gdpClientCache.
+    Returns the property dict or None.
+    """
+    if not nd:
+        return None
+
+    # gdpClientCache can be at several paths depending on Zillow version
+    cache_str = None
+    cache_paths = [
+        ("props", "pageProps", "componentProps", "gdpClientCache"),
+        ("props", "pageProps", "initialData", "gdpClientCache"),
+        ("props", "pageProps", "gdpClientCache"),
+    ]
+    for path in cache_paths:
+        try:
+            node = nd
+            for k in path:
+                node = node[k]
+            if isinstance(node, str) and node:
+                cache_str = node
+                break
+            # Sometimes it is already a dict (newer Zillow builds)
+            if isinstance(node, dict) and node:
+                cache_str = json.dumps(node)
+                break
+        except (KeyError, TypeError):
+            continue
+
+    if not cache_str:
+        # Fallback: try direct componentProps
+        try:
+            cp = nd["props"]["pageProps"]["componentProps"]
+            if "homeDetails" in cp:
+                return cp["homeDetails"]
+        except (KeyError, TypeError):
+            pass
+        return None
+
+    try:
+        cache = json.loads(cache_str)
+    except (ValueError, TypeError):
+        return None
+
+    # Iterate over all keys in the cache -- the key name varies by Zillow build
+    for _, val in cache.items():
+        if not isinstance(val, dict):
+            continue
+        # Try: {property: {...}}
+        if "property" in val and isinstance(val["property"], dict):
+            return val["property"]
+        # Try: {data: {property: {...}}}
+        try:
+            p = val["data"]["property"]
+            if isinstance(p, dict):
+                return p
+        except (KeyError, TypeError):
+            pass
+        # Try: val itself looks like a property object
+        if "zpid" in val and "bedrooms" in val:
+            return val
+
+    return None
+
+
+# -- Field helpers -------------------------------------------------------------
 
 def _safe_int(v):
     try:
@@ -213,15 +366,15 @@ def _safe_float(v):
 
 def _parse_price(v):
     """
-    Handles both numeric and string price formats from Zillow.
-      '$2,200/mo'  → 2200
-      '$1,500+/mo' → 1500
-      2200.0       → 2200
+    Handles both numeric and string price formats.
+      '$2,200/mo'  -> 2200
+      '$1,500+/mo' -> 1500
+      2200.0       -> 2200
     """
     if v is None:
         return None
     if isinstance(v, (int, float)):
-        return int(v)
+        return int(v) if v > 0 else None
     digits = re.sub(r"[^\d]", "", str(v).split("+")[0].split("-")[0])
     return int(digits) if digits else None
 
@@ -231,7 +384,9 @@ def _jdumps(v):
         return "[]"
     if isinstance(v, str):
         return v
-    return json.dumps([str(x) for x in v if x])
+    if isinstance(v, list):
+        return json.dumps([str(x) for x in v if x is not None])
+    return "[]"
 
 
 def _now():
@@ -242,9 +397,66 @@ def _gen_id():
     return "PP-" + uuid.uuid4().hex[:8].upper()
 
 
-# ── Photo collector ───────────────────────────────────────────────────────────
+def _list_to_str(lst):
+    """Join a list of strings into a single readable string."""
+    if not lst or not isinstance(lst, list):
+        return None
+    parts = [str(x).strip() for x in lst if x]
+    return ", ".join(parts) if parts else None
 
-def _collect_photos(listing):
+
+def _parse_date(v):
+    """Try to extract a YYYY-MM-DD string from various Zillow date formats."""
+    if not v:
+        return None
+    s = str(v).strip()
+    # Already ISO: '2024-08-01'
+    m = re.match(r"(\d{4}-\d{2}-\d{2})", s)
+    if m:
+        return m.group(1)
+    # Epoch milliseconds
+    if re.match(r"^\d{13}$", s):
+        try:
+            return datetime.utcfromtimestamp(int(s) / 1000).strftime("%Y-%m-%d")
+        except (ValueError, OSError):
+            pass
+    # Epoch seconds
+    if re.match(r"^\d{10}$", s):
+        try:
+            return datetime.utcfromtimestamp(int(s)).strftime("%Y-%m-%d")
+        except (ValueError, OSError):
+            pass
+    # 'August 1, 2024' style
+    for fmt in ("%B %d, %Y", "%b %d, %Y", "%m/%d/%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return None
+
+
+def _coerce_bool(v):
+    """Return True/False/None from various Zillow yes/no/bool values."""
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return v
+    s = str(v).strip().lower()
+    if s in ("true", "yes", "1", "allowed", "ok"):
+        return True
+    if s in ("false", "no", "0", "not allowed", "none"):
+        return False
+    return None
+
+
+# -- Photo collection ----------------------------------------------------------
+
+def _collect_photos_search(listing):
+    """
+    Collect photo URLs from a search result listing dict.
+    Checks imgSrc, carouselPhotos, hdpData.homeInfo.photos.
+    Returns up to 40 deduplicated URLs.
+    """
     urls = []
     seen = set()
 
@@ -253,17 +465,14 @@ def _collect_photos(listing):
             urls.append(url)
             seen.add(url)
 
-    # Primary image
     _add(listing.get("imgSrc") or listing.get("img"))
 
-    # Carousel / gallery
     for p in (listing.get("carouselPhotos") or []):
         if isinstance(p, str):
             _add(p)
         elif isinstance(p, dict):
             _add(p.get("url") or p.get("src") or p.get("href"))
 
-    # hdpData photos (sometimes included)
     hi = (listing.get("hdpData") or {}).get("homeInfo") or {}
     for p in (hi.get("photos") or hi.get("images") or []):
         if isinstance(p, str):
@@ -274,7 +483,78 @@ def _collect_photos(listing):
     return urls[:40]
 
 
-# ── Quality scoring (mirrors scraper.py logic) ────────────────────────────────
+def _collect_photos_detail(prop):
+    """
+    Collect high-resolution photo URLs from a detail page property dict.
+    Prefers responsivePhotosOriginalRatio (best quality), then falls back
+    to responsivePhotos, then photos array.
+    Returns up to 40 deduplicated URLs.
+    """
+    urls = []
+    seen = set()
+
+    def _add(url):
+        if url and isinstance(url, str) and url.startswith("http") and url not in seen:
+            urls.append(url)
+            seen.add(url)
+
+    def _best_from_mixed(mixed):
+        """Pick the highest-width JPEG from a mixedSources object."""
+        if not isinstance(mixed, dict):
+            return None
+        for key in ("jpeg", "jpg", "webp"):
+            lst = mixed.get(key)
+            if lst and isinstance(lst, list):
+                best = None
+                best_w = 0
+                for item in lst:
+                    if isinstance(item, dict):
+                        w = item.get("width") or 0
+                        if w > best_w:
+                            best_w = w
+                            best = item.get("url")
+                if best:
+                    return best
+        return None
+
+    # Best source: responsivePhotosOriginalRatio (full-res, original aspect ratio)
+    for photo in (prop.get("responsivePhotosOriginalRatio") or []):
+        if isinstance(photo, dict):
+            url = _best_from_mixed(photo.get("mixedSources"))
+            if not url:
+                url = photo.get("url")
+            _add(url)
+
+    # Second: responsivePhotos
+    if len(urls) < 3:
+        for photo in (prop.get("responsivePhotos") or []):
+            if isinstance(photo, dict):
+                url = _best_from_mixed(photo.get("mixedSources"))
+                if not url:
+                    url = photo.get("url")
+                _add(url)
+
+    # Fallback: flat photos array
+    if len(urls) < 3:
+        for photo in (prop.get("photos") or []):
+            if isinstance(photo, str):
+                _add(photo)
+            elif isinstance(photo, dict):
+                _add(photo.get("url") or photo.get("src"))
+
+    # Last resort: hdpData
+    if len(urls) < 1:
+        hi = (prop.get("hdpData") or {}).get("homeInfo") or {}
+        for p in (hi.get("photos") or []):
+            if isinstance(p, dict):
+                _add(p.get("url"))
+            elif isinstance(p, str):
+                _add(p)
+
+    return urls[:40]
+
+
+# -- Quality scoring -----------------------------------------------------------
 
 def _quality_score(r):
     sc = 0
@@ -284,7 +564,10 @@ def _quality_score(r):
     for f in _BONUS:
         if r.get(f) not in (None, "", "[]"):
             sc += 2
-    n   = len(json.loads(r.get("original_image_urls") or "[]"))
+    try:
+        n = len(json.loads(r.get("original_image_urls") or "[]"))
+    except (ValueError, TypeError):
+        n = 0
     sc += 6 if n >= 5 else (3 if n >= 1 else 0)
     return min(sc, 100)
 
@@ -293,10 +576,10 @@ def _missing_fields(r):
     return [f for f in _TRACKABLE_MISSING if r.get(f) in (None, "", "[]")]
 
 
-# ── Listing mapper ────────────────────────────────────────────────────────────
+# -- Listing mapper (Phase 1 -- search result) ---------------------------------
 
 def _map_listing(raw):
-    """Map one raw Zillow listing dict → pipeline_properties record."""
+    """Map one raw Zillow search-result listing dict -> pipeline_properties record."""
     hi = {}
     try:
         hi = (raw.get("hdpData") or {}).get("homeInfo") or {}
@@ -305,75 +588,57 @@ def _map_listing(raw):
 
     zpid = str(raw.get("zpid") or hi.get("zpid") or "")
 
-    # ── Address ───────────────────────────────────────────────────────────────
-    street  = (raw.get("addressStreet")  or hi.get("streetAddress") or
-               raw.get("address"))
-    city    = (raw.get("addressCity")    or hi.get("city"))
-    state   = (raw.get("addressState")   or hi.get("state"))
-    zipcode = (raw.get("addressZipcode") or hi.get("zipcode"))
+    street  = raw.get("addressStreet")  or hi.get("streetAddress") or raw.get("address")
+    city    = raw.get("addressCity")    or hi.get("city")
+    state   = raw.get("addressState")   or hi.get("state")
+    zipcode = raw.get("addressZipcode") or hi.get("zipcode")
 
-    # ── Coordinates ───────────────────────────────────────────────────────────
     ll  = raw.get("latLong") or {}
     lat = _safe_float(ll.get("latitude")  or hi.get("latitude"))
     lng = _safe_float(ll.get("longitude") or hi.get("longitude"))
 
-    # ── Rent ──────────────────────────────────────────────────────────────────
     rent = _parse_price(
         raw.get("unformattedPrice") or
-        hi.get("price")             or
-        hi.get("rentZestimate")     or
+        hi.get("price") or
+        hi.get("rentZestimate") or
         raw.get("price")
     )
 
-    # ── Beds / baths ──────────────────────────────────────────────────────────
-    beds       = _safe_int(raw.get("beds")  or hi.get("bedrooms"))
-    baths_raw  = _safe_float(raw.get("baths") or hi.get("bathrooms"))
-    bath_f     = _safe_int(baths_raw) if baths_raw is not None else None
-    bath_h     = 1 if (baths_raw is not None and baths_raw != bath_f) else None
-    bath_total = baths_raw  # keep the 0.5 precision Zillow provides
+    beds      = _safe_int(raw.get("beds")  or hi.get("bedrooms"))
+    baths_raw = _safe_float(raw.get("baths") or hi.get("bathrooms"))
+    bath_f    = _safe_int(baths_raw) if baths_raw is not None else None
+    bath_h    = 1 if (baths_raw is not None and baths_raw != bath_f) else None
+    bath_total = baths_raw
 
-    # ── Property type ─────────────────────────────────────────────────────────
     raw_type  = (raw.get("homeType") or hi.get("homeType") or "").upper()
     prop_type = _TYPE_MAP.get(raw_type) or (raw_type or None)
 
-    # ── Auto-title ────────────────────────────────────────────────────────────
-    bed_pfx  = f"{beds}BR " if beds else ""
+    bed_pfx  = (str(beds) + "BR ") if beds else ""
     type_lbl = (prop_type or "Rental").replace("_", " ").title()
-    title    = f"{bed_pfx}{type_lbl} in {city}" if city else (street or "Zillow Rental")
+    title    = (bed_pfx + type_lbl + " in " + city) if city else (street or "Zillow Rental")
 
-    # ── Source URL ────────────────────────────────────────────────────────────
     detail = raw.get("detailUrl") or ""
-    source_url = (f"{ZILLOW_BASE}{detail}" if detail.startswith("/") else detail) or None
+    source_url = _build_detail_url(detail) if detail else None
 
-    # ── Photos ────────────────────────────────────────────────────────────────
-    photos = _collect_photos(raw)
+    photos = _collect_photos_search(raw)
 
-    # ── Pets ──────────────────────────────────────────────────────────────────
     pets_allowed = hi.get("isPetFriendly")
     if pets_allowed is None:
         tags = raw.get("tags") or []
         if any("pet" in str(t).lower() for t in tags):
             pets_allowed = True
 
-    # ── Parking ───────────────────────────────────────────────────────────────
     parking_raw = hi.get("parkingType") or raw.get("parkingType")
     parking     = str(parking_raw).replace("_", " ").title() if parking_raw else None
 
-    # ── Amenities from tags ───────────────────────────────────────────────────
     tags      = raw.get("tags") or []
     amenities = _jdumps(tags)
 
-    # ── Description ───────────────────────────────────────────────────────────
     desc = hi.get("description") or raw.get("description")
-
-    # ── Neighborhood ─────────────────────────────────────────────────────────
     hood = raw.get("neighborhood") or hi.get("neighborhoodName") or hi.get("neighborhood")
-
-    # ── Year built / HOA ──────────────────────────────────────────────────────
     yr_built = _safe_int(hi.get("yearBuilt"))
     hoa      = _safe_int(hi.get("hoaFee"))
 
-    # ── Agent / broker ────────────────────────────────────────────────────────
     agent  = raw.get("brokerName") or hi.get("agentName")
     broker = raw.get("brokerName") or hi.get("brokerName")
 
@@ -384,19 +649,20 @@ def _map_listing(raw):
         "statusType": raw.get("statusType"),
         "pgapt":      raw.get("pgapt"),
         "_source":    "zillow",
+        "_phase":     "search",
     }
 
     now = _now()
 
     record = {
-        # ── Identity ──────────────────────────────────────────────────────────
+        # -- Identity ----------------------------------------------------------
         "id":                    _gen_id(),
         "source":                "zillow",
         "source_url":            source_url,
         "source_listing_id":     zpid,
         "status":                "scraped",
 
-        # ── Address ───────────────────────────────────────────────────────────
+        # -- Address -----------------------------------------------------------
         "title":                 title,
         "address":               street,
         "unit_number":           None,
@@ -409,7 +675,7 @@ def _map_listing(raw):
         "lng":                   lng,
         "location_context":      None,
 
-        # ── Property details ──────────────────────────────────────────────────
+        # -- Property details --------------------------------------------------
         "property_type":         prop_type,
         "bedrooms":              beds,
         "bathrooms":             bath_f,
@@ -425,9 +691,9 @@ def _map_listing(raw):
         "has_central_air":       False,
         "virtual_tour_url":      None,
 
-        # ── Financials ────────────────────────────────────────────────────────
+        # -- Financials --------------------------------------------------------
         "monthly_rent":          rent,
-        "security_deposit":      rent,
+        "security_deposit":      None,      # filled by detail phase
         "last_months_rent":      None,
         "application_fee":       None,
         "pet_deposit":           None,
@@ -437,21 +703,21 @@ def _map_listing(raw):
         "hoa_fee":               hoa,
         "tax_value":             None,
 
-        # ── Listing details ───────────────────────────────────────────────────
+        # -- Listing details ---------------------------------------------------
         "description":           desc,
         "showing_instructions":  None,
         "available_date":        None,
         "minimum_lease_months":  None,
         "lease_terms":           "[]",
 
-        # ── Pets & policies ───────────────────────────────────────────────────
+        # -- Pets & policies ---------------------------------------------------
         "pets_allowed":          pets_allowed,
         "pet_types_allowed":     "[]",
         "pet_weight_limit":      None,
         "pet_details":           None,
         "smoking_allowed":       None,
 
-        # ── Amenities & features ──────────────────────────────────────────────
+        # -- Amenities & features ----------------------------------------------
         "parking":               parking,
         "amenities":             amenities,
         "appliances":            "[]",
@@ -461,17 +727,17 @@ def _map_listing(raw):
         "cooling_type":          None,
         "laundry_type":          None,
 
-        # ── Photos ────────────────────────────────────────────────────────────
+        # -- Photos ------------------------------------------------------------
         "original_image_urls":   _jdumps(photos),
         "local_image_paths":     "[]",
 
-        # ── Agent / broker ────────────────────────────────────────────────────
+        # -- Agent / broker ----------------------------------------------------
         "agent_name":            agent,
         "broker_name":           broker,
         "agent_image_url":       None,
         "poster_landlord_id":    None,
 
-        # ── Pipeline metadata ─────────────────────────────────────────────────
+        # -- Pipeline metadata -------------------------------------------------
         "original_data":         json.dumps(original_data, default=str),
         "edited_fields":         "[]",
         "inferred_features":     "[]",
@@ -487,10 +753,268 @@ def _map_listing(raw):
     return record
 
 
-# ── Filters ───────────────────────────────────────────────────────────────────
+# -- Detail enrichment (Phase 2) -----------------------------------------------
+
+def _enrich_from_detail(record, prop):
+    """
+    Overlay a full detail-page property dict onto an existing search-phase record.
+    Only overwrites fields that are currently None/empty with non-None detail values.
+    Always overwrites photos and description (detail is always richer).
+    Returns the enriched record (mutates in place).
+    """
+    if not prop or not isinstance(prop, dict):
+        return record
+
+    rf = prop.get("resoFacts") or {}
+
+    # -- Address (fill gaps) ---------------------------------------------------
+    addr = prop.get("address") or {}
+    if not record.get("address"):
+        record["address"] = addr.get("streetAddress") or addr.get("street")
+    if not record.get("city"):
+        record["city"] = addr.get("city")
+    if not record.get("state"):
+        record["state"] = addr.get("state")
+    if not record.get("zip"):
+        record["zip"] = addr.get("zipcode")
+    if not record.get("county"):
+        record["county"] = prop.get("county") or addr.get("county")
+
+    # -- Coordinates -----------------------------------------------------------
+    if record.get("lat") is None:
+        record["lat"] = _safe_float(prop.get("latitude"))
+    if record.get("lng") is None:
+        record["lng"] = _safe_float(prop.get("longitude"))
+
+    # -- Property specs --------------------------------------------------------
+    if not record.get("square_footage"):
+        record["square_footage"] = _safe_int(prop.get("livingArea") or rf.get("livingArea"))
+    if not record.get("lot_size_sqft"):
+        record["lot_size_sqft"] = _safe_int(prop.get("lotSizeSquareFeet") or rf.get("lotSizeSquareFeet"))
+    if not record.get("year_built"):
+        record["year_built"] = _safe_int(prop.get("yearBuilt") or rf.get("yearBuilt"))
+    if not record.get("bedrooms"):
+        record["bedrooms"] = _safe_int(prop.get("bedrooms") or rf.get("bedrooms"))
+    if not record.get("bathrooms"):
+        baths = _safe_float(prop.get("bathrooms") or rf.get("bathroomsFull"))
+        record["bathrooms"] = _safe_int(baths)
+    if not record.get("half_bathrooms"):
+        record["half_bathrooms"] = _safe_int(prop.get("bathroomsHalf") or rf.get("bathroomsHalf"))
+    if not record.get("total_bathrooms"):
+        record["total_bathrooms"] = _safe_float(prop.get("bathrooms"))
+
+    # Floors / stories
+    if not record.get("floors"):
+        stories = rf.get("stories") or rf.get("levels")
+        if stories:
+            # levels can be "Two", "Three" etc
+            num = _safe_int(stories)
+            if num is None:
+                levels_map = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+                num = levels_map.get(str(stories).strip().lower())
+            record["floors"] = num
+
+    # Garage
+    if not record.get("garage_spaces"):
+        record["garage_spaces"] = _safe_int(rf.get("garageSpaces"))
+
+    # Basement
+    basement_val = rf.get("basement") or rf.get("basementYN")
+    if basement_val not in (None, "", "None", "No basement", "none"):
+        record["has_basement"] = True
+
+    # Central air
+    has_cooling = _coerce_bool(rf.get("hasCooling"))
+    cooling_list = rf.get("cooling") or []
+    if has_cooling or any("central" in str(c).lower() for c in cooling_list):
+        record["has_central_air"] = True
+
+    # Virtual tour
+    if not record.get("virtual_tour_url"):
+        record["virtual_tour_url"] = prop.get("virtualTourUrl") or prop.get("threeDimensionalTourUrl")
+
+    # -- Financials ------------------------------------------------------------
+    # Monthly rent (prefer detail over search -- search sometimes shows estimate)
+    detail_rent = _parse_price(prop.get("price") or prop.get("rentZestimate"))
+    if detail_rent and not record.get("monthly_rent"):
+        record["monthly_rent"] = detail_rent
+
+    # Actual security deposit (NOT just copying rent)
+    deposit = _safe_int(rf.get("securityDeposit") or prop.get("securityDeposit"))
+    if deposit and deposit > 0:
+        record["security_deposit"] = deposit
+    elif not record.get("security_deposit") and record.get("monthly_rent"):
+        # Fall back to rent only if no real deposit found
+        record["security_deposit"] = record["monthly_rent"]
+
+    # Fees
+    if not record.get("application_fee"):
+        record["application_fee"] = _safe_int(rf.get("applicationFee") or prop.get("applicationFee"))
+    if not record.get("pet_deposit"):
+        record["pet_deposit"] = _safe_int(rf.get("petFee") or prop.get("petFee"))
+    if not record.get("parking_fee"):
+        record["parking_fee"] = _safe_int(rf.get("parkingFee") or prop.get("parkingFee"))
+    if not record.get("hoa_fee"):
+        record["hoa_fee"] = _safe_int(rf.get("monthlyHoaFee") or prop.get("monthlyHoaFee") or rf.get("hoaFee"))
+    if not record.get("tax_value"):
+        record["tax_value"] = _safe_int(prop.get("taxAnnualAmount") or rf.get("taxAnnualAmount"))
+
+    # -- Listing details -------------------------------------------------------
+    # Description -- always prefer detail page (much longer and complete)
+    detail_desc = prop.get("description")
+    if detail_desc and len(str(detail_desc)) > len(str(record.get("description") or "")):
+        record["description"] = detail_desc
+
+    # Available date
+    if not record.get("available_date"):
+        date_raw = (
+            rf.get("dateAvailable") or rf.get("availableFrom") or
+            prop.get("dateAvailable") or prop.get("availableFrom") or
+            prop.get("datePostedString")
+        )
+        record["available_date"] = _parse_date(date_raw)
+
+    # Lease term
+    lease_raw = rf.get("leaseTerm") or rf.get("leaseTerms") or prop.get("leaseTerm")
+    if lease_raw and record.get("lease_terms") in (None, "[]"):
+        if isinstance(lease_raw, list):
+            record["lease_terms"] = _jdumps(lease_raw)
+        else:
+            record["lease_terms"] = _jdumps([str(lease_raw)])
+        # Try to parse months from lease term
+        if not record.get("minimum_lease_months"):
+            m = re.search(r"(\d+)\s*month", str(lease_raw).lower())
+            if m:
+                record["minimum_lease_months"] = int(m.group(1))
+
+    # -- Pets & policies -------------------------------------------------------
+    pets = _coerce_bool(rf.get("petsAllowed") or prop.get("petsAllowed") or rf.get("isPetFriendly"))
+    if pets is not None:
+        record["pets_allowed"] = pets
+
+    smoking = _coerce_bool(rf.get("smokingAllowed") or prop.get("smokingAllowed"))
+    if smoking is not None:
+        record["smoking_allowed"] = smoking
+
+    # Pet types
+    if record.get("pet_types_allowed") in (None, "[]"):
+        pet_types = []
+        if _coerce_bool(rf.get("catsAllowed")):
+            pet_types.append("cats")
+        if _coerce_bool(rf.get("dogsAllowed")):
+            pet_types.append("dogs")
+        if pet_types:
+            record["pet_types_allowed"] = _jdumps(pet_types)
+
+    # -- Amenities & features --------------------------------------------------
+    # Heating
+    heating_list = rf.get("heating") or []
+    if heating_list:
+        record["heating_type"] = _list_to_str(heating_list)
+
+    # Cooling
+    cooling_list = rf.get("cooling") or []
+    if cooling_list:
+        record["cooling_type"] = _list_to_str(cooling_list)
+
+    # Laundry
+    laundry_list = rf.get("laundryFeatures") or rf.get("laundry") or []
+    if laundry_list:
+        record["laundry_type"] = _list_to_str(laundry_list)
+
+    # Appliances
+    appliances_list = rf.get("appliances") or []
+    if appliances_list and record.get("appliances") in (None, "[]"):
+        record["appliances"] = _jdumps(appliances_list)
+
+    # Utilities included
+    utils_list = rf.get("utilities") or rf.get("utilitiesIncluded") or []
+    if utils_list and record.get("utilities_included") in (None, "[]"):
+        record["utilities_included"] = _jdumps(utils_list)
+
+    # Flooring
+    floor_list = rf.get("flooring") or []
+    if floor_list and record.get("flooring") in (None, "[]"):
+        record["flooring"] = _jdumps(floor_list)
+
+    # Parking -- richer detail from resoFacts
+    parking_list = rf.get("parkingFeatures") or []
+    if parking_list:
+        record["parking"] = _list_to_str(parking_list)
+
+    # Amenities -- combine search tags + community features + at-a-glance facts
+    community = prop.get("communityFeatures") or []
+    existing_tags = []
+    try:
+        existing_tags = json.loads(record.get("amenities") or "[]")
+    except (ValueError, TypeError):
+        pass
+    all_amenities = existing_tags + community
+    # atAGlanceFacts may have extra details
+    for fact in (rf.get("atAGlanceFacts") or []):
+        if isinstance(fact, dict):
+            val = fact.get("factValue") or fact.get("value")
+            lbl = fact.get("factLabel") or fact.get("label")
+            if val and val not in ("None", "0", "false"):
+                all_amenities.append((lbl + ": " + val) if lbl else str(val))
+    if all_amenities:
+        record["amenities"] = _jdumps(list(dict.fromkeys(all_amenities)))
+
+    # -- Neighborhood ----------------------------------------------------------
+    if not record.get("neighborhood"):
+        hood = (
+            prop.get("neighborhoodRegion", {}).get("name") or
+            prop.get("neighborhoodName") or
+            prop.get("neighborhood") or
+            rf.get("subdivision")
+        )
+        record["neighborhood"] = hood
+
+    # -- Property type ---------------------------------------------------------
+    if not record.get("property_type"):
+        raw_type = (prop.get("homeType") or rf.get("homeType") or "").upper()
+        record["property_type"] = _TYPE_MAP.get(raw_type) or raw_type or None
+
+    # -- Auto-title (rebuild if we now have better data) -----------------------
+    if record.get("bedrooms") and record.get("city") and record.get("property_type"):
+        bed_pfx  = str(record["bedrooms"]) + "BR "
+        type_lbl = record["property_type"].replace("_", " ").title()
+        record["title"] = bed_pfx + type_lbl + " in " + record["city"]
+
+    # -- Photos (always replace -- detail is far richer) -----------------------
+    detail_photos = _collect_photos_detail(prop)
+    if detail_photos:
+        record["original_image_urls"] = _jdumps(detail_photos)
+    # If detail had no photos, keep search photos
+
+    # -- Agent / broker --------------------------------------------------------
+    attr = prop.get("attributionInfo") or {}
+    if not record.get("agent_name"):
+        record["agent_name"] = attr.get("agentName") or attr.get("providerName")
+    if not record.get("broker_name"):
+        record["broker_name"] = attr.get("brokerName") or attr.get("officeName")
+
+    # -- Update original_data to mark phase 2 complete ------------------------
+    try:
+        od = json.loads(record.get("original_data") or "{}")
+    except (ValueError, TypeError):
+        od = {}
+    od["_phase"] = "detail"
+    od["zpid"]   = record.get("source_listing_id") or od.get("zpid")
+    record["original_data"] = json.dumps(od, default=str)
+
+    # -- Recompute quality score & missing fields ------------------------------
+    record["data_quality_score"] = _quality_score(record)
+    record["missing_fields"]     = _jdumps(_missing_fields(record))
+    record["updated_at"]         = _now()
+
+    return record
+
+
+# -- Filters -------------------------------------------------------------------
 
 def _passes_filters(raw, beds_min, beds_max, price_min, price_max):
-    """Return True if a raw listing passes the user's CLI filters."""
+    """Return True if a raw search listing passes the user's CLI filters."""
     hi = {}
     try:
         hi = (raw.get("hdpData") or {}).get("homeInfo") or {}
@@ -503,13 +1027,17 @@ def _passes_filters(raw, beds_min, beds_max, price_min, price_max):
         hi.get("rentZestimate")     or raw.get("price")
     )
 
-    if beds_min  is not None and (beds  is None or float(beds)  < beds_min):  return False
-    if beds_max  is not None and (beds  is not None and float(beds) > beds_max):  return False
-    if price_min is not None and (price is None or price < price_min):         return False
-    if price_max is not None and (price is not None and price > price_max):    return False
+    if beds_min is not None and (beds is None or float(beds) < beds_min):
+        return False
+    if beds_max is not None and (beds is not None and float(beds) > beds_max):
+        return False
+    if price_min is not None and (price is None or price < price_min):
+        return False
+    if price_max is not None and (price is not None and price > price_max):
+        return False
 
     # Skip non-rental items that sometimes bleed into results
-    pgapt = raw.get("pgapt") or ""
+    pgapt  = raw.get("pgapt") or ""
     status = raw.get("statusType") or ""
     if pgapt and pgapt not in ("ForRent", ""):
         return False
@@ -519,32 +1047,171 @@ def _passes_filters(raw, beds_min, beds_max, price_min, price_max):
     return True
 
 
-# ── Public scrape function ────────────────────────────────────────────────────
+# -- Phase 2: detail page fetcher (thread-safe) --------------------------------
+
+_detail_lock = threading.Lock()
+_detail_ua_idx = [0]
+
+
+def _next_ua():
+    """Thread-safe round-robin UA picker."""
+    with _detail_lock:
+        idx = _detail_ua_idx[0] % len(_USER_AGENTS)
+        _detail_ua_idx[0] += 1
+        return _USER_AGENTS[idx]
+
+
+def _fetch_detail_property(session, url, zpid, verbose=False):
+    """
+    Fetch a single Zillow detail page and return the property dict, or None.
+    Uses the shared session (cookies carry over from search phase).
+    Applies a random delay before the request.
+    """
+    if not url:
+        return None
+
+    time.sleep(random.uniform(*DETAIL_DELAY))
+
+    # Rotate UA per request to reduce fingerprint
+    hdrs = {"User-Agent": _next_ua(), "Referer": "https://www.zillow.com/homes/for_rent/"}
+
+    for attempt in range(MAX_DETAIL_RETRY + 1):
+        try:
+            resp = session.get(url, headers=hdrs, timeout=DETAIL_TIMEOUT, allow_redirects=True)
+        except Exception as e:
+            if verbose:
+                print("     [detail] error fetching zpid=" + zpid + " : " + str(e)[:80])
+            return None
+
+        if _is_bot_page(resp.text if resp.status_code == 200 else "", resp.status_code):
+            if verbose:
+                print("     [detail] bot-detected (status=" + str(resp.status_code) + ") zpid=" + zpid)
+            if attempt < MAX_DETAIL_RETRY:
+                time.sleep(random.uniform(3.0, 6.0))
+                continue
+            return None
+
+        if resp.status_code != 200:
+            if verbose:
+                print("     [detail] HTTP " + str(resp.status_code) + " for zpid=" + zpid)
+            return None
+
+        nd = _extract_next_data(resp.text)
+        prop = _extract_detail_property(nd)
+        if prop:
+            return prop
+
+        if attempt < MAX_DETAIL_RETRY:
+            time.sleep(random.uniform(2.0, 4.0))
+
+    return None
+
+
+def _enrich_records_with_details(session, records, verbose=True):
+    """
+    Phase 2: fetch detail pages for all records that have a source_url and
+    would benefit from enrichment (score < ENRICH_SKIP_SCORE).
+    Returns the enriched records list.
+    """
+    to_enrich = []
+    already_good = []
+
+    for rec in records:
+        url = rec.get("source_url")
+        score = rec.get("data_quality_score") or 0
+        if url and score < ENRICH_SKIP_SCORE:
+            to_enrich.append(rec)
+        else:
+            already_good.append(rec)
+
+    if not to_enrich:
+        if verbose:
+            print("  ✅  All records already at quality score >= " + str(ENRICH_SKIP_SCORE) + ", skipping detail fetch.")
+        return records
+
+    if verbose:
+        print(
+            "\n  🔍  Phase 2 — Fetching detail pages for "
+            + str(len(to_enrich)) + " listing(s) ["
+            + str(DETAIL_WORKERS) + " workers] …"
+        )
+        if already_good:
+            print("     Skipping " + str(len(already_good)) + " already high-quality records.")
+
+    enriched = []
+    failed   = 0
+
+    def _worker(rec):
+        url  = rec.get("source_url")
+        zpid = rec.get("source_listing_id") or "?"
+        prop = _fetch_detail_property(session, url, zpid, verbose=False)
+        if prop:
+            return _enrich_from_detail(rec, prop)
+        return rec  # return original if detail fetch failed
+
+    workers = min(DETAIL_WORKERS, len(to_enrich))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(_worker, rec): rec for rec in to_enrich}
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            try:
+                result = fut.result()
+                enriched.append(result)
+            except Exception:
+                enriched.append(futures[fut])
+                failed += 1
+            if verbose and done % 5 == 0:
+                print("     [detail] " + str(done) + "/" + str(len(to_enrich)) + " done …")
+
+    if verbose:
+        scores = [r.get("data_quality_score", 0) for r in enriched]
+        avg_after = round(sum(scores) / len(scores), 1) if scores else 0
+        print(
+            "  ✅  Detail phase complete. "
+            + str(len(enriched) - failed) + " enriched, "
+            + str(failed) + " failed. "
+            + "Avg score after: " + str(avg_after)
+        )
+
+    return already_good + enriched
+
+
+# -- Public scrape function ----------------------------------------------------
 
 def scrape_and_map(
     location,
-    limit     = 200,
-    beds_min  = None,
-    beds_max  = None,
-    price_min = None,
-    price_max = None,
-    min_score = 0,
-    verbose   = True,
+    limit         = 200,
+    beds_min      = None,
+    beds_max      = None,
+    price_min     = None,
+    price_max     = None,
+    min_score     = 0,
+    fetch_details = True,
+    verbose       = True,
 ):
     """
     Scrape Zillow for-rent listings for one location and return a list of
     pipeline_properties-compatible dicts (quality scored, filters applied).
 
+    Phase 1: Crawl search result pages to collect listings (always runs).
+    Phase 2: Fetch each listing's detail page to extract full property data
+             including amenities, appliances, utilities, heating/cooling/laundry,
+             actual security deposit, available date, and high-res photos.
+             Controlled by fetch_details parameter.
+
     Args:
-        location  : human-readable location string ('Dallas, TX', '90210', etc.)
-        limit     : max number of records to return
-        beds_min/max, price_min/max : filter applied client-side
-        min_score : skip records with data_quality_score below this value
-        verbose   : print progress lines
+        location      : human-readable location string ('Dallas, TX', etc.)
+        limit         : max number of records to return
+        beds_min/max  : bedroom filter (client-side)
+        price_min/max : rent filter (client-side)
+        min_score     : drop records below this quality score (after enrichment)
+        fetch_details : if True, run Phase 2 detail enrichment (recommended)
+        verbose       : print progress to stdout
 
     Returns:
         (records: list[dict], blocked: bool)
-        blocked=True means Zillow returned bot-detection on page 1.
+        blocked=True means Zillow returned bot-detection on the first search page.
     """
     session  = _make_session()
     slug     = _location_to_slug(location)
@@ -552,40 +1219,45 @@ def scrape_and_map(
     blocked  = False
 
     if verbose:
-        print(f"  🔍  Zillow: fetching rentals for: {location}")
+        print("  [Zillow] Phase 1 -- search pages for: " + location)
 
+    # -- Phase 1: Search pages -------------------------------------------------
     for page in range(1, MAX_PAGES + 1):
         if len(raw_kept) >= limit:
             break
 
         url = _build_search_url(slug, page)
         if verbose:
-            print(f"     → page {page}: {url}")
+            print("     -> page " + str(page) + ": " + url)
 
         try:
             resp = session.get(url, timeout=25, allow_redirects=True)
         except Exception as e:
             if verbose:
-                print(f"  ⚠  Request error (page {page}): {e}")
+                print("  [warning] Request error (page " + str(page) + "): " + str(e))
             break
 
-        # ── Bot-detection signals ─────────────────────────────────────────────
-        if resp.status_code == 403:
+        if _is_bot_page(resp.text if resp.status_code == 200 else "", resp.status_code):
             if verbose:
-                print("  ⛔  Zillow returned 403 — bot detection triggered.")
-                print("     Run from a residential IP or set HTTP_PROXY to a residential proxy.")
-            if page == 1:
-                blocked = True
-            break
-
-        if resp.status_code == 429:
-            if verbose:
-                print("  ⛔  Zillow rate-limited (429). Waiting 30s before retry…")
-            time.sleep(30)
-            try:
-                resp = session.get(url, timeout=25, allow_redirects=True)
-            except Exception:
-                break
+                if resp.status_code == 403:
+                    print("  [blocked] Zillow returned 403 -- DataDome bot detection triggered.")
+                elif resp.status_code == 429:
+                    print("  [rate-limited] 429 -- waiting 45s and retrying...")
+                    time.sleep(45)
+                    try:
+                        resp = session.get(url, timeout=25, allow_redirects=True)
+                        if resp.status_code == 200 and not _is_bot_page(resp.text, resp.status_code):
+                            pass  # retry succeeded, continue below
+                        else:
+                            if page == 1:
+                                blocked = True
+                            break
+                    except Exception:
+                        if page == 1:
+                            blocked = True
+                        break
+                else:
+                    print("  [blocked] Bot-detection page detected (status=" + str(resp.status_code) + ").")
             if resp.status_code != 200:
                 if page == 1:
                     blocked = True
@@ -593,16 +1265,15 @@ def scrape_and_map(
 
         if resp.status_code != 200:
             if verbose:
-                print(f"  ⚠  HTTP {resp.status_code} on page {page}")
+                print("  [warning] HTTP " + str(resp.status_code) + " on page " + str(page))
             break
 
-        # ── Parse __NEXT_DATA__ ───────────────────────────────────────────────
         nd = _extract_next_data(resp.text)
         if not nd:
             if verbose:
                 print(
-                    f"  ⚠  __NEXT_DATA__ not found on page {page}.\n"
-                    f"     Zillow may have served a CAPTCHA or changed their page structure."
+                    "  [warning] __NEXT_DATA__ not found on page " + str(page) + ".\n"
+                    "     Zillow may have served a CAPTCHA or changed page structure."
                 )
             if page == 1:
                 blocked = True
@@ -613,16 +1284,15 @@ def scrape_and_map(
         if not listings:
             if verbose and page == 1:
                 print(
-                    "  ⚠  No listings in __NEXT_DATA__ on page 1.\n"
-                    "     Location may be invalid, or Zillow returned a non-search page."
+                    "  [warning] No listings in __NEXT_DATA__ on page 1.\n"
+                    "     Location may be invalid, or results page structure changed."
                 )
             break
 
         if verbose and page == 1:
-            desc = f"~{total_count} total" if total_count else "unknown total"
-            print(f"     Zillow reports {desc} for-rent listings")
+            desc = ("~" + str(total_count) + " total") if total_count else "unknown total"
+            print("     Zillow reports " + desc + " for-rent listings")
 
-        # ── Apply filters & collect ───────────────────────────────────────────
         page_kept = 0
         for raw in listings:
             if len(raw_kept) >= limit:
@@ -632,27 +1302,26 @@ def scrape_and_map(
                 page_kept += 1
 
         if verbose:
-            print(f"     Kept {page_kept} from page {page} (running total: {len(raw_kept)})")
+            print(
+                "     Kept " + str(page_kept) + " from page " + str(page)
+                + " (running total: " + str(len(raw_kept)) + ")"
+            )
 
-        # Stop early if we've collected everything Zillow has
         if total_count and len(raw_kept) >= min(total_count, limit):
             break
-        # Sparse page → likely the last one
         if len(listings) < 10:
             break
 
-        # Polite inter-page delay
         if page < MAX_PAGES:
+            # Rotate UA between search pages
+            _rotate_ua(session)
             time.sleep(random.uniform(*PAGE_DELAY))
 
-    # ── Map raw → pipeline records ────────────────────────────────────────────
+    # -- Map Phase 1 raw -> pipeline records -----------------------------------
     records = []
     for raw in raw_kept:
         try:
             rec = _map_listing(raw)
-            if rec["data_quality_score"] < min_score:
-                continue
-            # Drop listings with neither address nor coordinates
             has_addr   = bool(rec.get("address") and rec.get("city"))
             has_coords = rec.get("lat") is not None and rec.get("lng") is not None
             if not has_addr and not has_coords:
@@ -662,6 +1331,31 @@ def scrape_and_map(
             continue
 
     if verbose:
-        print(f"  ✅  Zillow: {len(records)} pipeline-ready records for: {location}")
+        scores = [r.get("data_quality_score", 0) for r in records]
+        avg    = round(sum(scores) / len(scores), 1) if scores else 0
+        print(
+            "  [Phase 1 done] " + str(len(records)) + " records mapped. "
+            "Avg quality score: " + str(avg)
+        )
+
+    # -- Phase 2: Detail enrichment --------------------------------------------
+    if fetch_details and records:
+        records = _enrich_records_with_details(session, records, verbose=verbose)
+
+    # -- Final quality filter --------------------------------------------------
+    if min_score > 0:
+        before = len(records)
+        records = [r for r in records if (r.get("data_quality_score") or 0) >= min_score]
+        dropped = before - len(records)
+        if verbose and dropped:
+            print("     Dropped " + str(dropped) + " record(s) below min-score " + str(min_score))
+
+    if verbose:
+        scores = [r.get("data_quality_score", 0) for r in records]
+        avg    = round(sum(scores) / len(scores), 1) if scores else 0
+        print(
+            "  [Zillow done] " + str(len(records)) + " pipeline-ready records for: "
+            + location + "  (avg score: " + str(avg) + ")"
+        )
 
     return records, blocked
