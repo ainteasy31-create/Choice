@@ -866,7 +866,7 @@ def _stage_records(records, location, source_label, args, started_at):
     total_batches = len(batches)
     workers       = min(MAX_WORKERS, total_batches)
     print(f"\n📦  [{source_label}] Staging {len(records)} listing(s) in "
-          f"{total_batches} batch(es) [{workers} worker(s)]…")
+          f"{total_batches} batch(es) [{workers} worker(s)]...")
 
     count_new = count_err = 0
     with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -1228,6 +1228,24 @@ def _scrape_generic_url(url):
 
 # ── URL-list scrape runner ─────────────────────────────────────────────────────
 
+def _upsert_one(rec, upsert=False):
+    """
+    Insert (or upsert) a single pipeline record.
+    Returns 'new', 'dup', or 'err'.
+    """
+    if not upsert:
+        sid = rec.get("source_listing_id", "")
+        if sid:
+            existing = _get_existing_ids([sid])
+            if sid in existing:
+                return "dup"
+    count, err = _sb_post_batch("pipeline_properties", [rec], upsert=upsert)
+    if err:
+        print("  [error] Insert failed: " + err[:160])
+        return "err"
+    return "new"
+
+
 def _run_urls(urls, args, started_at):
     """
     Scrape a list of individual listing URLs (Zillow or other sites) into the pipeline.
@@ -1397,7 +1415,7 @@ def _run_location(location, args, started_at):
 # ── Main runner ───────────────────────────────────────────────────────────────
 
 def run(args):
-    print("\n🏠  Choice Properties — Scraper v4")
+    print("\n🏠  Choice Properties — Scraper v5")
     print(f"   Dry run      : {args.dry_run}")
     print(f"   Upsert       : {args.upsert}")
 
@@ -1485,7 +1503,7 @@ def _build_parser():
     p = argparse.ArgumentParser(
         prog="scraper",
         description=(
-            "Choice Properties -- Scraper v4\n"
+            "Choice Properties -- Scraper v5\n"
             "Two modes:\n"
             "  URL mode   : scrape specific listing URLs (--url / --urls-file)\n"
             "  Search mode: scrape all rentals in a city/ZIP (--location / --locations-file)"

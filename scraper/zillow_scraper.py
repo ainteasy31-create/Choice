@@ -1419,7 +1419,7 @@ def _enrich_records_with_details(session, records, verbose=True):
         print(
             "\n  🔍  Phase 2 — Fetching detail pages for "
             + str(len(to_enrich)) + " listing(s) ["
-            + str(DETAIL_WORKERS) + " workers] …"
+            + str(DETAIL_WORKERS) + " workers]..."
         )
         if already_good:
             print("     Skipping " + str(len(already_good)) + " already high-quality records.")
@@ -1448,7 +1448,7 @@ def _enrich_records_with_details(session, records, verbose=True):
                 enriched.append(futures[fut])
                 failed += 1
             if verbose and done % 5 == 0:
-                print("     [detail] " + str(done) + "/" + str(len(to_enrich)) + " done …")
+                print("     [detail] " + str(done) + "/" + str(len(to_enrich)) + " done...")
 
     if verbose:
         scores = [r.get("data_quality_score", 0) for r in enriched]
@@ -1816,7 +1816,7 @@ def scrape_urls(urls, verbose=True):
         if i > 0:
             delay = random.uniform(*DETAIL_DELAY)
             if verbose:
-                print("     Waiting " + str(round(delay, 1)) + "s …")
+                print("     Waiting " + str(round(delay, 1)) + "s...")
             time.sleep(delay)
 
         prop = _fetch_detail_property(session, clean_url, zpid, verbose=verbose)
