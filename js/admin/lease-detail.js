@@ -208,7 +208,7 @@
 
     const [appRes, eventsRes, pdfsRes, amendmentsRes, ver, tokensRes, leasesRes] = await Promise.all([
       sb.from('applications').select('*').eq('app_id', _appId).single(),
-      sb.from('sign_events').select('*').eq('app_id', _appId).order('created_at', { ascending: false }),
+      sb.from('sign_events').select('*').eq('app_id', _appId).order('signed_at', { ascending: false }),
       sb.from('lease_pdf_versions').select('*').eq('app_id', _appId).order('version_number', { ascending: false }),
       sb.from('lease_amendments').select('*').eq('app_id', _appId).order('created_at', { ascending: false }),
       sb.from('admin_actions').select('action, created_at, metadata').eq('target_id', _appId).eq('target_type','application').order('created_at',{ascending:false}).limit(50),
@@ -263,7 +263,7 @@
 
     const eventsHtml = events.length
       ? events.map(e => `<div class="ev">
-            <div class="ev-time">${S.esc(fmt(e.created_at))}</div>
+            <div class="ev-time">${S.esc(fmt(e.signed_at))}</div>
             <div class="ev-title">${S.esc(eventLabel(e.signer_type))} &mdash; ${S.esc(e.signer_name||'')}</div>
             <div class="ev-meta">
               ${e.signer_email ? `${S.esc(e.signer_email)} &middot; ` : ''}
