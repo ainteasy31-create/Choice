@@ -1260,6 +1260,8 @@
         } catch (uploadErr) {
           S.toast('Photo upload failed: ' + (uploadErr.message || uploadErr), 'error');
         }
+        // Brief pause between uploads to avoid CDN rate limiting
+        if (i < entries.length - 1) await new Promise(r => setTimeout(r, 400));
       }
 
       _editPendingPhotos.clear();
@@ -1746,39 +1748,40 @@
       const total    = entries.length;
       let successCnt = 0;
 
-      // Upload in parallel batches of 2 for speed
-      const BATCH_SIZE = 2;
+      // Sequential uploads — one at a time to avoid CDN rate limits
       const baseOrder = _photos.length ? Math.max(..._photos.map(ph => ph.display_order ?? 0)) + 1 : 0;
-      for (let batch = 0; batch < total; batch += BATCH_SIZE) {
-        const chunk = entries.slice(batch, batch + BATCH_SIZE);
-        await Promise.all(chunk.map(async ([sid, file], j) => {
-          const idx = batch + j;
-          const itemEl = pendingGrid.querySelector(`[data-pending-id="${sid}"]`);
-          const ovlEl  = document.getElementById(`pd-pm-ovl-${sid}`);
-          if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--brand)"></i><span style="color:#fff;font-size:.72rem">Uploading…</span>';
-          try {
-            const result = await _uploadAdminPhoto(file, propId, (pct) => {
-              const overall = Math.round(((successCnt + pct / 100) / total) * 100);
-              uploadBar.style.width = overall + '%';
-              uploadPct.textContent = overall + '%';
-              uploadText.textContent = `Uploading ${Math.min(batch + j + 1, total)} of ${total}…`;
-            });
-            const { error: insErr } = await CP.sb().from('property_photos').insert([{
-              property_id:   propId,
-              url:           result.url,
-              file_id:       result.fileId || null,
-              display_order: baseOrder + idx,
-            }]);
-            if (insErr) throw new Error(insErr.message);
-            successCnt++;
-            if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
-            if (itemEl) itemEl.style.borderColor = 'rgba(34,197,94,.6)';
-          } catch (err) {
-            const msg = String(err?.message || err).slice(0, 80);
-            if (ovlEl) ovlEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f87171"></i><span style="color:#f87171;font-size:.7rem">Failed</span><span style="color:rgba(255,255,255,.7);font-size:.64rem;text-align:center;max-width:110px;word-break:break-word">${esc(msg)}</span>`;
-            if (itemEl) itemEl.classList.add('error');
-          }
-        }));
+      for (let idx = 0; idx < total; idx++) {
+        const [sid, file] = entries[idx];
+        const itemEl = pendingGrid.querySelector(`[data-pending-id="${sid}"]`);
+        const ovlEl  = document.getElementById(`pd-pm-ovl-${sid}`);
+        if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:var(--brand)"></i><span style="color:#fff;font-size:.72rem">Uploading…</span>';
+        const pctBase = Math.round((idx / total) * 100);
+        uploadBar.style.width = pctBase + '%';
+        uploadPct.textContent = pctBase + '%';
+        uploadText.textContent = `Uploading ${idx + 1} of ${total}…`;
+        try {
+          const result = await _uploadAdminPhoto(file, propId, (pct) => {
+            const overall = Math.round(((idx + pct / 100) / total) * 100);
+            uploadBar.style.width = overall + '%';
+            uploadPct.textContent = overall + '%';
+          });
+          const { error: insErr } = await CP.sb().from('property_photos').insert([{
+            property_id:   propId,
+            url:           result.url,
+            file_id:       result.fileId || null,
+            display_order: baseOrder + successCnt,
+          }]);
+          if (insErr) throw new Error(insErr.message);
+          successCnt++;
+          if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
+          if (itemEl) itemEl.style.borderColor = 'rgba(34,197,94,.6)';
+        } catch (err) {
+          const msg = String(err?.message || err).slice(0, 80);
+          if (ovlEl) ovlEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f87171"></i><span style="color:#f87171;font-size:.7rem">Failed</span><span style="color:rgba(255,255,255,.7);font-size:.64rem;text-align:center;max-width:110px;word-break:break-word">${esc(msg)}</span>`;
+          if (itemEl) itemEl.classList.add('error');
+        }
+        // Small pause between uploads to avoid CDN rate limiting
+        if (idx < total - 1) await new Promise(r => setTimeout(r, 400));
       }
 
       uploadBar.style.width = '100%';
