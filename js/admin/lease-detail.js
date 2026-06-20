@@ -304,8 +304,8 @@
             ? `<div class="text-xs muted">Reason: ${S.esc(t.revoke_reason)}</div>` : '';
           const usedLine = t.used_at
             ? `<div class="text-xs muted">Used ${S.esc(fmt(t.used_at))}</div>` : '';
-          const ipLine = t.ip_address
-            ? `<div class="text-xs muted">IP ${S.esc(t.ip_address)}</div>` : '';
+          const ipLine = t.ip_locked_to
+            ? `<div class="text-xs muted">IP locked to ${S.esc(String(t.ip_locked_to))}</div>` : '';
           return `<div class="pdf-row" style="flex-wrap:wrap;gap:8px">
             <div style="flex:1;min-width:240px">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
