@@ -8,17 +8,21 @@
     update_status:'Update status', mark_paid:'Mark paid', mark_movein:'Mark move-in',
     generate_lease:'Generate lease', resend_lease:'Resend lease', void_lease:'Void lease',
     tenant_signed_lease:'Tenant signed', co_applicant_signed_lease:'Co-applicant signed',
-    'property.edit':'Property edited', 'property.hard_delete':'Property deleted',
+    'property.create':'Property created', 'property.edit':'Property edited',
+    'property.hard_delete':'Property deleted', 'property.duplicate':'Property duplicated',
     'property.photo_reorder':'Photos reordered', 'property.photo_delete':'Photo deleted',
-    'property.status_change':'Status changed'
+    'property.photo_upload':'Photo uploaded',
+    'property.status_change':'Status changed', 'property.geocode':'Geocode updated'
   };
   const ACTION_PILL = {
     update_status:'pill-info', mark_paid:'pill-success', mark_movein:'pill-purple',
     generate_lease:'pill-warning', resend_lease:'pill-warning', void_lease:'pill-danger',
     tenant_signed_lease:'pill-success', co_applicant_signed_lease:'pill-success',
-    'property.edit':'pill-info', 'property.hard_delete':'pill-danger',
+    'property.create':'pill-success', 'property.edit':'pill-info',
+    'property.hard_delete':'pill-danger', 'property.duplicate':'pill-info',
     'property.photo_reorder':'pill-muted', 'property.photo_delete':'pill-warning',
-    'property.status_change':'pill-info'
+    'property.photo_upload':'pill-muted',
+    'property.status_change':'pill-info', 'property.geocode':'pill-muted'
   };
 
   // Route target links based on target_type
