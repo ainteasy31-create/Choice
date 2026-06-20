@@ -6,6 +6,6 @@
   // If somehow this file still loads on a non-redirect page, send the user to properties.
   if (document.title && document.title.toLowerCase().includes('listing')) {
     var p = new URLSearchParams(location.search);
-    location.replace('/admin/properties.html' + (p.toString() ? '?' + p.toString() : ''));
+    location.replace('/listings.html' + (p.toString() ? '?' + p.toString() : ''));
   }
 })();

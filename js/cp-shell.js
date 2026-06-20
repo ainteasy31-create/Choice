@@ -601,7 +601,7 @@
       }
       if(gPending){
         clearTimeout(gPending.t);
-        const map = { d:'dashboard.html', a:'applications.html', l:'leases.html', m:'move-ins.html', p:'properties.html' };
+        const map = { d:'dashboard.html', a:'applications.html', l:'leases.html', m:'move-ins.html', p:'../listings.html' };
         const target = map[e.key];
         gPending = null;
         if(target){ e.preventDefault(); location.href = _portalDir() + target; }

@@ -146,7 +146,7 @@
               <button class="btn btn-ghost btn-sm" id="lord-det-toggle-verify">
                 ${l.verified ? '<i class="fas fa-times-circle"></i> Unverify' : '<i class="fas fa-check-circle"></i> Verify'}
               </button>
-              <a class="btn btn-ghost btn-sm" href="/admin/properties.html?landlord=${esc(l.id)}">
+              <a class="btn btn-ghost btn-sm" href="/listings.html?landlord=${esc(l.id)}">
                 <i class="fas fa-building"></i> View properties
               </a>
             </div>

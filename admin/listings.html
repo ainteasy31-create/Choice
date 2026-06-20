@@ -10,7 +10,7 @@
   // Preserve any ?status= or ?landlord= query params in the redirect.
   (function () {
     var p = new URLSearchParams(location.search);
-    var next = '/admin/properties.html';
+    var next = '/listings.html';
     var qs = p.toString();
     if (qs) next += '?' + qs;
     location.replace(next);
