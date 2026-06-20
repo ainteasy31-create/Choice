@@ -10,7 +10,41 @@ Nationwide rental property marketplace and management platform. Static HTML/CSS/
 - **Images:** ImageKit.io CDN
 - **Maps:** Leaflet + Geoapify
 - **Auth:** Supabase Auth (PKCE flow)
-- **Scraper:** Python + HomeHarvest CLI (`scraper/scraper.py`) → stages into `pipeline.pipeline_properties`
+- **Scraper (Realtor.com):** Python + HomeHarvest CLI (`scraper/scraper.py`) — run from Replit shell → stages into `pipeline.pipeline_properties`
+- **Scraper (Zillow):** `scraper/zillow_scraper.py` — run from **iSH Shell on iPhone** (requires residential IP; Zillow blocks datacenter IPs) → same pipeline table
+
+## iSH Shell (iPhone Scraper)
+The Zillow scraper must run from a residential IP. The owner runs it from **iSH** (Alpine Linux terminal app for iOS):
+
+**Setup (one-time):**
+```bash
+# In iSH on iPhone
+apk add python3 py3-pip git
+pip3 install homeharvest requests python-dotenv
+git clone https://ghp_<TOKEN>@github.com/choice121/Choice.git
+cd Choice/scraper
+# Create .env with SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+```
+
+**Pulling latest code in iSH:**
+```bash
+cd ~/Choice
+git pull https://ghp_<TOKEN>@github.com/choice121/Choice.git
+```
+
+**Running the Zillow scraper from iSH:**
+```bash
+cd ~/Choice/scraper
+python3 scraper.py --location "Dallas, TX" --source zillow --dry-run   # preview
+python3 scraper.py --location "Dallas, TX" --source zillow              # real run
+python3 scraper.py --location "Dallas, TX" --source both               # Zillow + Realtor
+```
+
+**Key iSH constraints:**
+- Python 3.9 (Alpine) — no f-strings with Unicode curly quotes (`"`, `"`)
+- No Docker, no Supabase CLI
+- Realtor.com scraper works fine from Replit shell (datacenter IP is OK)
+- Zillow scraper needs iSH / any residential IP (mobile data or home WiFi)
 
 ## Repository
 - GitHub: https://github.com/choice121/Choice

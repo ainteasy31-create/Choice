@@ -30,17 +30,17 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: 'Admin access required' }, 403, {}, req);
   }
 
-  let pipeline_id: string, property_id: string;
+  let pipeline_id: string | null, property_id: string;
   try {
     const body = await req.json();
-    pipeline_id = body.pipeline_id;
+    pipeline_id = body.pipeline_id ?? null;
     property_id = body.property_id;
   } catch {
     return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400, {}, req);
   }
 
-  if (!pipeline_id || !property_id) {
-    return jsonResponse({ success: false, error: 'pipeline_id and property_id required' }, 400, {}, req);
+  if (!property_id) {
+    return jsonResponse({ success: false, error: 'property_id is required' }, 400, {}, req);
   }
 
   const SUPABASE_URL        = Deno.env.get('SUPABASE_URL')!;
@@ -53,16 +53,22 @@ Deno.serve(async (req) => {
 
   const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
-  // Fetch pipeline record (pipeline schema is private — service role required)
-  const { data: pipeline, error: pErr } = await adminClient
+  // Fetch pipeline record — lookup by pipeline_id if provided, otherwise by choice_property_id
+  const query = adminClient
     .schema('pipeline')
     .from('pipeline_properties')
-    .select('original_image_urls')
-    .eq('id', pipeline_id)
-    .single();
+    .select('original_image_urls');
 
-  if (pErr || !pipeline) {
-    return jsonResponse({ success: false, error: 'Pipeline record not found' }, 404, {}, req);
+  const { data: pipeline, error: pErr } = pipeline_id
+    ? await query.eq('id', pipeline_id).single()
+    : await query.eq('choice_property_id', property_id).maybeSingle();
+
+  if (pErr) {
+    return jsonResponse({ success: false, error: 'Pipeline lookup failed: ' + pErr.message }, 500, {}, req);
+  }
+  if (!pipeline) {
+    // No pipeline source — property wasn't published from scraper
+    return jsonResponse({ success: true, transferred: 0, skipped: 0, no_source: true }, 200, {}, req);
   }
 
   const urls: string[] = (() => {
