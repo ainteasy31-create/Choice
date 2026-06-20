@@ -1747,6 +1747,28 @@
           <button class="pd-edit-close" id="pd-pm-close" aria-label="Close">✕</button>
         </div>
         <div class="pd-edit-body">
+
+          <div class="pd-pm-replace-section">
+            <div class="pd-pm-replace-title"><i class="fas fa-repeat"></i> Replace all photos</div>
+            <div class="pd-pm-replace-zone" id="pd-pm-replace-zone">
+              <input type="file" id="pd-pm-replace-input" accept="image/jpeg,image/png,image/webp,image/*" multiple>
+              <i class="fas fa-arrow-right-arrow-left rz-icon"></i>
+              <strong>Drop replacement photos here</strong>
+              <p>Deletes ${_photos.length ? 'all ' + _photos.length + ' existing photo' + (_photos.length !== 1 ? 's' : '') : 'existing photos'} &amp; uploads these new ones</p>
+            </div>
+            <div class="pd-pm-replace-preview" id="pd-pm-replace-preview" style="display:none"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-top:8px">
+              <span id="pd-pm-replace-count" style="font-size:.72rem;color:var(--muted)"></span>
+              <div style="display:flex;gap:8px">
+                <button type="button" class="btn btn-ghost btn-sm" id="pd-pm-replace-clear" style="display:none">Clear</button>
+                <button type="button" class="btn btn-sm" id="pd-pm-replace-btn" disabled
+                  style="background:#ef4444;color:#fff;border:none;opacity:.5"><i class="fas fa-repeat"></i> Replace all</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="pd-pm-replace-divider">Or manage individual photos</div>
+
           <p class="pd-pm-hint"><i class="fas fa-grip-dots-vertical"></i> Drag to reorder &middot; First photo is the cover image.</p>
           <div class="pd-pm-grid" id="pd-pm-grid">
             ${_photos.map((ph, i) => `
@@ -1873,6 +1895,189 @@
     });
 
     bindDragToReorder(document.getElementById('pd-pm-grid'));
+
+    // ── Replace-all flow ─────────────────────────────────────────────────────
+    const replaceInput   = document.getElementById('pd-pm-replace-input');
+    const replaceZone    = document.getElementById('pd-pm-replace-zone');
+    const replacePreview = document.getElementById('pd-pm-replace-preview');
+    const replaceCount   = document.getElementById('pd-pm-replace-count');
+    const replaceBtn     = document.getElementById('pd-pm-replace-btn');
+    const replaceClear   = document.getElementById('pd-pm-replace-clear');
+
+    const _replaceMap = new Map();
+    let _replacing    = false;
+
+    function _addReplaceFile(file) {
+      if (['image/heic', 'image/heif'].includes(file.type.toLowerCase()) || /\.heic$/i.test(file.name)) {
+        S.toast(`"${file.name}" is HEIC format. Convert to JPG first.`, 'error'); return;
+      }
+      if (file.size > 10 * 1024 * 1024) { S.toast(`"${file.name}" exceeds 10 MB.`, 'error'); return; }
+      for (const f of _replaceMap.values()) { if (f.name === file.name && f.size === file.size) return; }
+      const sid = 'rp' + Date.now() + Math.random().toString(36).slice(2, 6);
+      _replaceMap.set(sid, file);
+      _renderReplacePreview();
+    }
+
+    function _renderReplacePreview() {
+      const entries = [..._replaceMap.entries()];
+      if (!entries.length) {
+        replacePreview.style.display = 'none';
+        replacePreview.innerHTML = '';
+        replaceCount.textContent = '';
+        replaceBtn.disabled = true;
+        replaceBtn.style.opacity = '.5';
+        replaceClear.style.display = 'none';
+        return;
+      }
+      replacePreview.style.display = '';
+      // Only add new thumbs, don't re-render existing ones (preserves loaded images)
+      const existing = new Set([...replacePreview.querySelectorAll('[data-rsid]')].map(el => el.dataset.rsid));
+      for (const [sid, file] of entries) {
+        if (existing.has(sid)) continue;
+        const thumb = document.createElement('div');
+        thumb.className = 'pd-pm-replace-thumb';
+        thumb.dataset.rsid = sid;
+        thumb.innerHTML = `<img id="rthumb-${esc(sid)}" src="" alt=""><button type="button" class="pd-pm-replace-thumb-rm" data-remove-rp="${esc(sid)}" title="Remove"><i class="fas fa-times"></i></button>`;
+        replacePreview.appendChild(thumb);
+        const imgEl = thumb.querySelector('img');
+        const reader = new FileReader();
+        reader.onload = ev => { if (imgEl) imgEl.src = ev.target.result; };
+        reader.readAsDataURL(file);
+      }
+      replaceCount.textContent = entries.length + ' photo' + (entries.length !== 1 ? 's' : '') + ' queued';
+      replaceBtn.disabled = false;
+      replaceBtn.style.opacity = '1';
+      replaceClear.style.display = '';
+    }
+
+    replacePreview.addEventListener('click', e => {
+      const btn = e.target.closest('[data-remove-rp]');
+      if (!btn || _replacing) return;
+      const sid = btn.dataset.removeRp;
+      _replaceMap.delete(sid);
+      replacePreview.querySelector(`[data-rsid="${sid}"]`)?.remove();
+      _renderReplacePreview();
+    });
+
+    replaceClear?.addEventListener('click', () => {
+      if (_replacing) return;
+      _replaceMap.clear();
+      replacePreview.innerHTML = '';
+      _renderReplacePreview();
+    });
+
+    replaceInput?.addEventListener('change', e => { [...e.target.files].forEach(_addReplaceFile); replaceInput.value = ''; });
+    replaceZone?.addEventListener('dragover',  e => { e.preventDefault(); replaceZone.classList.add('drag-over'); });
+    replaceZone?.addEventListener('dragleave', () => replaceZone.classList.remove('drag-over'));
+    replaceZone?.addEventListener('drop', e => {
+      e.preventDefault(); replaceZone.classList.remove('drag-over');
+      [...e.dataTransfer.files].forEach(_addReplaceFile);
+    });
+
+    replaceBtn?.addEventListener('click', async () => {
+      if (_replacing || !_replaceMap.size) return;
+      const entries  = [..._replaceMap.entries()];
+      const newCount = entries.length;
+      const oldCount = _photos.length;
+      const ok = await S.confirm({
+        title:   'Replace all photos?',
+        message: `This will delete ${oldCount > 0 ? 'all ' + oldCount + ' existing photo' + (oldCount !== 1 ? 's' : '') + ' and upload ' : 'and upload '}${newCount} new photo${newCount !== 1 ? 's' : ''}. This cannot be undone.`,
+        ok:      'Replace all',
+        cancel:  'Cancel',
+        danger:  true,
+      });
+      if (!ok) return;
+
+      _replacing = true;
+      replaceBtn.disabled = true;
+      replaceBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting old…';
+      if (replaceClear) replaceClear.style.display = 'none';
+
+      // Step 1: delete all existing photos from DB
+      try {
+        const { error } = await CP.sb().from('property_photos').delete().eq('property_id', propId);
+        if (error) throw new Error(error.message);
+        _photos = [];
+        const pmGrid = document.getElementById('pd-pm-grid');
+        if (pmGrid) pmGrid.innerHTML = '';
+        refreshGalleryInPlace();
+      } catch (delErr) {
+        S.toast('Delete failed: ' + (delErr.message || delErr), 'error');
+        replaceBtn.disabled = false;
+        replaceBtn.innerHTML = '<i class="fas fa-repeat"></i> Replace all';
+        replaceBtn.style.opacity = '1';
+        _replacing = false;
+        return;
+      }
+
+      // Step 2: upload new photos sequentially
+      const total = entries.length;
+      let successCnt = 0;
+
+      replaceBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+      if (uploadProg) uploadProg.style.display = '';
+
+      for (let idx = 0; idx < total; idx++) {
+        const [sid, file] = entries[idx];
+        const thumb = replacePreview.querySelector(`[data-rsid="${sid}"]`);
+        if (thumb) thumb.style.outline = '2px solid var(--brand)';
+        if (replaceCount) replaceCount.textContent = `Uploading ${idx + 1} of ${total}…`;
+        if (uploadText) uploadText.textContent = `Uploading ${idx + 1} of ${total}…`;
+        if (uploadPct)  uploadPct.textContent  = Math.round((idx / total) * 100) + '%';
+        if (uploadBar)  uploadBar.style.width  = Math.round((idx / total) * 100) + '%';
+        try {
+          const result = await _uploadAdminPhoto(file, propId, (pct) => {
+            const overall = Math.round(((idx + pct / 100) / total) * 100);
+            if (uploadBar) uploadBar.style.width = overall + '%';
+            if (uploadPct) uploadPct.textContent = overall + '%';
+          });
+          const { error: insErr } = await CP.sb()
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+          if (insErr) throw new Error(insErr.message);
+          successCnt++;
+          if (thumb) { thumb.style.outline = '2px solid #4ade80'; }
+        } catch (upErr) {
+          if (thumb) thumb.style.outline = '2px solid #f87171';
+          S.toast(`Photo ${idx + 1} failed: ${(upErr.message || upErr).toString().slice(0, 60)}`, 'error');
+        }
+        if (idx < total - 1) await new Promise(r => setTimeout(r, 400));
+      }
+
+      if (uploadProg) uploadProg.style.display = 'none';
+      if (uploadBar)  uploadBar.style.width = '100%';
+      _replacing = false;
+
+      if (successCnt > 0) {
+        S.toast(`${successCnt} photo${successCnt > 1 ? 's' : ''} uploaded — gallery updated!`, 'success');
+        // Audit log (non-blocking)
+        CP.Auth.getSession().then(({ data }) => {
+          CP.sb().from('admin_actions').insert([{
+            user_id:     data?.session?.user?.id || null,
+            action:      'property.photo_upload',
+            target_type: 'property',
+            target_id:   String(propId),
+            metadata:    { count: successCnt, replaced: true, deleted_count: oldCount }
+          }]).catch(() => {});
+        }).catch(() => {});
+        // Reload fresh photo data, update gallery, close panel
+        const { data: freshProp } = await CP.sb()
+          .from('properties')
+          .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
+          .eq('id', propId).single();
+        if (freshProp) {
+          _photos = Array.isArray(freshProp.property_photos)
+            ? freshProp.property_photos.slice().sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+            : [];
+          refreshGalleryInPlace();
+        }
+        closePanel();
+      } else {
+        replaceBtn.disabled = false;
+        replaceBtn.innerHTML = '<i class="fas fa-repeat"></i> Replace all';
+        replaceBtn.style.opacity = '1';
+        if (replaceCount) replaceCount.textContent = 'All uploads failed — try again';
+      }
+    });
 
     // ── Upload zone ───────────────────────────────────────────────────────────
     const fileInput   = document.getElementById('pd-pm-file-input');

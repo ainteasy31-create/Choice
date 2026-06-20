@@ -250,6 +250,21 @@ select.pd-edit-input{cursor:pointer}
   .pd-pm-grid{grid-template-columns:1fr 1fr}
 }
 
+/* ── Bulk replace zone ── */
+.pd-pm-replace-section{background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.18);border-radius:var(--r-md);padding:14px;margin-bottom:16px}
+.pd-pm-replace-title{font-size:.66rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ef4444;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pd-pm-replace-zone{border:2px dashed rgba(239,68,68,.35);border-radius:var(--r-sm);padding:16px 14px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;position:relative;display:flex;flex-direction:column;align-items:center;gap:4px}
+.pd-pm-replace-zone:hover,.pd-pm-replace-zone.drag-over{border-color:#ef4444;background:rgba(239,68,68,.07)}
+.pd-pm-replace-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.pd-pm-replace-zone i.rz-icon{font-size:1.3rem;color:#ef4444}
+.pd-pm-replace-zone strong{font-size:.82rem;font-weight:700;color:var(--text)}
+.pd-pm-replace-zone p{font-size:.7rem;color:var(--muted);margin:0}
+.pd-pm-replace-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-top:10px}
+.pd-pm-replace-thumb{position:relative;aspect-ratio:4/3;border-radius:5px;overflow:hidden;background:var(--surface-2);border:1.5px solid var(--border);transition:outline .1s}
+.pd-pm-replace-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pd-pm-replace-thumb-rm{position:absolute;top:2px;right:2px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:3px;width:18px;height:18px;font-size:.56rem;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;padding:0}
+.pd-pm-replace-divider{font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+
 /* ── Lightbox: bigger touch targets on mobile ── */
 @media(max-width:640px){
   .pd-lb-thumb{width:64px;height:50px}
