@@ -49,6 +49,25 @@
     return null;
   }
 
+  // ── Availability chip ───────────────────────────────────────
+  // Returns a small inline chip HTML string for the address line.
+  // "Now" (green) when available immediately; "Aug 1" (amber) for future date.
+  function availChipHtml(p) {
+    if (p.available_date) {
+      var avail = new Date(p.available_date + 'T00:00:00');
+      var diffDays = Math.ceil((avail - Date.now()) / 864e5);
+      if (diffDays <= 0) {
+        return '<span class="property-card-avail avail-now">Available Now</span>';
+      }
+      var label = avail.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+      return '<span class="property-card-avail">Avail. ' + label + '</span>';
+    }
+    if (p.status === 'active') {
+      return '<span class="property-card-avail avail-now">Available Now</span>';
+    }
+    return '';
+  }
+
   // ── Unified card builder ────────────────────────────────────
   /**
    * Build a property card HTML string.
@@ -60,11 +79,14 @@
   function buildPropertyCard(p, opts) {
     opts = opts || {};
     const imgSizes = opts.imgSizes ||
-      '(max-width: 539px) calc(100vw - 32px), (max-width: 899px) calc(50vw - 28px), (max-width: 1319px) calc(33vw - 32px), calc(25vw - 32px)';
+      '(max-width: 399px) calc(100vw - 32px), (max-width: 899px) calc(50vw - 28px), (max-width: 1319px) calc(33vw - 32px), calc(25vw - 32px)';
 
     const photos = (p.photo_urls && p.photo_urls.length) ? p.photo_urls : ['/assets/placeholder-property.jpg'];
     const title  = esc(p.title || 'Rental property');
     const id     = esc(p.id);
+    const propUrl = (window.CP && window.CP.UI && window.CP.UI.propertyUrl)
+      ? window.CP.UI.propertyUrl(p)
+      : '/property.html?id=' + id;
 
     // ── Image slides ──────────────────────────────────────────
     const slidesHtml = photos.map(function (url, i) {
@@ -102,31 +124,25 @@
       return i === 0 ? s : '<span class="property-card-spec-sep">·</span>' + s;
     }).join('');
 
-    // ── Badge — priority: featured > verified ────
-      // Availability badges ("Available Now" / "Avail. <date>") are intentionally
-      // not rendered on public cards per request — only marketing-relevant labels remain.
-      var badge = '';
-      if (p.featured) {
-        badge = '<div class="property-card-badge badge-featured"><i class="fas fa-star"></i> Featured</div>';
-      } else if (p.landlords && p.landlords.verified) {
-        badge = '<div class="property-card-badge badge-verified"><i class="fas fa-shield-halved"></i> Verified</div>';
-      }
+    // ── Badge — priority: featured > verified ─────────────────
+    var badge = '';
+    if (p.featured) {
+      badge = '<div class="property-card-badge badge-featured"><i class="fas fa-star"></i> Featured</div>';
+    } else if (p.landlords && p.landlords.verified) {
+      badge = '<div class="property-card-badge badge-verified"><i class="fas fa-shield-halved"></i> Verified</div>';
+    }
 
     var freshChipHtml = '';
 
-
-    // P2-C: Property type label — defined here so typeChipHtml below can use it ──────
+    // ── Property type chip (bottom-left of image) ─────────────
     var typeMap = { apartment: 'Apartment', house: 'House', condo: 'Condo', townhouse: 'Townhouse',
                     townhome: 'Townhome', studio: 'Studio', loft: 'Loft', room: 'Room', duplex: 'Duplex' };
     var typeLabel = p.property_type ? (typeMap[String(p.property_type).toLowerCase()] || esc(p.property_type)) : '';
-    var typeHtml  = typeLabel ? '<div class="property-card-type">' + typeLabel + '</div>' : '';
-
-    // ── Property type chip (bottom-left of image) ─────────────
     var typeChipHtml = typeLabel
       ? '<div class="property-card-type-chip">' + typeLabel + '</div>'
       : '';
 
-    // P2-B: Dots (≤6 photos) OR count pill (>6 photos) — never both
+    // ── P2-B: Dots (≤6 photos) OR count pill (>6 photos) — never both ──
     var dotsHtml = '';
     var photoCountHtml = '';
     if (photos.length > 1) {
@@ -143,39 +159,57 @@
     // ── Address ───────────────────────────────────────────────
     var addrLine = esc([p.address, p.city, p.state].filter(Boolean).join(', '));
 
+    // ── Availability chip ─────────────────────────────────────
+    var avail = availChipHtml(p);
+
     // ── Price ─────────────────────────────────────────────────
     var rentHtml = fmtRent(p.monthly_rent);
     var rentUnit = Number(p.monthly_rent) > 0 ? '<span class="property-card-price-unit">/mo</span>' : '';
 
     return (
-      '<article class="property-card" data-id="' + id + '">' +
+      '<article class="property-card" data-id="' + id + '"' + (p.featured ? ' data-featured="1"' : '') + '>' +
 
-        // Image block — contains all overlaid buttons (save, share, badge, dots)
-        // Not wrapped in <a>; card click-through is handled by event delegation.
+        // ── Image block ────────────────────────────────────────
         '<div class="property-card-img">' +
           '<div class="property-card-slides">' + slidesHtml + '</div>' +
-          // Featured / verified badge — top-left
+          // Featured / verified badge — top-left (self-positioned via .property-card-badge)
           badge +
-          // Freshness chip — top-left, stacks under badge (Phase 9.2)
+          // Freshness chip — stacks under badge (Phase 9.2)
           freshChipHtml +
           // Carousel position indicators — bottom-center
           dotsHtml +
+          // Photo count — bottom-right (only when >6 photos)
           photoCountHtml +
           // Property type chip — bottom-left
           typeChipHtml +
-          // Share icon — bottom-right, always visible
-          // URL: canonical slug URL (Phase C SEO). Falls back to /property.html?id= when fields missing.
-          '<button class="property-card-share" data-id="' + id + '" data-title="' + title + '" data-url="' + (window.CP && window.CP.UI && window.CP.UI.propertyUrl ? window.CP.UI.propertyUrl(p) : '/property.html?id=' + id) + '" aria-label="Share property"><i class="fas fa-share-nodes"></i></button>' +
+          // Save + Share — top-right, both inside .property-card-actions
+          '<div class="property-card-actions">' +
+            '<button class="property-card-save" type="button" data-id="' + id + '" aria-label="Save property">' +
+              '<i class="far fa-heart"></i>' +
+            '</button>' +
+            '<button class="property-card-share" type="button" data-id="' + id + '" data-title="' + title + '" data-url="' + escAttr(propUrl) + '" aria-label="Share property">' +
+              '<i class="fas fa-share-nodes"></i>' +
+            '</button>' +
+          '</div>' +
         '</div>' +
 
-        // Body — full-width link for clean click-through (canonical slug URL — Phase C)
-        '<a href="' + (window.CP && window.CP.UI && window.CP.UI.propertyUrl ? window.CP.UI.propertyUrl(p) : '/property.html?id=' + id) + '" class="property-card-body" aria-label="' + title + '">' +
-          typeHtml +
-          '<div class="property-card-price">' + rentHtml + rentUnit + '</div>' +
-          (specsHtml ? '<div class="property-card-specs">' + specsHtml + '</div>' : '') +
+        // ── Body — full-width link for click-through ───────────
+        '<a href="' + escAttr(propUrl) + '" class="property-card-body" aria-label="' + title + '">' +
+          // 1. Title (2-line clamp — most prominent element)
           '<div class="property-card-title">' + title + '</div>' +
-          '<div class="property-card-addr"><i class="fas fa-location-dot"></i>' + addrLine + '</div>' +
+          // 2. Address + availability chip inline
+          '<div class="property-card-addr">' +
+            '<i class="fas fa-location-dot"></i>' + addrLine +
+            (avail ? '<span class="property-card-addr-sep">·</span>' + avail : '') +
+          '</div>' +
+          // 3. Specs
+          (specsHtml ? '<div class="property-card-specs">' + specsHtml + '</div>' : '') +
+          // 4. Amenity tags
           (tags.length ? '<div class="property-card-tags">' + tags.join('') + '</div>' : '') +
+          // 5. Footer — price pinned to bottom with divider
+          '<div class="property-card-footer">' +
+            '<div class="property-card-price">' + rentHtml + rentUnit + '</div>' +
+          '</div>' +
         '</a>' +
 
       '</article>'
