@@ -88,6 +88,7 @@ function readURL() {
   activeType     = p.get('type')     || 'all';
   sortBy         = p.get('sort')     || 'newest';
   currentPage    = parseInt(p.get('page') || '1', 10);
+  if (isAdminMode && p.get('landlord')) adminLandlordId = p.get('landlord');
 }
 
 // ── Write state → URL ─────────────────────────────────────────────────────
@@ -101,6 +102,7 @@ function pushURL(replace = false) {
   if (activeType && activeType !== 'all') p.set('type', activeType);
   if (sortBy && sortBy !== 'newest') p.set('sort', sortBy);
   if (currentPage > 1) p.set('page', currentPage);
+  if (isAdminMode && adminLandlordId) p.set('landlord', adminLandlordId);
   const url = p.toString() ? `?${p}` : window.location.pathname;
   if (replace) history.replaceState(null, '', url);
   else         history.pushState(null, '', url);

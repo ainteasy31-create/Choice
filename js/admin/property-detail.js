@@ -149,7 +149,7 @@
   function renderGallery(photos) {
     const urls = photos.map(p => p.url).filter(Boolean);
     if (!urls.length) {
-      return '<div class="pd-no-photo pd-no-photo-btn" id="pd-no-photo-zone" role="button" tabindex="0" title="Click to upload photos"><i class="fas fa-camera" style="font-size:1.4rem;color:var(--brand);margin-bottom:6px"></i><span>No photos — tap to upload</span></div>';
+      return '<div id="pd-gallery-wrap"><div class="pd-no-photo pd-no-photo-btn" id="pd-no-photo-zone" role="button" tabindex="0" title="Click to upload photos"><i class="fas fa-camera" style="font-size:1.4rem;color:var(--brand);margin-bottom:6px"></i><span>No photos — tap to upload</span></div></div>';
     }
     const main = `<div class="pd-mosaic">
       <div class="pd-mosaic-main" id="pd-mosaic-main" data-idx="0">
@@ -178,7 +178,19 @@
         </div>`
       : '';
 
-    return main + strip;
+    return '<div id="pd-gallery-wrap">' + main + strip + '</div>';
+  }
+
+  function refreshGalleryInPlace() {
+    const wrap = document.getElementById('pd-gallery-wrap');
+    if (!wrap) return;
+    wrap.outerHTML = renderGallery(_photos);
+    const urls = _photos.map(p => p.url).filter(Boolean);
+    bindGallery(urls);
+    const noPhotoZone = document.getElementById('pd-no-photo-zone');
+    if (noPhotoZone) noPhotoZone.addEventListener('click', () => openPhotoManager(true));
+    const photosBtn = document.getElementById('pd-btn-photos');
+    if (photosBtn) photosBtn.textContent = _photos.length ? 'All photos (' + _photos.length + ')' : 'Manage photos';
   }
 
   function bindGallery(urls) {
@@ -1175,6 +1187,9 @@
 
     function _addEditPendingFile(file) {
       if (!file.type.startsWith('image/')) return;
+      if (['image/heic', 'image/heif'].includes(file.type.toLowerCase()) || /\.heic$/i.test(file.name)) {
+        S.toast(`"${file.name}" is HEIC format. Convert to JPG or PNG first.`, 'error'); return;
+      }
       if (file.size > 10 * 1024 * 1024) { S.toast('"' + file.name + '" exceeds 10 MB.', 'error'); return; }
       for (const f of _editPendingPhotos.values()) {
         if (f.name === file.name && f.size === file.size) return;
@@ -1667,6 +1682,7 @@
       const item = btn.closest('.pd-pm-item');
       if (item) item.remove();
       refreshOrderBadges();
+      refreshGalleryInPlace();
       S.toast('Photo deleted', 'success');
       // Best-effort CDN cleanup (fire-and-forget, never surfaced to user)
       if (fileId && window.CONFIG?.SUPABASE_URL && window.CONFIG?.SUPABASE_ANON_KEY) {

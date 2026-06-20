@@ -122,7 +122,7 @@ async function loadProperty(id) {
   } catch (e) {
     console.error('[property] lookup failed for id=', id, e);
     showToast('Property not found.', 'error');
-    setTimeout(() => window.location.href = '/index.html', 2000);
+    setTimeout(() => window.location.href = '/listings.html', 2000);
     return;
   }
 

@@ -346,14 +346,21 @@
 
   // ── Server actions: dry-run + finalize ───────────────────────────
   async function callEdge(payload){
-    // callEdgeFunction is not on window.CP — hand-roll the call directly.
     const token = await window.CP.Auth.getAccessToken();
+    if (!token) {
+      window.location.href = '/admin/login.html';
+      throw new Error('Session expired — redirecting to login.');
+    }
     const url = (window.CONFIG?.SUPABASE_URL || '') + '/functions/v1/generate-deposit-letter';
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify(payload),
     });
+    if (resp.status === 401) {
+      window.location.href = '/admin/login.html';
+      throw new Error('Session expired — redirecting to login.');
+    }
     const body = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(body?.message || ('HTTP ' + resp.status));
     return body;
