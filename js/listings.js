@@ -367,6 +367,12 @@ async function _bulkStatusChange() {
   const newStatus = sel?.value;
   if (!newStatus) { window.showToast?.('Pick a status first', 'error'); return; }
 
+  // Confirmation dialog — prevents accidental mass status changes
+  const confirmed = window.confirm(
+    `Change ${ids.length} propert${ids.length === 1 ? 'y' : 'ies'} to "${newStatus}"?\n\nThis will update all selected properties immediately.`
+  );
+  if (!confirmed) return;
+
   const btn = bar?.querySelector('#bulkApplyBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
