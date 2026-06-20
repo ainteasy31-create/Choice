@@ -370,12 +370,35 @@ async function _bulkStatusChange() {
   const btn = bar?.querySelector('#bulkApplyBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
+  // Resolve session once — used for audit log entries
+  let userId = null;
+  try {
+    const session = await window.CP.Auth.getSession();
+    userId = session?.user?.id || null;
+  } catch (_) {}
+
   let ok = 0, fail = 0;
   await Promise.all(ids.map(async id => {
     try {
+      const oldStatus = pageProperties.find(p => String(p.id) === String(id))?.status || null;
       const res = await window.CP.Properties.update(id, { status: newStatus });
-      if (res && res.ok !== false) ok++;
-      else fail++;
+      if (res && res.ok !== false) {
+        ok++;
+        // Audit log — non-blocking, mirrors the pattern used by property.js status changes
+        try {
+          if (userId) {
+            await window.CP.sb().from('admin_actions').insert({
+              action:      'property.status_change',
+              target_type: 'property',
+              target_id:   id,
+              metadata:    { from: oldStatus, to: newStatus, source: 'bulk' },
+              user_id:     userId,
+            });
+          }
+        } catch (_) {}
+      } else {
+        fail++;
+      }
     } catch { fail++; }
   }));
 
@@ -383,9 +406,7 @@ async function _bulkStatusChange() {
   window.showToast?.(ok + ' updated' + (fail ? ', ' + fail + ' failed' : ''), fail ? 'error' : 'success');
   _adminSelected.clear();
   _updateBulkBar();
-  // Uncheck all visible checkboxes
   document.querySelectorAll('[data-admin-id]').forEach(c => { c.checked = false; });
-  // Refresh the grid to show new statuses
   await fetchAndRender();
 }
 
