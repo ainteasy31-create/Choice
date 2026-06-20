@@ -244,7 +244,11 @@ function injectAdminToolbar() {
       <option value="archived">Archived</option>
     </select>
     <button id="bulkApplyBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer">Apply</button>
-    <button id="bulkClearBtn" style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Clear selection</button>
+    <span style="width:1px;background:#374151;align-self:stretch;margin:0 2px"></span>
+    <button id="bulkFeatureBtn" style="background:transparent;border:1px solid #f59e0b;color:#f59e0b;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">⭐ Feature</button>
+    <button id="bulkUnfeatureBtn" style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Unfeature</button>
+    <span style="width:1px;background:#374151;align-self:stretch;margin:0 2px"></span>
+    <button id="bulkClearBtn" style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Clear</button>
     <button id="bulkSelAllBtn" style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Select all on page</button>`;
   toolbar.insertAdjacentElement('afterend', bulkBar);
 
@@ -271,6 +275,8 @@ function injectAdminToolbar() {
 
   // Wire bulk bar buttons
   document.getElementById('bulkApplyBtn')?.addEventListener('click', _bulkStatusChange);
+  document.getElementById('bulkFeatureBtn')?.addEventListener('click', () => _bulkSetFeatured(true));
+  document.getElementById('bulkUnfeatureBtn')?.addEventListener('click', () => _bulkSetFeatured(false));
   document.getElementById('bulkClearBtn')?.addEventListener('click', () => {
     _adminSelected.clear();
     document.querySelectorAll('[data-admin-id]').forEach(c => { c.checked = false; });
@@ -410,6 +416,62 @@ async function _bulkStatusChange() {
 
   if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
   window.showToast?.(ok + ' updated' + (fail ? ', ' + fail + ' failed' : ''), fail ? 'error' : 'success');
+  _adminSelected.clear();
+  _updateBulkBar();
+  document.querySelectorAll('[data-admin-id]').forEach(c => { c.checked = false; });
+  await fetchAndRender();
+}
+
+async function _bulkSetFeatured(featured) {
+  const ids = [..._adminSelected];
+  if (!ids.length) return;
+  const label = featured ? 'feature' : 'unfeature';
+  const confirmed = window.confirm(
+    `${featured ? 'Feature' : 'Unfeature'} ${ids.length} propert${ids.length === 1 ? 'y' : 'ies'}?\n\n` +
+    (featured
+      ? 'These properties will appear as Featured on the public listings page.'
+      : 'These properties will no longer appear as Featured.')
+  );
+  if (!confirmed) return;
+
+  const fBtn = document.getElementById(featured ? 'bulkFeatureBtn' : 'bulkUnfeatureBtn');
+  if (fBtn) { fBtn.disabled = true; fBtn.textContent = 'Saving…'; }
+
+  let userId = null;
+  try {
+    const session = await window.CP.Auth.getSession();
+    userId = session?.user?.id || null;
+  } catch (_) {}
+
+  let ok = 0, fail = 0;
+  await Promise.all(ids.map(async id => {
+    try {
+      const oldVal = pageProperties.find(p => String(p.id) === String(id))?.featured ?? null;
+      const res = await window.CP.Properties.update(id, { featured });
+      if (res && res.ok !== false) {
+        ok++;
+        try {
+          if (userId) {
+            await window.CP.sb().from('admin_actions').insert({
+              action:      'property.featured_change',
+              target_type: 'property',
+              target_id:   id,
+              metadata:    { from: oldVal, to: featured, source: 'bulk' },
+              user_id:     userId,
+            });
+          }
+        } catch (_) {}
+      } else {
+        fail++;
+      }
+    } catch { fail++; }
+  }));
+
+  if (fBtn) {
+    fBtn.disabled = false;
+    fBtn.textContent = featured ? '⭐ Feature' : 'Unfeature';
+  }
+  window.showToast?.(ok + ' ' + label + 'd' + (fail ? ', ' + fail + ' failed' : ''), fail ? 'error' : 'success');
   _adminSelected.clear();
   _updateBulkBar();
   document.querySelectorAll('[data-admin-id]').forEach(c => { c.checked = false; });
