@@ -84,6 +84,7 @@
         ]},
         { sect: 'Properties',     items: [
           { href: '/listings.html',       icon: 'i-property', label: 'Properties' },
+          { href: 'pipeline.html',        icon: 'i-spark',    label: 'Pipeline' },
           { href: 'landlords.html',       icon: 'i-user',     label: 'Landlords' }
         ]},
         { sect: 'Communications', items: [
@@ -109,6 +110,7 @@
       more: [
         { href: 'move-ins.html',          icon: 'i-door',    label: 'Move-ins' },
         { href: 'inspections.html',       icon: 'i-check',   label: 'Inspections' },
+        { href: 'pipeline.html',          icon: 'i-spark',   label: 'Pipeline' },
         { href: 'landlords.html',         icon: 'i-user',    label: 'Landlords' },
         { href: 'messages.html',          icon: 'i-message', label: 'Messages' },
         { href: 'email-logs.html',        icon: 'i-mail',    label: 'Email logs' },
