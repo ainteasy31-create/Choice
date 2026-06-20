@@ -3,7 +3,7 @@
    Shared mobile shell for the Operations Console design system.
    Used by admin, landlord, and tenant portals.
 
-   Provides: bottom nav highlighting, pull-to-refresh, swipe-to-act,
+   Provides: bottom nav highlighting, swipe-to-act,
    bottom sheet, toast, skeletons, realtime live indicator, CSP-safe
    data-action delegation, and helpers.
 
@@ -116,28 +116,6 @@
     if(backdrop) backdrop.classList.remove('open');
     if(sheet)    sheet.classList.remove('open');
   };
-
-  // ───────────────────────── Pull-to-refresh ─────────────────────────
-  function initPullToRefresh(){
-    const ptr = document.createElement('div');
-    ptr.className = 'ptr';
-    // BATCH_08: shimmer bar replaces the spinner — same affordance, less mechanical.
-    ptr.innerHTML = '<span class="cp-shimmer-bar" aria-hidden="true"></span><span>Refreshing…</span>';
-    document.body.appendChild(ptr);
-
-    let startY = 0, pulling = false;
-    document.addEventListener('touchstart', (e) => {
-      if(window.scrollY > 0) return;
-      startY = e.touches[0].clientY;
-      pulling = true;
-    }, { passive: true });
-    document.addEventListener('touchmove', (e) => {
-      if(!pulling) return;
-      const dy = e.touches[0].clientY - startY;
-      if(dy > 80){ pulling = false; ptr.classList.add('active'); setTimeout(()=>{ location.reload(); }, 250); }
-    }, { passive: true });
-    document.addEventListener('touchend', () => { pulling = false; }, { passive: true });
-  }
 
   // ───────────────────────── Swipe to act ─────────────────────────
   function initSwipeRows(){
@@ -737,7 +715,6 @@
     initChipA11y();
     initKeyboardShortcuts();
     initErrorCapture();
-    if('ontouchstart' in window) initPullToRefresh();
     // Cross-tab session sync: if user signs out in another tab, follow.
     window.addEventListener('storage', (e) => {
       if(!e.key) return;
