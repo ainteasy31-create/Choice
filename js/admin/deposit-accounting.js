@@ -66,7 +66,7 @@
     const { data: apps, error: appErr } = await sb
       .from('applications')
       .select(`id, app_id, first_name, last_name, email,
-               property_address, city, state, zip,
+               property_address,
                move_in_date_actual, move_out_date_actual,
                lease_state_code, security_deposit, pet_deposit, key_deposit,
                updated_at, created_at`)
@@ -233,7 +233,7 @@
     _editingNotes = row.acc?.admin_notes || '';
 
     $('#editorTitle').textContent = `Deposit accounting · ${(row.app.first_name||'')+' '+(row.app.last_name||'')}`;
-    $('#editorSub').textContent = `${row.app.property_address || ''}${row.app.city?' · '+row.app.city:''}  ·  Move-out ${fmtDateLong(row.app.move_out_date_actual)}`;
+    $('#editorSub').textContent = `${row.app.property_address || ''}  ·  Move-out ${fmtDateLong(row.app.move_out_date_actual)}`;
     $('#adminNotes').value = _editingNotes;
     $('#btnDownload').style.display = row.acc?.letter_pdf_path ? 'inline-block' : 'none';
 
