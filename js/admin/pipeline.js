@@ -33,6 +33,23 @@
     const imgs = parseJSON(l.original_image_urls);
     return (imgs && imgs.length) ? imgs[0] : null;
   }
+  // Convert a stored JSON array to a user-editable comma-separated string
+  function jArrToText(v){
+    if(!v || v === '[]') return '';
+    const arr = parseJSON(v);
+    if(!arr || !arr.length) return typeof v === 'string' && !v.startsWith('[') ? v : '';
+    return arr.join(', ');
+  }
+  // Convert a comma-separated text string back to a JSON array string for storage
+  function textToJArr(s){
+    if(!s || !s.trim()) return '[]';
+    return JSON.stringify(s.split(',').map(x => x.trim()).filter(Boolean));
+  }
+  // Returns true if the listing was enriched by Phase 2 detail scraping
+  function isEnriched(l){
+    const od = parseJSON(l.original_data);
+    return od && od._phase === 'detail';
+  }
 
   // Returns _pageData filtered by the active source chip
   function visibleListings(){
@@ -124,7 +141,9 @@
           <strong style="font-size:.82rem;color:var(--text)">${fmt$$(l.monthly_rent)}/mo</strong>
           ${l.source ? `<span class="src-badge src-${S.esc(l.source)}" title="Listing source">${l.source === 'zillow' ? 'Zillow' : l.source === 'realtor' ? 'Realtor' : S.esc(l.source)}</span>` : ''}
           ${qsBadge(score)}
-          ${missing.length ? `<span class="qs-badge qs-low" title="Missing fields">${missing.length} missing</span>` : ''}
+          ${missing.length ? `<span class="qs-badge qs-low" title="Missing fields: ${S.esc(missing.join(', '))}">${missing.length} missing</span>` : ''}
+          ${isEnriched(l) ? `<span class="qs-badge qs-high" title="Phase 2 detail enrichment complete — heating, cooling, appliances and more populated">✓ Full data</span>` : ''}
+          ${l.available_date ? `<span class="qs-badge" style="background:rgba(99,102,241,.1);color:var(--brand)" title="Available date">Avail ${S.esc(l.available_date)}</span>` : ''}
           ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none" target="_blank">Live ↗</a>` : ''}
         </div>
       </div>
@@ -181,6 +200,8 @@
     const isPublished = l.status === 'published';
     const isArchived  = l.status === 'archived';
     const editedFields = parseJSON(l.edited_fields) || [];
+    const enriched = isEnriched(l);
+    const photoCount = (parseJSON(l.original_image_urls) || []).length;
 
     return `
     <div class="pl-panel-hd">
@@ -188,6 +209,7 @@
         <div class="pl-panel-title">${S.esc(l.address || '(no address)')}</div>
         <div class="pl-panel-sub">${S.esc([l.city, l.state, l.zip].filter(Boolean).join(', '))}
           ${score != null ? ` · <span class="qs-badge ${qsClass(score)}">Q: ${score}/100</span>` : ''}
+          ${enriched ? ` · <span class="qs-badge qs-high" title="Phase 2 detail scrape complete">✓ Full data</span>` : ` · <span class="qs-badge qs-low" title="Only basic search data — run scraper with Phase 2 for full details">Search only</span>`}
           ${editedFields.length ? ` · <span style="font-size:.7rem;color:var(--brand)">${editedFields.length} fields edited</span>` : ''}
         </div>
         ${l.source_url ? `<a href="${S.esc(l.source_url)}" target="_blank" rel="noopener" class="pl-source-link" style="margin-top:4px">
@@ -201,7 +223,7 @@
 
       <!-- Photos -->
       <div class="pl-section">
-        <div class="pl-section-title">Photos (source)</div>
+        <div class="pl-section-title">Photos from source ${photoCount ? `<span style="font-weight:400;color:var(--muted-2)">(${photoCount})</span>` : ''}</div>
         ${panelPhotos(l)}
       </div>
 
@@ -232,17 +254,53 @@
           ${fi('monthly_rent','Monthly rent ($)', l.monthly_rent,'number',true)}
           ${fi('security_deposit','Security deposit ($)', l.security_deposit,'number',false)}
           ${fi('application_fee','App fee ($)', l.application_fee,'number',false)}
+          ${fi('pet_deposit','Pet deposit ($)', l.pet_deposit,'number',false)}
+          ${fi('parking_fee','Parking fee ($)', l.parking_fee,'number',false)}
+          ${fi('hoa_fee','HOA fee ($)', l.hoa_fee,'number',false)}
           ${fi('bedrooms','Bedrooms', l.bedrooms,'number',false)}
           ${fi('bathrooms','Bathrooms', l.bathrooms,'number',false)}
           ${fi('square_footage','Sqft', l.square_footage,'number',false)}
-          ${fi('property_type','Type', l.property_type,'text',false,false,[
-            {v:'',l:'— select —'},{v:'single_family',l:'Single family'},{v:'condo',l:'Condo'},
-            {v:'townhouse',l:'Townhouse'},{v:'apartment',l:'Apartment'},{v:'multi_family',l:'Multi-family'},
-            {v:'mobile',l:'Mobile'},{v:'land',l:'Land'},{v:'other',l:'Other'}
+          ${fi('lot_size_sqft','Lot sqft', l.lot_size_sqft,'number',false)}
+          ${fi('year_built','Year built', l.year_built,'number',false)}
+          ${fi('floors','Floors / stories', l.floors,'number',false)}
+          ${fi('garage_spaces','Garage spaces', l.garage_spaces,'number',false)}
+          ${fi('property_type','Property type', l.property_type,'text',false,false,[
+            {v:'',l:'— select —'},{v:'SINGLE_FAMILY',l:'Single family'},{v:'CONDOS',l:'Condo'},
+            {v:'TOWNHOMES',l:'Townhouse'},{v:'APARTMENT',l:'Apartment'},{v:'MULTI_FAMILY',l:'Multi-family'},
+            {v:'MOBILE',l:'Mobile'},{v:'LAND',l:'Land'},{v:'FARM',l:'Farm'}
           ])}
           ${fi('available_date','Available date', l.available_date,'date',false)}
           ${fi('minimum_lease_months','Min lease (mo)', l.minimum_lease_months,'number',false)}
-          ${fi('garage_spaces','Garage spaces', l.garage_spaces,'number',false)}
+        </div>
+      </div>
+
+      <!-- Features (Phase 2 data) -->
+      <div class="pl-section">
+        <div class="pl-section-title">Features ${enriched ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
+        <div class="pl-form-grid">
+          ${fi('heating_type','Heating', l.heating_type,'text',false)}
+          ${fi('cooling_type','Cooling', l.cooling_type,'text',false)}
+          ${fi('laundry_type','Laundry', l.laundry_type,'text',false)}
+          ${fi('has_central_air','Central air', l.has_central_air,'text',false,false,[
+            {v:'',l:'— unknown —'},{v:'true',l:'Yes'},{v:'false',l:'No'}
+          ])}
+          ${fi('has_basement','Basement', l.has_basement,'text',false,false,[
+            {v:'',l:'— unknown —'},{v:'true',l:'Yes'},{v:'false',l:'No'}
+          ])}
+          ${fi('parking','Parking', l.parking,'text',false)}
+        </div>
+        <div class="pl-form-grid full" style="margin-top:10px">
+          ${fi('flooring','Flooring (comma-separated)', jArrToText(l.flooring),'text',false,true)}
+        </div>
+      </div>
+
+      <!-- Appliances & Utilities (Phase 2 data) -->
+      <div class="pl-section">
+        <div class="pl-section-title">Appliances &amp; utilities ${enriched ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
+        <div class="pl-form-grid full">
+          ${fi('appliances','Appliances (comma-separated)', jArrToText(l.appliances),'text',false,true)}
+          ${fi('utilities_included','Utilities included (comma-separated)', jArrToText(l.utilities_included),'text',false,true)}
+          ${fi('amenities','Amenities / tags (comma-separated)', jArrToText(l.amenities),'textarea',false,true)}
         </div>
       </div>
 
@@ -267,12 +325,8 @@
           ${fi('smoking_allowed','Smoking', l.smoking_allowed,'text',false,false,[
             {v:'',l:'— unknown —'},{v:'true',l:'Yes'},{v:'false',l:'No'}
           ])}
-          ${fi('has_central_air','Central air', l.has_central_air,'text',false,false,[
-            {v:'',l:'— unknown —'},{v:'true',l:'Yes'},{v:'false',l:'No'}
-          ])}
-          ${fi('has_basement','Basement', l.has_basement,'text',false,false,[
-            {v:'',l:'— unknown —'},{v:'true',l:'Yes'},{v:'false',l:'No'}
-          ])}
+          ${fi('pet_types_allowed','Pet types (comma-sep)', jArrToText(l.pet_types_allowed),'text',false)}
+          ${fi('lease_terms','Lease terms (comma-sep)', jArrToText(l.lease_terms),'text',false)}
         </div>
       </div>
 
@@ -336,19 +390,33 @@
     if(!panel || !_current) return {};
     const l = _current;
     const patch = {};
-    const textFields = ['title','address','city','state','zip','county','neighborhood',
+
+    // Plain text fields
+    const textFields = [
+      'title','address','city','state','zip','county','neighborhood',
       'description','showing_instructions','location_context','virtual_tour_url',
-      'property_type','available_date'];
-    const intFields  = ['monthly_rent','security_deposit','application_fee',
-      'bedrooms','square_footage','minimum_lease_months','garage_spaces'];
+      'property_type','available_date',
+      'heating_type','cooling_type','laundry_type','parking',
+    ];
+    // Integer fields
+    const intFields = [
+      'monthly_rent','security_deposit','application_fee',
+      'pet_deposit','parking_fee','hoa_fee',
+      'bedrooms','square_footage','minimum_lease_months','garage_spaces',
+      'year_built','floors','lot_size_sqft',
+    ];
+    // Float fields
     const floatFields = ['bathrooms'];
-    const boolFields  = ['pets_allowed','smoking_allowed','has_central_air','has_basement'];
+    // Boolean fields (stored as true/false/null)
+    const boolFields = ['pets_allowed','smoking_allowed','has_central_air','has_basement'];
+    // JSON-array fields stored as comma-separated text in the form
+    const jArrFields = ['appliances','utilities_included','amenities','flooring','pet_types_allowed','lease_terms'];
 
     textFields.forEach(f => {
       const el = panel.querySelector('#pf-'+f);
       if(!el) return;
       const v = el.value.trim() || null;
-      if(v !== (l[f]??'').toString().trim()) patch[f] = v;
+      if(v !== (l[f]??'').toString().trim() || (v === null && l[f] != null)) patch[f] = v;
     });
     intFields.forEach(f => {
       const el = panel.querySelector('#pf-'+f);
@@ -371,6 +439,14 @@
       const v   = raw === '' ? null : raw === 'true';
       if(v !== l[f]) patch[f] = v;
     });
+    jArrFields.forEach(f => {
+      const el = panel.querySelector('#pf-'+f);
+      if(!el) return;
+      const newArr = textToJArr(el.value);
+      const oldArr = l[f] || '[]';
+      if(newArr !== oldArr) patch[f] = newArr;
+    });
+
     return patch;
   }
 
