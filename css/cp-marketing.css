@@ -3101,6 +3101,37 @@ body[data-portal="public"][data-page="property"] .mv2-contact-card textarea:focu
 }
 body[data-portal="public"][data-page="property"] .mv2-contact-card textarea { resize: vertical; min-height: 80px; }
 
+/* ── Detail-listed-by: hide duplicate text since landlord card already shows this ── */
+body[data-portal="public"][data-page="property"] .prop-split-content .detail-listed-by {
+  display: none !important;
+}
+
+/* ── Contact card: keep inline on mobile (not a bottom drawer) for mv2-contact-card ── */
+@media (max-width: 767px) {
+  body[data-portal="public"][data-page="property"] #contactCard.mv2-contact-card {
+    position: static !important;
+    transform: none !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    padding: 16px !important;
+    padding-bottom: 16px !important;
+  }
+  body[data-portal="public"][data-page="property"] #contactCard.mv2-contact-card .contact-drawer-handle-bar,
+  body[data-portal="public"][data-page="property"] #contactCard.mv2-contact-card .contact-drawer-close-btn {
+    display: none !important;
+  }
+  /* Hide message icon in mob-bar since form is inline */
+  body[data-portal="public"][data-page="property"] #mobile-apply-bar .mob-msg-btn {
+    display: none;
+  }
+  /* Widen the Apply button to fill the freed space */
+  body[data-portal="public"][data-page="property"] #mobile-apply-bar .mob-actions {
+    flex: 0 0 auto;
+  }
+}
+
 /* ── Responsive: ≤900px = single-column stack ── */
 @media (max-width: 900px) {
   body[data-portal="public"][data-page="property"] .prop-split {

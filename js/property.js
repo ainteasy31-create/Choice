@@ -404,8 +404,10 @@ function renderProperty(p) {
       _banner.id = 'moveInSpecialBanner';
       _banner.style.cssText = 'background:linear-gradient(90deg,#065f46,#059669);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:10px;font-size:.875rem;font-weight:600;margin:0;';
       _banner.innerHTML = `<i class="fas fa-tag" style="font-size:1rem;opacity:.9"></i><span>Move-in Special: ${esc(p.move_in_special)}</span>`;
-      const _galleryStrip = document.getElementById('galleryStrip');
-      if (_galleryStrip) _galleryStrip.insertAdjacentElement('afterend', _banner);
+      // Insert move-in banner before the About section in the content column
+      const _aboutSection = document.getElementById('aboutSection');
+      if (_aboutSection) _aboutSection.insertAdjacentElement('beforebegin', _banner);
+      else document.getElementById('propSplitContent')?.insertAdjacentElement('afterbegin', _banner);
     }
   }
 
@@ -1393,8 +1395,9 @@ function initAdminPropertyPanel(prop) {
       </a>
     </div>`;
 
-  const gallery = document.querySelector('.gallery-mosaic');
-  if (gallery) gallery.parentNode.insertBefore(banner, gallery);
+  // Insert admin banner before the split container (not inside the sticky photo column)
+  const split = document.getElementById('propSplit');
+  if (split) split.parentNode.insertBefore(banner, split);
   else document.body.prepend(banner);
 
   // ── Status inline save ──

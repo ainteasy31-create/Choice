@@ -117,10 +117,8 @@
 
     <!-- Availability + share row -->
     <div class="prop-avail-row">
-      <div class="prop-avail-chip" id="propAvailChip" style="display:none">
-        <span class="prop-avail-dot"></span>
-        <span id="propAvailText">Available Now</span>
-      </div>
+      <!-- sidebarAvail: JS populates this with availability text + controls display -->
+      <div class="prop-avail-chip" id="sidebarAvail" style="display:none"></div>
       <div class="prop-share-btns">
         <button class="prop-share-btn" id="savePropBtn">
           <i class="far fa-heart"></i> Save
@@ -161,7 +159,7 @@
     <div class="prop-divider"></div>
 
     <!-- About -->
-    <div class="prop-section" id="aboutSection">
+    <div class="prop-section detail-section" id="aboutSection">
       <div class="prop-section-eyebrow">About this home</div>
       <div class="prop-section-head">A place to <em>call home</em>.</div>
       <div class="prop-desc" id="detailDesc">
@@ -356,8 +354,7 @@
   </div>
 </div>
 
-<!-- Hidden elements kept for JS compatibility -->
-<div id="sidebarAvail" style="display:none" aria-hidden="true"></div>
+<!-- sidebarAvail now lives in .prop-avail-row above; no compat div needed -->
 
   <script nonce="VZEkWatH2Jtta2vFy8dRhA">
     document.addEventListener('DOMContentLoaded', function() {
