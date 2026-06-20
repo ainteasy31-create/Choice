@@ -370,11 +370,19 @@
       ${renderStatusBar(p.status)}
     </div>`;
 
-    const extraBadges = p.property_type
-      ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-          <span class="pill pill-muted">${esc(capitalize(p.property_type))}</span>
-        </div>`
-      : '';
+    const extraBadges = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+        ${p.property_type ? `<span class="pill pill-muted">${esc(capitalize(p.property_type))}</span>` : ''}
+        ${p.featured ? '<span class="pill pill-warning">★ Featured</span>' : ''}
+      </div>`;
+
+    // ── Metrics strip ──
+    const daysListed = p.created_at ? Math.floor((Date.now() - new Date(p.created_at).getTime()) / 86400000) : null;
+    const metricsHtml = `<div class="pd-metrics-strip">
+      <div class="pd-metric"><span class="pd-metric-val">${daysListed !== null ? daysListed : '—'}</span><span class="pd-metric-lbl">days listed</span></div>
+      <div class="pd-metric"><span class="pd-metric-val" id="pd-metric-apps">—</span><span class="pd-metric-lbl">applications</span></div>
+      <div class="pd-metric"><span class="pd-metric-val" id="pd-metric-inqs">—</span><span class="pd-metric-lbl">inquiries</span></div>
+      <div class="pd-metric"><span class="pd-metric-val">${p.views_count != null ? Number(p.views_count).toLocaleString() : '—'}</span><span class="pd-metric-lbl">views</span></div>
+    </div>`;
 
     const actionsHtml = `<div class="pd-actions">
       <button class="btn btn-primary btn-sm" id="pd-btn-edit"><i class="fas fa-pen-to-square"></i> Edit &amp; Upload</button>
@@ -382,7 +390,8 @@
       <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Public listing</a>
       <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft"><i class="fas fa-copy"></i> Duplicate</button>
     </div>
-    ${_lastSavedAt ? `<div id="pd-lastsaved" class="pd-lastsaved">Last saved ${_lastSavedAt}</div>` : ''}`;
+    ${_lastSavedAt ? `<div id="pd-lastsaved" class="pd-lastsaved">Last saved ${_lastSavedAt}</div>` : ''}
+    ${metricsHtml}`;
 
     // ── Key fields grid ──
     const fields = [
@@ -570,12 +579,21 @@
         </div>`
       : '';
 
+    // ── Admin notes (read-only display, admin-only) ──
+    const adminNotesHtml = p.admin_notes
+      ? `<div class="pd-section" style="border-left:3px solid var(--brand);padding-left:12px">
+          <div class="pd-section-title" style="color:var(--brand)"><i class="fas fa-note-sticky"></i> Admin Notes (internal)</div>
+          <div class="pd-desc" style="font-style:italic;color:var(--muted)">${esc(p.admin_notes)}</div>
+        </div>`
+      : '';
+
     document.getElementById('pd-root').innerHTML =
       galleryHtml
       + headerHtml
       + statusHtml
       + extraBadges
       + actionsHtml
+      + adminNotesHtml
       + fieldsHtml
       + descHtml
       + vtHtml
@@ -663,10 +681,18 @@
       const { data: nd, error: ne } = await CP.sb().from('properties').insert([clone]).select('id').single();
       if (ne) { S.toast('Duplicate failed: ' + ne.message, 'error'); return; }
       S.toast('Property duplicated — opening new draft…', 'success');
+      // Audit log for duplicate (non-blocking)
+      CP.sb().auth.getUser().then(({ data: ud }) => {
+        CP.sb().from('admin_actions').insert([{
+          user_id:     ud?.user?.id || null,
+          action:      'property.duplicate',
+          target_type: 'property',
+          target_id:   String(nd.id),
+          metadata:    { source_id: propId, source_title: p.title || null, status: 'draft' }
+        }]).catch(() => {});
+      }).catch(() => {});
       setTimeout(() => { location.href = '/admin/property-detail.html?id=' + encodeURIComponent(nd.id) + '&edit=1'; }, 700);
     });
-
-    // (featured column removed from schema — no handler needed)
 
     // Inquiry message expand (click row → modal dialog)
     document.querySelectorAll('.pd-inq-row').forEach(row => {
@@ -929,6 +955,9 @@
               <label class="pd-edit-label">Showing instructions
                 <textarea class="pd-edit-input" name="showing_instructions" rows="2" placeholder="Contact landlord to schedule…">${esc(p.showing_instructions || '')}</textarea>
               </label>
+              <label class="pd-edit-label">Admin notes <span class="pd-edit-hint">Internal only — never shown to landlords or tenants</span>
+                <textarea class="pd-edit-input" name="admin_notes" rows="3" placeholder="Internal memo, flags, follow-up reminders…" id="pd-admin-notes-ta">${esc(p.admin_notes || '')}</textarea>
+              </label>
               <div class="pd-edit-row">
                 <label class="pd-edit-label">Latitude
                   <input class="pd-edit-input" name="lat" type="number" value="${esc(String(p.lat || ''))}" placeholder="37.7749" step="any">
@@ -1121,6 +1150,16 @@
         form.elements.lat.value = lat.toFixed(6);
         form.elements.lng.value = lng.toFixed(6);
         S.toast('Coordinates updated!', 'success');
+        // Audit log (non-blocking)
+        CP.sb().auth.getUser().then(({ data: ud }) => {
+          CP.sb().from('admin_actions').insert([{
+            user_id:     ud?.user?.id || null,
+            action:      'property.geocode',
+            target_type: 'property',
+            target_id:   String(propId),
+            metadata:    { lat, lng, address: addr, method: 'manual_button' }
+          }]).catch(() => {});
+        }).catch(() => {});
       } catch (err) {
         S.toast('Geocode failed: ' + (err.message || err), 'error');
       } finally {
@@ -1251,11 +1290,9 @@
         if (statusEl) statusEl.textContent = `Uploading photo ${i + 1} of ${entries.length}…`;
         try {
           const result = await _uploadAdminPhoto(file, propId, () => {});
-          const { data: newPhoto } = await CP.sb()
-            .from('property_photos')
-            .insert([{ property_id: propId, url: result.url, file_id: result.fileId || null, display_order: baseOrder + uploadedCnt }])
-            .select('id,url,display_order,watermark_status,file_id')
-            .single();
+          const { data: newPhotoRows } = await CP.sb()
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+          const newPhoto = newPhotoRows && newPhotoRows[0];
           if (newPhoto) { _photos.push(newPhoto); uploadedCnt++; }
         } catch (uploadErr) {
           S.toast('Photo upload failed: ' + (uploadErr.message || uploadErr), 'error');
@@ -1336,6 +1373,8 @@
       pet_details:        get('pet_details') || null,
       smoking_allowed:    getBool('smoking_allowed'),
       showing_instructions: get('showing_instructions') || null,
+      admin_notes:        get('admin_notes') || null,
+      featured:           getBool('featured') ?? false,
       lat:                resolvedLat,
       lng:                resolvedLng,
       landlord_id:        get('landlord_id') || null,
@@ -1470,6 +1509,16 @@
 
   // ── Incremental apps/inqs update (after deferred fetch) ─────────────────────
   function _updateAppsInqs(apps, inqs) {
+    // Update metrics strip counters
+    const metricApps = document.getElementById('pd-metric-apps');
+    const metricInqs = document.getElementById('pd-metric-inqs');
+    if (metricApps && apps !== null) {
+      metricApps.textContent = apps.length === 25 ? '25+' : String(apps.length);
+    }
+    if (metricInqs && inqs !== null) {
+      metricInqs.textContent = inqs.length === 25 ? '25+' : String(inqs.length);
+    }
+
     const appsSection = document.getElementById('pd-apps-section');
     const inqsSection = document.getElementById('pd-inqs-section');
 
@@ -1765,12 +1814,8 @@
             uploadBar.style.width = overall + '%';
             uploadPct.textContent = overall + '%';
           });
-          const { error: insErr } = await CP.sb().from('property_photos').insert([{
-            property_id:   propId,
-            url:           result.url,
-            file_id:       result.fileId || null,
-            display_order: baseOrder + successCnt,
-          }]);
+          const { error: insErr } = await CP.sb()
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
           if (insErr) throw new Error(insErr.message);
           successCnt++;
           if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
@@ -2020,7 +2065,13 @@
             .limit(25)
         ]);
         _updateAppsInqs(appsRes.data || [], inqsRes.data || []);
-      } catch (e) { /* non-fatal */ }
+      } catch (e) {
+        // Show error state rather than leaving the sections in "loading" state forever
+        const s1 = document.getElementById('pd-apps-section');
+        const s2 = document.getElementById('pd-inqs-section');
+        if (s1) s1.innerHTML = '<div class="pd-section-title">Applications</div><div class="pd-empty-row" style="color:var(--muted)">Could not load applications — refresh to retry.</div>';
+        if (s2) s2.innerHTML = '<div class="pd-section-title">Inquiries</div><div class="pd-empty-row" style="color:var(--muted)">Could not load inquiries — refresh to retry.</div>';
+      }
     };
     if (typeof requestIdleCallback !== 'undefined') {
       requestIdleCallback(_loadAppsInqs, { timeout: 3000 });
