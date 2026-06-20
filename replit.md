@@ -15,6 +15,8 @@ Nationwide rental property marketplace and management platform. Static HTML/CSS/
 ## Repository
 - GitHub: https://github.com/choice121/Choice
 - Cloudflare Pages auto-builds on every push to `main`
+- **Live site:** https://choice-properties-site.pages.dev
+- **Admin portal:** https://choice-properties-site.pages.dev/admin/
 
 ## How to Push Changes
 Always use the GitHub Git Data API — never `git push` from Replit:
