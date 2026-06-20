@@ -313,6 +313,7 @@
                                  return Number.isFinite(v) ? Math.max(1, Math.min(28, v)) : 1;
                                })(),
       rent_proration_method:   data.rent_proration_method || 'daily',
+      application_fee:         num(app.application_fee),
       utility_responsibilities,
     };
 

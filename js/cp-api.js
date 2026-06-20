@@ -996,6 +996,7 @@ async function updateNav() {
           'first_month_rent,last_month_rent,pet_deposit,pet_rent,admin_fee,' +
           'key_deposit,parking_fee,cleaning_fee,cleaning_fee_refundable,' +
           'lease_late_fee_flat,lease_state_code,lease_landlord_name,lease_landlord_address,' +
+          'rent_due_day_of_month,rent_proration_method,' +
           'utility_responsibilities,move_out_date_actual,prorated_first_month'
         )
         .order('created_at', { ascending: false });
