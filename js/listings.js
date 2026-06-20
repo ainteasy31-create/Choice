@@ -207,7 +207,7 @@ function injectAdminToolbar() {
             style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
             <i class="fas fa-download"></i> Export CSV
           </button>
-          <a href="/admin/property-detail.html?new=1"
+          <a href="/landlord/new-listing.html"
             style="background:#006aff;color:#fff;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:6px">
             <i class="fas fa-plus"></i> New Property
           </a>

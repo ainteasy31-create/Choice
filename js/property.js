@@ -114,7 +114,7 @@ async function loadProperty(id) {
   try {
     const { data, error } = await supabase
       .from('properties')
-      .select('*, landlords(id, user_id, business_name, contact_name, avatar_url, tagline, verified), property_photos(url, file_id, display_order)')
+      .select('*, landlords(id, user_id, business_name, contact_name, avatar_url, tagline, verified), property_photos(id, url, file_id, display_order)')
       .eq('id', id)
       .single();
     if (error || !data) throw new Error('Not found');
