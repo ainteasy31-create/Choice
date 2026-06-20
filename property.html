@@ -36,33 +36,31 @@
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
   <link rel="preconnect" href="https://ik.imagekit.io" crossorigin>
   <link rel="preconnect" id="sb-preconnect"><!-- set by config.js -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,600&display=swap">
   <link rel="stylesheet" href="/assets/fontawesome.css">
   <noscript><link rel="stylesheet" href="/assets/fontawesome.css"></noscript>
   <link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
   <link rel="stylesheet" href="/css/cp-marketing.css?v=__BUILD_VERSION__">
   <!-- Leaflet loaded lazily via IntersectionObserver in renderMap() -->
   <style>
-    /* ── CRITICAL CSS — above-fold paint for property.html ───────────────────
-       Mobile sticky Apply CTA + minimum nav-slot reservation. The full
-       component sheet lives in cp-marketing.css under the
-       body[data-portal="public"][data-page="property"] scope.
-    ─────────────────────────────────────────────────────────────────────── */
+    /* ── CRITICAL CSS — Editorial Split layout ───────────────────────────── */
     *,*::before,*::after{box-sizing:border-box}
     html{-webkit-text-size-adjust:100%}
     body[data-portal="public"]{
       margin:0;
       font-family:"Inter",-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-      background:#f7f9fc;color:#1f2937;line-height:1.6;font-size:15.5px;
+      background:#fff;color:#1f2937;line-height:1.6;font-size:15px;
     }
-    #site-nav{min-height:64px;display:block}
-    /* Mobile sticky Apply CTA — hidden on desktop, activated by JS at runtime */
-    #mobile-apply-bar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:#0a1628;border-top:1px solid rgba(255,255,255,.12);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -4px 24px rgba(0,0,0,.35)}
-    #mobile-apply-bar .mob-price{color:rgba(255,255,255,.65);font-size:.75rem;line-height:1.2}
-    #mobile-apply-bar .mob-price strong{display:block;font-size:1.05rem;font-weight:700;color:#fff;letter-spacing:-.01em}
-    #mobile-apply-bar .mob-btn{background:#006aff;color:#fff;border:none;border-radius:8px;padding:12px 22px;font-size:.875rem;font-weight:700;letter-spacing:-.01em;text-decoration:none;white-space:nowrap;cursor:pointer;flex-shrink:0;box-shadow:0 4px 16px rgba(0,106,255,.35);transition:background 160ms ease,box-shadow 160ms ease}
-    #mobile-apply-bar .mob-btn:hover{background:#0054cc;box-shadow:0 6px 22px rgba(0,106,255,.45)}
-    @media(max-width:767px){#mobile-apply-bar.active{display:flex}body.mob-bar-active{padding-bottom:calc(80px + env(safe-area-inset-bottom))}}
+    #site-nav{min-height:56px;display:block}
+
+    /* Mobile sticky Apply bar */
+    #mobile-apply-bar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:#fff;border-top:1px solid #e4e8ef;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -2px 16px rgba(0,0,0,.08)}
+    #mobile-apply-bar .mob-price{color:#6b7280;font-size:.75rem;line-height:1.2}
+    #mobile-apply-bar .mob-price strong{display:block;font-size:1.15rem;font-weight:800;color:#0a1628;letter-spacing:-.02em}
+    #mobile-apply-bar .mob-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+    #mobile-apply-bar .mob-msg-btn{width:44px;height:44px;border-radius:9px;border:1.5px solid #e4e8ef;background:transparent;color:#6b7280;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    #mobile-apply-bar .mob-btn{background:#006aff;color:#fff;border:none;border-radius:9px;padding:12px 22px;font-size:.875rem;font-weight:800;text-decoration:none;white-space:nowrap;cursor:pointer;box-shadow:0 4px 16px rgba(0,106,255,.35)}
+    @media(max-width:900px){#mobile-apply-bar.active{display:flex}body.mob-bar-active{padding-bottom:calc(72px + env(safe-area-inset-bottom))}}
   </style>
 <script defer src="/config.js?v=__BUILD_VERSION__"></script>
 <script defer src="/js/supabase.min.js"></script>
@@ -72,90 +70,101 @@
 </head>
 <body data-portal="public" data-page="property">
 
-<!-- ── Site Navigation (hydrated from /components/nav.html by components.js) ── -->
+<!-- ── Site Navigation ── -->
 <div id="site-nav"></div>
 
-<!-- ── Gallery Mosaic ── -->
-<div class="gallery-mosaic skeleton-loading" id="gallery">
-  <!-- Main large panel -->
-  <div class="mosaic-main" id="mosaicMain">
-    <img class="mosaic-main-img" id="mosaicMainImg" src="" alt="Property photo" fetchpriority="high" decoding="async">
-  </div>
-  <!-- Right 2×2 side grid -->
-  <div class="mosaic-side" id="mosaicSide"></div>
+<!-- ── Editorial Split Layout ── -->
+<div class="prop-split" id="propSplit">
 
-  <!-- See all photos button (desktop) -->
-  <button class="mosaic-expand-btn" id="mosaicExpandBtn">
-    <i class="fas fa-th"></i> See all photos
-  </button>
-
-  <!-- Mobile swipe nav arrows -->
-  <button class="mosaic-nav-btn prev" id="mosaicPrev"><i class="fas fa-chevron-left"></i></button>
-  <button class="mosaic-nav-btn next" id="mosaicNext"><i class="fas fa-chevron-right"></i></button>
-  <div class="mosaic-mobile-count" id="mosaicMobileCount">1 / 1</div>
-
-  <!-- Legacy galleryExpand kept for JS compatibility -->
-  <button id="galleryExpand" style="display:none"></button>
-</div>
-
-<!-- ── Gallery Thumbnail Strip ── -->
-<div class="gallery-strip" id="galleryStrip" role="list" aria-label="Property photos"></div>
-
-<!-- ── Lightbox ── -->
-<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Property photo gallery">
-  <!-- Header: counter + close -->
-  <div class="lightbox-header">
-    <div class="lightbox-counter" id="lightboxCounter" aria-live="polite" aria-atomic="true">1 / 1</div>
-    <button class="lightbox-close" id="lightboxClose" aria-label="Close gallery"><i class="fas fa-times"></i></button>
-  </div>
-  <!-- Main image stage -->
-  <div class="lightbox-stage">
-    <button class="lightbox-nav prev" id="lightboxPrev" aria-label="Previous photo"><i class="fas fa-chevron-left"></i></button>
-    <div class="lightbox-img-wrap" id="lightboxImgWrap">
-      <div class="lb-lqip-bg" id="lbLqipBg"></div>
-      <img class="lightbox-img" id="lightboxImg" src="" alt="Property photo" loading="lazy">
-      <div class="lb-spinner" id="lbSpinner"></div>
+  <!-- LEFT: Sticky Photo Gallery -->
+  <div class="prop-split-photos" id="propSplitPhotos">
+    <!-- Mosaic / swipe gallery (populated by JS) -->
+    <div class="gallery-mosaic skeleton-loading" id="gallery">
+      <div class="mosaic-main" id="mosaicMain">
+        <img class="mosaic-main-img" id="mosaicMainImg" src="" alt="Property photo" fetchpriority="high" decoding="async">
+      </div>
+      <div class="mosaic-thumbs" id="mosaicSide"></div>
+      <!-- Mobile swipe nav -->
+      <button class="mosaic-nav-btn prev" id="mosaicPrev"><i class="fas fa-chevron-left"></i></button>
+      <button class="mosaic-nav-btn next" id="mosaicNext"><i class="fas fa-chevron-right"></i></button>
+      <div class="mosaic-mobile-count" id="mosaicMobileCount">1 / 1</div>
+      <!-- See all (desktop) -->
+      <button class="mosaic-expand-btn" id="mosaicExpandBtn">
+        <i class="fas fa-th-large"></i>
+        <span class="mosaic-expand-label">See All Photos</span>
+        <span class="mosaic-photo-count"></span>
+      </button>
+      <!-- Legacy kept for JS compat -->
+      <button id="galleryExpand" style="display:none"></button>
     </div>
-    <button class="lightbox-nav next" id="lightboxNext" aria-label="Next photo"><i class="fas fa-chevron-right"></i></button>
+    <!-- Thumbnail strip (below gallery on desktop, hidden on mobile) -->
+    <div class="gallery-strip" id="galleryStrip" role="list" aria-label="Property photos"></div>
   </div>
-  <!-- Thumbnail filmstrip -->
-  <div class="lightbox-thumbs" id="lightboxThumbs"></div>
-</div>
 
-<!-- ── Detail Content ── -->
-<div class="property-detail mv2-property">
-  <div class="container">
-    <div class="detail-layout">
+  <!-- RIGHT: Scrollable Content -->
+  <div class="prop-split-content property-detail" id="propSplitContent">
 
-  <!-- Main column -->
-  <div class="detail-main" id="detailMain">
-    <div class="detail-breadcrumb mv2-breadcrumb">
+    <!-- Breadcrumb -->
+    <div class="detail-breadcrumb">
       <a href="/listings.html" id="backToResults">Listings</a>
-      <i class="fas fa-chevron-right" style="font-size:10px"></i>
+      <i class="fas fa-chevron-right" style="font-size:9px"></i>
       <span id="breadcrumbCity">Loading…</span>
       <span id="breadcrumbTitleGroup" style="display:none">
-        <i class="fas fa-chevron-right" style="font-size:10px"></i>
+        <i class="fas fa-chevron-right" style="font-size:9px"></i>
         <span id="breadcrumbTitle"></span>
       </span>
     </div>
 
-    <div class="detail-header mv2-detail-header">
-      <div class="detail-price" id="detailPrice">
-        <div class="skeleton" style="height:44px;width:200px;border-radius:8px"></div>
+    <!-- Availability + share row -->
+    <div class="prop-avail-row">
+      <div class="prop-avail-chip" id="propAvailChip" style="display:none">
+        <span class="prop-avail-dot"></span>
+        <span id="propAvailText">Available Now</span>
       </div>
-      <div class="detail-title" id="detailTitle">
-        <div class="skeleton" style="height:28px;width:72%;border-radius:6px;margin-bottom:6px"></div>
-      </div>
-      <div class="detail-address" id="detailAddress">
-        <div class="skeleton" style="height:18px;width:52%;border-radius:4px"></div>
+      <div class="prop-share-btns">
+        <button class="prop-share-btn" id="savePropBtn">
+          <i class="far fa-heart"></i> Save
+        </button>
+        <button class="prop-share-btn" onclick="shareProp()">
+          <i class="fas fa-share-alt"></i> Share
+        </button>
       </div>
     </div>
 
-    <div class="detail-meta-row" id="detailMeta"></div>
+    <!-- Price + title -->
+    <div class="prop-header">
+      <div class="prop-price" id="detailPrice">
+        <div class="skeleton" style="height:44px;width:200px;border-radius:8px"></div>
+      </div>
+      <h1 class="prop-title" id="detailTitle">
+        <div class="skeleton" style="height:30px;width:75%;border-radius:6px;margin-bottom:6px"></div>
+      </h1>
+      <div class="prop-address" id="detailAddress">
+        <div class="skeleton" style="height:18px;width:55%;border-radius:4px"></div>
+      </div>
+    </div>
 
-    <div class="detail-section">
-      <div class="detail-section-title mv2-section-title">About this <em>home</em>.</div>
-      <div class="detail-desc" id="detailDesc">
+    <!-- Landlord inline row -->
+    <div class="prop-landlord-row" id="landlordCard" style="display:none">
+      <div class="prop-ll-avatar" id="landlordAvatar">?</div>
+      <div class="prop-ll-info">
+        <div class="prop-ll-label">Listed by</div>
+        <div class="prop-ll-name" id="landlordName">—</div>
+        <div class="prop-ll-tagline" id="landlordTagline"></div>
+      </div>
+      <i class="fas fa-circle-check prop-ll-verified" id="landlordVerified" style="display:none" title="Verified landlord"></i>
+    </div>
+
+    <!-- Stats / meta grid -->
+    <div class="prop-meta-grid" id="detailMeta"></div>
+
+    <div class="prop-divider"></div>
+
+    <!-- About -->
+    <div class="prop-section" id="aboutSection">
+      <div class="prop-section-eyebrow">About this home</div>
+      <div class="prop-section-head">A place to <em>call home</em>.</div>
+      <div class="prop-desc" id="detailDesc">
         <div class="skeleton skeleton-line" style="width:100%;height:15px;margin-bottom:10px"></div>
         <div class="skeleton skeleton-line" style="width:96%;height:15px;margin-bottom:10px"></div>
         <div class="skeleton skeleton-line" style="width:88%;height:15px;margin-bottom:10px"></div>
@@ -163,7 +172,9 @@
       </div>
     </div>
 
-    <div class="detail-section detail-tabs-wrap" id="detailTabsSection" style="display:none">
+    <!-- Amenities / Utilities / Lease (tabbed) -->
+    <div class="prop-section detail-tabs-wrap" id="detailTabsSection" style="display:none">
+      <div class="prop-section-eyebrow">Features &amp; details</div>
       <div class="detail-tabs" id="detailTabs" role="tablist">
         <button class="detail-tab active" data-panel="panelAmenities" id="tabAmenities" role="tab" aria-selected="true" aria-controls="panelAmenities">
           <i class="fas fa-list-check"></i> Amenities
@@ -189,13 +200,61 @@
         <div class="amenities-grid" id="leaseGrid"></div>
       </div>
     </div>
+    <!-- Legacy hidden sections kept for JS compat -->
     <div id="amenitiesSection" style="display:none"></div>
     <div id="utilitiesSection" style="display:none"></div>
     <div id="leaseSection" style="display:none"></div>
 
-    <!-- Map section — uses Leaflet if lat/lng available, fallback iframe -->
-    <div class="detail-section">
-      <div class="detail-section-title mv2-section-title">Where it <em>sits</em>.</div>
+    <div class="prop-divider" id="dividerAfterFeatures" style="display:none"></div>
+
+    <!-- Costs -->
+    <div class="prop-section" id="costsSection">
+      <div class="prop-section-eyebrow">Costs</div>
+      <div class="prop-section-head">What you'll <em>pay</em>.</div>
+      <table class="prop-cost-table">
+        <tbody>
+          <tr><td>Monthly Rent</td><td id="sidebarRent"><span class="skeleton" style="height:14px;width:60px;border-radius:3px;display:inline-block"></span></td></tr>
+          <tr><td>Security Deposit</td><td id="sidebarDeposit">—</td></tr>
+          <tr><td>Application Fee</td><td id="sidebarFee">—</td></tr>
+          <tr id="sidebarMoveInRow" style="display:none"><td>Available From</td><td id="sidebarMoveIn">—</td></tr>
+          <tr id="sidebarLastMonthRow" style="display:none"><td>Last Month's Rent</td><td id="sidebarLastMonth">—</td></tr>
+          <tr id="sidebarAdminFeeRow" style="display:none"><td>Admin / Move-in Fee</td><td id="sidebarAdminFee">—</td></tr>
+          <tr id="sidebarMoveInSpecialRow" style="display:none"><td>Move-in Special</td><td id="sidebarMoveInSpecial" style="color:#10b981">—</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Apply strip -->
+      <div class="prop-apply-strip" id="applyStrip">
+        <div class="prop-apply-strip-text">
+          <div class="prop-apply-strip-price" id="sidebarPrice">
+            <div class="skeleton" style="height:26px;width:130px;border-radius:6px;display:inline-block"></div>
+          </div>
+          <div class="prop-apply-strip-sub">
+            <i class="fas fa-lock" style="color:#d4a017;font-size:10px"></i>
+            Nothing charged at submission — we contact you within 24 hrs.
+          </div>
+        </div>
+        <a href="#" class="prop-apply-btn" id="applyBtn">
+          Apply Now <i class="fas fa-paper-plane" style="font-size:13px"></i>
+        </a>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">
+        <p style="font-size:11.5px;color:#6b7280;line-height:1.55;display:flex;align-items:flex-start;gap:6px">
+          <i class="fas fa-clock" style="color:#1d4ed8;margin-top:2px;font-size:10px;flex-shrink:0"></i>
+          <span>Decisions are typically made within 24–72 hours of payment. Applicants who respond promptly are often prioritized.</span>
+        </p>
+        <a id="trackAppLink" href="/apply/?path=dashboard" class="prop-track-link">
+          <i class="fas fa-search" style="font-size:11px"></i> Already applied? Track your application →
+        </a>
+      </div>
+    </div>
+
+    <div class="prop-divider"></div>
+
+    <!-- Map -->
+    <div class="prop-section">
+      <div class="prop-section-eyebrow">Location</div>
+      <div class="prop-section-head">Where it <em>sits</em>.</div>
       <div class="map-container" id="mapContainer">
         <div id="mapFallback" style="height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#8892a2">
           <i class="fas fa-map-marker-alt" style="font-size:32px;color:#2563eb"></i>
@@ -210,132 +269,80 @@
         <i class="fas fa-diamond-turn-right"></i> Open in Maps
       </a>
     </div>
-  </div>
 
-  <!-- Sidebar -->
-  <div class="detail-sidebar">
-    <!-- Apply Card -->
-    <div class="apply-card mv2-apply-card">
-      <div class="apply-card-header">
-        <div class="apply-card-price" id="sidebarPrice"><div class="skeleton" style="height:32px;width:140px;border-radius:6px;display:inline-block"></div></div>
-        <div class="apply-card-avail" id="sidebarAvail" style="display:none" aria-hidden="true">
-          <div class="skeleton" style="height:14px;width:160px;border-radius:4px"></div>
-        </div>
-      </div>
-      <div class="apply-card-body">
-        <div class="apply-cost-row">
-          <span class="apply-cost-label">Monthly Rent</span>
-          <span class="apply-cost-value" id="sidebarRent"><span class="skeleton" style="height:13px;width:60px;border-radius:3px;display:inline-block"></span></span>
-        </div>
-        <div class="apply-cost-row">
-          <span class="apply-cost-label">Security Deposit</span>
-          <span class="apply-cost-value" id="sidebarDeposit">—</span>
-        </div>
-        <div class="apply-cost-row">
-          <span class="apply-cost-label">Application Fee</span>
-          <span class="apply-cost-value" id="sidebarFee">—</span>
-        </div>
-        <div class="apply-cost-row" id="sidebarMoveInRow" style="display:none">
-          <span class="apply-cost-label">Available From</span>
-          <span class="apply-cost-value" id="sidebarMoveIn">—</span>
-        </div>
-        <div class="apply-cost-row" id="sidebarLastMonthRow" style="display:none">
-          <span class="apply-cost-label">Last Month's Rent</span>
-          <span class="apply-cost-value" id="sidebarLastMonth">—</span>
-        </div>
-        <div class="apply-cost-row" id="sidebarAdminFeeRow" style="display:none">
-          <span class="apply-cost-label">Admin / Move-in Fee</span>
-          <span class="apply-cost-value" id="sidebarAdminFee">—</span>
-        </div>
-        <div class="apply-cost-row" id="sidebarMoveInSpecialRow" style="display:none">
-          <span class="apply-cost-label">Move-in Special</span>
-          <span class="apply-cost-value" id="sidebarMoveInSpecial" style="color:#10b981">—</span>
-        </div>
-        <a href="#" class="apply-btn" id="applyBtn">
-          Apply Now <i class="fas fa-paper-plane" style="font-size:14px"></i>
-        </a>
-        <p class="apply-disclaimer" style="display:flex;flex-direction:column;gap:6px">
-          <span><i class="fas fa-lock" style="color:#d4a017"></i>
-            <strong>Nothing is charged at submission.</strong> Our leasing team contacts you within 24 hours to securely complete the <strong><span id="applyFeeAmt">the application fee</span></strong>. Your application is activated for review only after payment is completed.</span>
-          <span style="color:#1d4ed8;font-weight:600"><i class="fas fa-clock"></i>
-            Decisions are typically made within 24 to 72 hours of payment. Applicants who respond promptly are often prioritized.</span>
-        </p>
-        <a id="trackAppLink" href="/apply/?path=dashboard"
-           class="apply-track-link">
-          <i class="fas fa-search"></i> Already applied? Track your application →
-        </a>
-      </div>
-    </div>
+    <div class="prop-divider"></div>
 
-    <!-- Landlord Profile Card -->
-    <div class="landlord-card mv2-landlord-card" id="landlordCard" style="display:none;">
-      <div class="landlord-card-avatar" id="landlordAvatar">?</div>
-      <div class="landlord-card-info">
-        <div class="landlord-card-label">Listed by</div>
-        <div class="landlord-card-name" id="landlordName">—</div>
-        <div class="landlord-card-tagline" id="landlordTagline"></div>
-      </div>
-      <i class="fas fa-circle-check landlord-card-verified" id="landlordVerified" style="display:none" title="This landlord has been reviewed and approved by Choice Properties"></i>
-    </div>
-
-    <!-- Contact Card -->
-    <div class="contact-card mv2-contact-card" id="contactCard">
-      <div class="contact-drawer-handle-bar"></div>
-      <div class="contact-card-header-row">
-        <div class="share-row">
-          <button class="share-btn" id="savePropBtn">
-            <i class="far fa-heart"></i> Save
-          </button>
-          <button class="share-btn" onclick="shareProp()">
-            <i class="fas fa-share-alt"></i> Share
+    <!-- Contact / message landlord -->
+    <div class="prop-section">
+      <div class="prop-section-eyebrow">Questions?</div>
+      <div class="prop-section-head">Message the <em>landlord</em>.</div>
+      <!-- Contact card (inline on desktop, drawer on mobile) -->
+      <div class="contact-card mv2-contact-card" id="contactCard">
+        <div class="contact-drawer-handle-bar"></div>
+        <div class="contact-card-header-row">
+          <div class="share-row" style="display:none"><!-- share btns already in header --></div>
+          <button class="contact-drawer-close-btn" id="contactDrawerCloseBtn" aria-label="Close">
+            <i class="fas fa-times"></i>
           </button>
         </div>
-        <button class="contact-drawer-close-btn" id="contactDrawerCloseBtn" aria-label="Close">
-          <i class="fas fa-times"></i>
+        <div class="contact-form-group">
+          <label class="form-label">Your Name</label>
+          <input type="text" class="form-input" id="inqName" placeholder="Full name">
+        </div>
+        <div class="contact-form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="inqEmail" placeholder="your@email.com">
+        </div>
+        <div class="contact-form-group">
+          <label class="form-label">Phone (optional)</label>
+          <input type="tel" class="form-input" id="inqPhone" placeholder="(555) 000-0000">
+        </div>
+        <div class="contact-form-group">
+          <label class="form-label">Message</label>
+          <textarea class="form-textarea" id="inqMessage" rows="3" maxlength="1500" placeholder="I'm interested in this property and have a few questions…"></textarea>
+          <div style="text-align:right;font-size:11px;color:#8892a2;margin-top:4px"><span id="inqCharCount">0</span> / 1500</div>
+          <div style="font-size:11px;color:#8892a2;margin-top:2px">Plain text only — no links or URLs.</div>
+        </div>
+        <button class="btn btn-primary btn-full" id="sendInquiryBtn">
+          <i class="fas fa-paper-plane"></i> Send Message
         </button>
+        <p style="font-size:12px;color:#8892a2;margin:10px 0 0;line-height:1.5;text-align:center">Submitting an inquiry does not reserve this property or start an application.</p>
       </div>
-      <div class="contact-card-title">Questions? Message the Landlord</div>
-      <div class="contact-form-group">
-        <label class="form-label">Your Name</label>
-        <input type="text" class="form-input" id="inqName" placeholder="Full name">
-      </div>
-      <div class="contact-form-group">
-        <label class="form-label">Email</label>
-        <input type="email" class="form-input" id="inqEmail" placeholder="your@email.com">
-      </div>
-      <div class="contact-form-group">
-        <label class="form-label">Phone (optional)</label>
-        <input type="tel" class="form-input" id="inqPhone" placeholder="(555) 000-0000">
-      </div>
-      <div class="contact-form-group">
-        <label class="form-label">Message</label>
-        <textarea class="form-textarea" id="inqMessage" rows="3" maxlength="1500" placeholder="I'm interested in this property and have a few questions…"></textarea>
-        <div style="text-align:right;font-size:11px;color:#8892a2;margin-top:4px"><span id="inqCharCount">0</span> / 1500</div>
-        <div style="font-size:11px;color:#8892a2;margin-top:2px">Plain text only — no links or URLs.</div>
-      </div>
-      <button class="btn btn-primary btn-full" id="sendInquiryBtn">
-        <i class="fas fa-paper-plane"></i> Send Message
-      </button>
-      <p style="font-size:12px;color:#8892a2;margin:10px 0 0;line-height:1.5;text-align:center;">Submitting an inquiry does not reserve this property or start an application. To apply, use the <strong>Apply Now</strong> button on the listing.</p>
-    </div><!-- /.contact-card -->
-  </div><!-- /.detail-sidebar -->
+    </div>
 
-</div><!-- /.detail-layout -->
-  </div><!-- /.container -->
-</div><!-- /.property-detail -->
+  </div><!-- /.prop-split-content -->
+</div><!-- /.prop-split -->
 
-<!-- ── Site Footer (hydrated from /components/footer.html by components.js) ── -->
+<!-- ── Lightbox ── -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Property photo gallery">
+  <div class="lightbox-header">
+    <div class="lightbox-counter" id="lightboxCounter" aria-live="polite" aria-atomic="true">1 / 1</div>
+    <button class="lightbox-close" id="lightboxClose" aria-label="Close gallery"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="lightbox-stage">
+    <button class="lightbox-nav prev" id="lightboxPrev" aria-label="Previous photo"><i class="fas fa-chevron-left"></i></button>
+    <div class="lightbox-img-wrap" id="lightboxImgWrap">
+      <div class="lb-lqip-bg" id="lbLqipBg"></div>
+      <img class="lightbox-img" id="lightboxImg" src="" alt="Property photo" loading="lazy">
+      <div class="lb-spinner" id="lbSpinner"></div>
+    </div>
+    <button class="lightbox-nav next" id="lightboxNext" aria-label="Next photo"><i class="fas fa-chevron-right"></i></button>
+  </div>
+  <div class="lightbox-thumbs" id="lightboxThumbs"></div>
+</div>
+
+<!-- ── Site Footer ── -->
 <div id="site-footer"></div>
 
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- Leaflet loaded lazily via IntersectionObserver in renderMap() -->
+<!-- Leaflet loaded lazily -->
 <script type="module" src="/js/property.js?v=__BUILD_VERSION__"></script>
 
 <!-- Contact drawer overlay (mobile) -->
 <div class="contact-drawer-overlay" id="contactDrawerOverlay" aria-hidden="true"></div>
 
-<!-- Mobile-only sticky Apply bar — populated by renderProperty() -->
+<!-- Mobile sticky Apply bar -->
 <div id="mobile-apply-bar" role="complementary" aria-label="Apply for this property">
   <div class="mob-price">
     <span>Monthly Rent</span>
@@ -349,8 +356,10 @@
   </div>
 </div>
 
+<!-- Hidden elements kept for JS compatibility -->
+<div id="sidebarAvail" style="display:none" aria-hidden="true"></div>
+
   <script nonce="VZEkWatH2Jtta2vFy8dRhA">
-    // Fix 11 — Back-to-results preserves filters
     document.addEventListener('DOMContentLoaded', function() {
       const backLink = document.getElementById('backToResults');
       if (backLink && document.referrer.includes('listings')) {

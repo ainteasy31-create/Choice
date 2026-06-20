@@ -2807,6 +2807,347 @@ body[data-portal="public"][data-page="property"] .lqip-bg.faded { opacity: 0; }
 
 
 /* =====================================================================
+   EDITORIAL SPLIT LAYOUT — Property Detail Page (June 2026)
+   Replaces the old .detail-layout / .detail-sidebar sidebar approach with
+   a full-viewport split: sticky photo column left, scrollable content right.
+   All existing gallery, lightbox, contact-card, and tab CSS stays in place.
+   ===================================================================== */
+
+/* ── Split container ── */
+body[data-portal="public"][data-page="property"] .prop-split {
+  display: grid;
+  grid-template-columns: 1fr 460px;
+  align-items: start;
+  min-height: calc(100vh - 56px);
+}
+
+/* ── Left sticky photo column ── */
+body[data-portal="public"][data-page="property"] .prop-split-photos {
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow: hidden;
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Gallery mosaic fills the sticky left column */
+body[data-portal="public"][data-page="property"] .prop-split-photos .gallery-mosaic {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100% !important;
+  margin-top: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  contain: layout style;
+}
+
+/* Thumbnail strip hidden inside split photos column (not needed — mosaic shows all) */
+body[data-portal="public"][data-page="property"] .prop-split-photos .gallery-strip {
+  display: none !important;
+}
+
+/* ── Right scrollable content column ── */
+body[data-portal="public"][data-page="property"] .prop-split-content {
+  padding: 32px 40px 80px;
+  min-width: 0;
+}
+
+/* ── Availability chip + share buttons row ── */
+body[data-portal="public"][data-page="property"] .prop-avail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+body[data-portal="public"][data-page="property"] .prop-avail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+body[data-portal="public"][data-page="property"] .prop-avail-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: #10b981; flex-shrink: 0;
+}
+body[data-portal="public"][data-page="property"] .prop-share-btns {
+  display: flex; gap: 8px;
+}
+body[data-portal="public"][data-page="property"] .prop-share-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border: 1.5px solid #e4e8ef; border-radius: 8px;
+  background: #fff; color: #374151;
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: border-color 160ms, background 160ms, color 160ms;
+}
+body[data-portal="public"][data-page="property"] .prop-share-btn:hover {
+  border-color: #0a1628; color: #0a1628; background: #f8fafc;
+}
+body[data-portal="public"][data-page="property"] .prop-share-btn.saved {
+  color: #dc2626; border-color: #fecaca; background: #fef2f2;
+}
+
+/* ── Price + header ── */
+body[data-portal="public"][data-page="property"] .prop-header {
+  margin-bottom: 18px;
+}
+body[data-portal="public"][data-page="property"] #detailPrice {
+  font-size: 40px; font-weight: 800; color: #0a1628;
+  letter-spacing: -.04em; line-height: 1;
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 6px;
+}
+body[data-portal="public"][data-page="property"] #detailPrice span {
+  font-size: 16px; font-weight: 400; color: #6b7280; letter-spacing: 0;
+}
+body[data-portal="public"][data-page="property"] .prop-title {
+  font-family: 'Fraunces', serif;
+  font-size: 26px; font-weight: 600;
+  color: #0a1628; line-height: 1.2;
+  margin: 0 0 8px; letter-spacing: -.01em;
+}
+body[data-portal="public"][data-page="property"] .prop-address {
+  font-size: 13.5px; color: #6b7280;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+body[data-portal="public"][data-page="property"] .prop-address i { color: var(--m-brand); font-size: 11px; }
+
+/* ── Landlord inline row ── */
+body[data-portal="public"][data-page="property"] .prop-landlord-row {
+  display: flex; align-items: center; gap: 12px;
+  background: #f8fafc; border-radius: 10px;
+  padding: 12px 14px; border: 1px solid #f1f5f9;
+  margin: 18px 0 4px;
+}
+body[data-portal="public"][data-page="property"] .prop-ll-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: #dbeafe; display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; color: #006aff; flex-shrink: 0; overflow: hidden;
+}
+body[data-portal="public"][data-page="property"] .prop-ll-avatar img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+body[data-portal="public"][data-page="property"] .prop-ll-label {
+  font-size: 10px; font-weight: 700; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px;
+}
+body[data-portal="public"][data-page="property"] .prop-ll-name {
+  font-size: 13.5px; font-weight: 700; color: #0a1628;
+}
+body[data-portal="public"][data-page="property"] .prop-ll-tagline {
+  font-size: 11.5px; color: #9ca3af;
+}
+body[data-portal="public"][data-page="property"] .prop-ll-verified {
+  color: #006aff; font-size: 18px; margin-left: auto; flex-shrink: 0;
+}
+
+/* ── Meta grid (stats cells) ── */
+body[data-portal="public"][data-page="property"] .prop-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 20px 0 0;
+}
+body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item {
+  background: #f8fafc; border-radius: 10px;
+  padding: 14px 12px; border: 1px solid #f1f5f9;
+  flex-direction: column; align-items: flex-start;
+  gap: 4px; min-width: 0;
+  box-shadow: none;
+  transition: border-color 180ms, box-shadow 180ms;
+}
+body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item:hover {
+  border-color: rgba(0,106,255,.18);
+  box-shadow: 0 2px 10px rgba(0,106,255,.07);
+  transform: none;
+}
+body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-icon { display: none; }
+body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-value {
+  font-size: 20px; font-weight: 700; color: #0a1628;
+  letter-spacing: -.02em; line-height: 1;
+}
+body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-label {
+  font-size: 10px; font-weight: 700; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .06em; margin-top: 4px;
+}
+
+/* ── Divider ── */
+body[data-portal="public"][data-page="property"] .prop-divider {
+  height: 1px; background: #f1f5f9; margin: 28px 0;
+}
+
+/* ── Sections ── */
+body[data-portal="public"][data-page="property"] .prop-section {
+  margin-bottom: 4px;
+}
+body[data-portal="public"][data-page="property"] .prop-section-eyebrow {
+  font-size: 10px; font-weight: 700; letter-spacing: .10em;
+  text-transform: uppercase; color: #006aff; margin-bottom: 6px;
+}
+body[data-portal="public"][data-page="property"] .prop-section-head {
+  font-family: 'Fraunces', serif;
+  font-size: 20px; font-weight: 600; color: #0a1628;
+  margin-bottom: 14px; line-height: 1.25;
+}
+body[data-portal="public"][data-page="property"] .prop-section-head em {
+  font-style: italic; color: #006aff;
+}
+
+/* ── Description ── */
+body[data-portal="public"][data-page="property"] .prop-desc p { margin: 0 0 12px; }
+body[data-portal="public"][data-page="property"] .prop-desc p:last-child { margin-bottom: 0; }
+
+/* ── Cost table ── */
+body[data-portal="public"][data-page="property"] .prop-cost-table {
+  width: 100%; border-collapse: collapse; margin-bottom: 0;
+}
+body[data-portal="public"][data-page="property"] .prop-cost-table tr {
+  border-bottom: 1px solid #f1f5f9;
+}
+body[data-portal="public"][data-page="property"] .prop-cost-table tr:last-child {
+  border-bottom: none;
+}
+body[data-portal="public"][data-page="property"] .prop-cost-table td {
+  padding: 10px 0; font-size: 13.5px;
+}
+body[data-portal="public"][data-page="property"] .prop-cost-table td:first-child { color: #6b7280; }
+body[data-portal="public"][data-page="property"] .prop-cost-table td:last-child {
+  text-align: right; font-weight: 600; color: #0a1628;
+}
+
+/* ── Apply strip ── */
+body[data-portal="public"][data-page="property"] .prop-apply-strip {
+  background: #0a1628; border-radius: 12px;
+  padding: 20px; color: #fff;
+  margin-top: 20px;
+  display: flex; align-items: center; gap: 16px;
+}
+body[data-portal="public"][data-page="property"] .prop-apply-strip-text { flex: 1; min-width: 0; }
+body[data-portal="public"][data-page="property"] .prop-apply-strip-price {
+  font-size: 20px; font-weight: 800; letter-spacing: -.02em; line-height: 1;
+}
+body[data-portal="public"][data-page="property"] .prop-apply-strip-price span {
+  font-size: 13px; font-weight: 400; color: rgba(255,255,255,.55); letter-spacing: 0;
+}
+body[data-portal="public"][data-page="property"] .prop-apply-strip-sub {
+  font-size: 11.5px; color: rgba(255,255,255,.58); margin-top: 4px; line-height: 1.4;
+  display: flex; align-items: flex-start; gap: 5px;
+}
+body[data-portal="public"][data-page="property"] .prop-apply-btn {
+  background: #006aff; color: #fff;
+  border: none; border-radius: 9px;
+  padding: 13px 20px; font-size: 14px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0,106,255,.40);
+  text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+  font-family: inherit; transition: background 180ms, transform 180ms, box-shadow 180ms;
+}
+body[data-portal="public"][data-page="property"] .prop-apply-btn:hover {
+  background: #0054cc; transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0,106,255,.50);
+}
+
+/* ── Track application link ── */
+body[data-portal="public"][data-page="property"] .prop-track-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: #006aff; font-weight: 600;
+  text-decoration: none;
+  transition: color 160ms;
+}
+body[data-portal="public"][data-page="property"] .prop-track-link:hover { color: #0044b3; }
+
+/* ── Contact card — inline variant (no bottom drawer chrome on desktop) ── */
+body[data-portal="public"][data-page="property"] .mv2-contact-card {
+  background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;
+  padding: 20px; margin-top: 0;
+}
+body[data-portal="public"][data-page="property"] .mv2-contact-card .contact-card-header-row {
+  justify-content: flex-end; margin-bottom: 0;
+}
+body[data-portal="public"][data-page="property"] .mv2-contact-card .contact-drawer-handle-bar,
+body[data-portal="public"][data-page="property"] .mv2-contact-card .contact-drawer-close-btn { display: none !important; }
+body[data-portal="public"][data-page="property"] .mv2-contact-card .contact-form-group { margin-bottom: 14px; }
+body[data-portal="public"][data-page="property"] .mv2-contact-card .form-label,
+body[data-portal="public"][data-page="property"] .mv2-contact-card label {
+  font-size: 10.5px; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: block;
+}
+body[data-portal="public"][data-page="property"] .mv2-contact-card .form-input,
+body[data-portal="public"][data-page="property"] .mv2-contact-card input,
+body[data-portal="public"][data-page="property"] .mv2-contact-card .form-textarea,
+body[data-portal="public"][data-page="property"] .mv2-contact-card textarea {
+  width: 100%; border: 1.5px solid #e4e8ef; border-radius: 8px;
+  padding: 9px 12px; font-size: 13.5px; color: #1f2937;
+  background: #fff; outline: none; font-family: inherit;
+  transition: border-color 160ms, box-shadow 160ms;
+  box-sizing: border-box;
+}
+body[data-portal="public"][data-page="property"] .mv2-contact-card .form-input:focus,
+body[data-portal="public"][data-page="property"] .mv2-contact-card input:focus,
+body[data-portal="public"][data-page="property"] .mv2-contact-card textarea:focus {
+  border-color: #006aff; box-shadow: 0 0 0 3px rgba(0,106,255,.14);
+}
+body[data-portal="public"][data-page="property"] .mv2-contact-card textarea { resize: vertical; min-height: 80px; }
+
+/* ── Responsive: ≤900px = single-column stack ── */
+@media (max-width: 900px) {
+  body[data-portal="public"][data-page="property"] .prop-split {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  body[data-portal="public"][data-page="property"] .prop-split-photos {
+    position: relative;
+    top: 0;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+  }
+  body[data-portal="public"][data-page="property"] .prop-split-photos .gallery-mosaic {
+    height: clamp(260px, 60vw, 420px) !important;
+    border-radius: var(--m-r-xl) !important;
+    margin: var(--m-s-3) var(--m-s-3) 0 !important;
+  }
+  body[data-portal="public"][data-page="property"] .prop-split-content {
+    padding: 20px 16px 100px;
+  }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-value { font-size: 17px; }
+  body[data-portal="public"][data-page="property"] #detailPrice { font-size: 32px; }
+  body[data-portal="public"][data-page="property"] .prop-title { font-size: 21px; }
+  body[data-portal="public"][data-page="property"] .prop-apply-strip { flex-direction: column; align-items: stretch; }
+  body[data-portal="public"][data-page="property"] .prop-apply-btn { width: 100%; justify-content: center; padding: 15px; }
+}
+@media (max-width: 480px) {
+  body[data-portal="public"][data-page="property"] .prop-meta-grid { grid-template-columns: repeat(2, 1fr); }
+  body[data-portal="public"][data-page="property"] .prop-split-photos .gallery-mosaic {
+    margin: 0 !important; border-radius: 0 !important;
+  }
+}
+
+/* ── Wide screens: expand right column cap ── */
+@media (min-width: 1400px) {
+  body[data-portal="public"][data-page="property"] .prop-split { grid-template-columns: 1fr 500px; }
+}
+@media (min-width: 1800px) {
+  body[data-portal="public"][data-page="property"] .prop-split { grid-template-columns: 1fr 540px; }
+}
+
+/* =====================================================================
    TESTIMONIALS + STATS BAR — added April 2026 (homepage social proof)
    Scoped to body[data-portal="public"][data-page="home"] when possible,
    but generic enough to work site-wide via .testimonials-section / .stats-bar.
