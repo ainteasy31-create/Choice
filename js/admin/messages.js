@@ -71,28 +71,6 @@
     render(threads);
   }
 
-  AdminShell && AdminShell.on && AdminShell.on('toggle-thread', (target) => {
-    const t = target.closest('.thread');
-    if(t) t.classList.toggle('open');
-  });
-  AdminShell && AdminShell.on && AdminShell.on('send-reply', async (target) => {
-    const appId = target.getAttribute('data-app');
-    const ta = document.querySelector('textarea[data-reply="'+appId+'"]');
-    if(!ta) return;
-    const msg = ta.value.trim();
-    if(!msg) return;
-    target.disabled = true;
-    const res = await CP.Applications.sendMessage(appId, msg, 'admin', 'Choice Properties');
-    target.disabled = false;
-    if(res.ok){
-      ta.value = '';
-      AdminShell.toast('Message sent','success');
-      load();
-    } else {
-      AdminShell.toast('Error: '+res.error,'error');
-    }
-  });
-
   document.addEventListener('DOMContentLoaded', async () => {
     try { await waitReady(8000); }
     catch(e){
@@ -102,6 +80,28 @@
     }
     const ok = await AdminShell.requireAdmin();
     if(!ok) return;
+
+    AdminShell.on('toggle-thread', (target) => {
+      const t = target.closest('.thread');
+      if(t) t.classList.toggle('open');
+    });
+    AdminShell.on('send-reply', async (target) => {
+      const appId = target.getAttribute('data-app');
+      const ta = document.querySelector('textarea[data-reply="'+appId+'"]');
+      if(!ta) return;
+      const msg = ta.value.trim();
+      if(!msg) return;
+      target.disabled = true;
+      const res = await CP.Applications.sendMessage(appId, msg, 'admin', 'Choice Properties');
+      target.disabled = false;
+      if(res.ok){
+        ta.value = '';
+        AdminShell.toast('Message sent','success');
+        load();
+      } else {
+        AdminShell.toast('Error: '+res.error,'error');
+      }
+    });
     AdminShell.on('refresh', () => load());
     load();
   });
