@@ -63,8 +63,10 @@
     const range_start = rangeStartISO(rangeKey);
     try {
       const { data, error } = await CP.sb().rpc('dashboard_pulse', { range_start, recent_limit: 8 });
-      if(!error && data && data.counts) {
-        return { ok:true, counts: data.counts, recent: data.recent || [], source:'rpc' };
+      // PostgREST may return an array (SETOF) or direct object depending on function definition
+      const row = Array.isArray(data) ? data[0] : data;
+      if(!error && row && row.counts) {
+        return { ok:true, counts: row.counts, recent: row.recent || [], source:'rpc' };
       }
       // PostgREST returns code 'PGRST202' when an RPC doesn't exist; any
       // other error → still try fallback so the dashboard renders something.
@@ -131,13 +133,15 @@
     document.getElementById('aq-count').textContent = queue.length ? (queue.length + ' item' + (queue.length>1?'s':'')) : '';
 
     // ── KPI strip ──
+    const rangeLabel = { '1d':'last 24h', '7d':'last 7 days', '30d':'last 30 days' }[_range] || 'all time';
+    const legacyNote = (pulse.source === 'legacy' && _range !== 'all') ? ' ⚠ range n/a' : '';
     document.getElementById('kpi-strip').innerHTML = [
       kpi({ label:'Active listings',   value:activeListings,                tone:'gold',    sub:'Live on platform', href:'/listings.html' }),
-      kpi({ label:'Total apps',        value:c.total||0,                    tone:'brand',   sub:(c.this_month||0) + ' this month', href:'applications.html' }),
+      kpi({ label:'Total apps',        value:c.total||0,                    tone:'brand',   sub:(_range !== 'all' ? (c.this_period||c.this_month||0) + ' ' + rangeLabel : (c.this_month||0) + ' this month') + legacyNote, href:'applications.html' }),
       kpi({ label:'Pending',           value:c.pending||0,                  tone:'warn',    sub:'Awaiting decision', href:'applications.html?status=pending' }),
       kpi({ label:'Approved',          value:c.approved||0,                 tone:'success', sub:(c.unpaid_approved||0) + ' unpaid', href:'applications.html?status=approved' }),
       kpi({ label:'Leases sent',       value:c.lease_sent||0,               tone:'',        sub:(c.lease_signed||0) + ' signed', href:'leases.html' }),
-      kpi({ label:'Move-ins confirmed',value:c.movein_confirmed||0,         tone:'success', sub:'This month', href:'move-ins.html' })
+      kpi({ label:'Move-ins confirmed',value:c.movein_confirmed||0,         tone:'success', sub:rangeLabel, href:'move-ins.html' })
     ].join('');
 
     // ── Recent feed ──

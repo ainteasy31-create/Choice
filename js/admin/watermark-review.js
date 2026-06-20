@@ -37,7 +37,7 @@
     if(!okAuth) return;
     const { data, error } = await CP.sb()
       .from('properties')
-      .select('id,title,address,status,created_at,property_photos(url,file_id,display_order,watermark_status)')
+      .select('id,title,address,status,created_at,property_photos(id,url,file_id,display_order,watermark_status)')
       .order('created_at',{ ascending:false });
     if(error){
       document.getElementById('props-list').innerHTML =
@@ -48,7 +48,7 @@
       const photos = Array.isArray(p.property_photos) ? p.property_photos : [];
       const sorted = photos.slice().sort((a,b) => (a.display_order||0)-(b.display_order||0));
       const validPhotos = sorted.filter(x => x.url);
-      return { ...p, photos: validPhotos, images: validPhotos.map(x => x.url) };
+      return { ...p, photos: validPhotos, images: validPhotos.map(x => ({ url: x.url, id: x.id })) };
     });
 
     // Pre-populate scanResults from previously saved watermark_status values.
@@ -83,11 +83,14 @@
     if(!result || result.saved) return true; // nothing new to save
     let allOk = true;
     for(const im of result.perImage){
-      const { error } = await CP.sb()
-        .from('property_photos')
-        .update({ watermark_status: im.flag })
-        .eq('property_id', p.id)
-        .eq('url', im.url);
+      // Prefer update by photo ID (reliable); fall back to URL match
+      let q = CP.sb().from('property_photos').update({ watermark_status: im.flag });
+      if(im.photoId) {
+        q = q.eq('id', im.photoId);
+      } else {
+        q = q.eq('property_id', p.id).eq('url', im.url);
+      }
+      const { error } = await q;
       if(error){ allOk = false; console.error('[wm] save error:', im.url, error); }
     }
     if(allOk) result.saved = true;
@@ -200,7 +203,11 @@
     const BATCH = 3;
     for(let i = 0; i < imgs.length; i += BATCH){
       const slice = imgs.slice(i, i + BATCH);
-      const results = await Promise.all(slice.map(url => analyzeImage(url).then(r => ({ url, ...r }))));
+      const results = await Promise.all(slice.map(img => {
+        const url = typeof img === 'string' ? img : img.url;
+        const photoId = typeof img === 'string' ? null : img.id;
+        return analyzeImage(url).then(r => ({ url, photoId, ...r }));
+      }));
       perImage.push(...results);
     }
     const flagged    = perImage.filter(x => x.flag === 'watermark' || x.flag === 'branding').length;
