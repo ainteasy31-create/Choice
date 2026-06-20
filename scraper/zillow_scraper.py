@@ -485,73 +485,76 @@ def _collect_photos_search(listing):
 
 def _collect_photos_detail(prop):
     """
-    Collect high-resolution photo URLs from a detail page property dict.
-    Prefers responsivePhotosOriginalRatio (best quality), then falls back
-    to responsivePhotos, then photos array.
-    Returns up to 40 deduplicated URLs.
+    Collect ALL high-resolution photo URLs from a detail page property dict.
+    Prefers responsivePhotosOriginalRatio (best quality, original aspect ratio),
+    then responsivePhotos, then flat photos array, then hdpData fallback.
+    Returns all deduplicated URLs (no artificial cap — for targeted URL scraping
+    we want every single photo Zillow has).
     """
     urls = []
     seen = set()
 
-    def _add(url):
-        if url and isinstance(url, str) and url.startswith("http") and url not in seen:
-            urls.append(url)
-            seen.add(url)
+    def _add(u):
+        if u and isinstance(u, str) and u.startswith("http") and u not in seen:
+            urls.append(u)
+            seen.add(u)
 
     def _best_from_mixed(mixed):
-        """Pick the highest-width JPEG from a mixedSources object."""
+        """Pick the highest-resolution URL from a mixedSources object."""
         if not isinstance(mixed, dict):
             return None
-        for key in ("jpeg", "jpg", "webp"):
+        # Try JPEG first (best quality), then WebP, then anything
+        for key in ("jpeg", "jpg", "webp", "png"):
             lst = mixed.get(key)
             if lst and isinstance(lst, list):
-                best = None
-                best_w = 0
+                best_url = None
+                best_w   = 0
                 for item in lst:
                     if isinstance(item, dict):
                         w = item.get("width") or 0
                         if w > best_w:
                             best_w = w
-                            best = item.get("url")
-                if best:
-                    return best
+                            best_url = item.get("url")
+                if best_url:
+                    return best_url
         return None
 
-    # Best source: responsivePhotosOriginalRatio (full-res, original aspect ratio)
+    # ── Source 1: responsivePhotosOriginalRatio (full-res, original aspect ratio)
     for photo in (prop.get("responsivePhotosOriginalRatio") or []):
         if isinstance(photo, dict):
-            url = _best_from_mixed(photo.get("mixedSources"))
-            if not url:
-                url = photo.get("url")
-            _add(url)
+            u = _best_from_mixed(photo.get("mixedSources")) or photo.get("url")
+            _add(u)
 
-    # Second: responsivePhotos
-    if len(urls) < 3:
-        for photo in (prop.get("responsivePhotos") or []):
-            if isinstance(photo, dict):
-                url = _best_from_mixed(photo.get("mixedSources"))
-                if not url:
-                    url = photo.get("url")
-                _add(url)
+    # ── Source 2: responsivePhotos (standard Zillow photo set)
+    for photo in (prop.get("responsivePhotos") or []):
+        if isinstance(photo, dict):
+            u = _best_from_mixed(photo.get("mixedSources")) or photo.get("url")
+            _add(u)
 
-    # Fallback: flat photos array
-    if len(urls) < 3:
-        for photo in (prop.get("photos") or []):
+    # ── Source 3: hugePhotos / mediumPhotos (older Zillow format)
+    for key in ("hugePhotos", "largePhotos", "mediumPhotos", "photos"):
+        for photo in (prop.get(key) or []):
             if isinstance(photo, str):
                 _add(photo)
             elif isinstance(photo, dict):
-                _add(photo.get("url") or photo.get("src"))
+                _add(photo.get("url") or photo.get("src") or photo.get("href"))
 
-    # Last resort: hdpData
-    if len(urls) < 1:
-        hi = (prop.get("hdpData") or {}).get("homeInfo") or {}
-        for p in (hi.get("photos") or []):
-            if isinstance(p, dict):
-                _add(p.get("url"))
-            elif isinstance(p, str):
-                _add(p)
+    # ── Source 4: desktopWebHdpImageLink / heroImage
+    _add(prop.get("desktopWebHdpImageLink"))
+    _add(prop.get("heroImage"))
 
-    return urls[:40]
+    # ── Source 5: hdpData.homeInfo.photos (last resort)
+    hi = (prop.get("hdpData") or {}).get("homeInfo") or {}
+    for p in (hi.get("photos") or []):
+        if isinstance(p, dict):
+            _add(p.get("url") or p.get("src"))
+        elif isinstance(p, str):
+            _add(p)
+
+    # ── Source 6: thumbnail from search phase (absolute fallback)
+    _add(prop.get("imgSrc"))
+
+    return urls  # No cap — collect every photo
 
 
 # -- Quality scoring -----------------------------------------------------------
@@ -907,6 +910,7 @@ def _enrich_from_detail(record, prop):
             record["pet_types_allowed"] = _jdumps(pet_types)
 
     # -- Amenities & features --------------------------------------------------
+
     # Heating
     heating_list = rf.get("heating") or []
     if heating_list:
@@ -918,7 +922,10 @@ def _enrich_from_detail(record, prop):
         record["cooling_type"] = _list_to_str(cooling_list)
 
     # Laundry
-    laundry_list = rf.get("laundryFeatures") or rf.get("laundry") or []
+    laundry_list = (
+        rf.get("laundryFeatures") or rf.get("laundry") or
+        rf.get("washerDryer") or []
+    )
     if laundry_list:
         record["laundry_type"] = _list_to_str(laundry_list)
 
@@ -928,7 +935,10 @@ def _enrich_from_detail(record, prop):
         record["appliances"] = _jdumps(appliances_list)
 
     # Utilities included
-    utils_list = rf.get("utilities") or rf.get("utilitiesIncluded") or []
+    utils_list = (
+        rf.get("utilities") or rf.get("utilitiesIncluded") or
+        rf.get("utilitiesPaidBy") or []
+    )
     if utils_list and record.get("utilities_included") in (None, "[]"):
         record["utilities_included"] = _jdumps(utils_list)
 
@@ -942,23 +952,191 @@ def _enrich_from_detail(record, prop):
     if parking_list:
         record["parking"] = _list_to_str(parking_list)
 
-    # Amenities -- combine search tags + community features + at-a-glance facts
-    community = prop.get("communityFeatures") or []
+    # Pet weight limit
+    if not record.get("pet_weight_limit"):
+        pet_wt = (
+            rf.get("petsMaxWeight") or rf.get("maxPetWeight") or
+            rf.get("petSizeLimit") or rf.get("petWeightLimit")
+        )
+        if pet_wt:
+            record["pet_weight_limit"] = _safe_int(pet_wt)
+
+    # ── Comprehensive amenity collection from every resoFacts section ──────────
+    # We merge everything into a rich amenities list so admins see all details.
+
     existing_tags = []
     try:
         existing_tags = json.loads(record.get("amenities") or "[]")
     except (ValueError, TypeError):
         pass
-    all_amenities = existing_tags + community
-    # atAGlanceFacts may have extra details
+
+    all_amenities = list(existing_tags)
+
+    def _extend_amenities(label, lst):
+        """Add labeled feature items to the amenities list."""
+        if not lst:
+            return
+        if isinstance(lst, str):
+            lst = [lst]
+        for item in lst:
+            if item and str(item).strip() not in ("None", "none", "0", "false", ""):
+                entry = (label + ": " + str(item)) if label else str(item)
+                if entry not in all_amenities:
+                    all_amenities.append(entry)
+
+    def _extend_plain(lst):
+        """Add plain feature items (no label prefix) to the amenities list."""
+        if not lst:
+            return
+        if isinstance(lst, str):
+            lst = [lst]
+        for item in lst:
+            s = str(item).strip()
+            if s and s not in ("None", "none", "0", "false", "") and s not in all_amenities:
+                all_amenities.append(s)
+
+    # Community / building features
+    _extend_plain(prop.get("communityFeatures") or rf.get("communityFeatures") or [])
+    _extend_plain(rf.get("buildingFeatures") or [])
+    _extend_plain(rf.get("associationAmenities") or rf.get("amenities") or [])
+
+    # Interior features
+    _extend_plain(rf.get("interiorFeatures") or [])
+
+    # Exterior features
+    _extend_plain(rf.get("exteriorFeatures") or [])
+
+    # Pool
+    pool_f = rf.get("poolFeatures") or []
+    if pool_f or _coerce_bool(rf.get("pool") or rf.get("poolPrivateYN")):
+        _extend_plain(pool_f if pool_f else ["Pool"])
+
+    # Spa / hot tub
+    spa_f = rf.get("spaFeatures") or []
+    if spa_f or _coerce_bool(rf.get("spaYN")):
+        _extend_plain(spa_f if spa_f else ["Spa/Hot Tub"])
+
+    # Patio / deck
+    _extend_plain(rf.get("patioAndPorchFeatures") or [])
+
+    # View
+    _extend_plain(rf.get("view") or [])
+
+    # Security features
+    _extend_plain(rf.get("securityFeatures") or rf.get("security") or [])
+
+    # Accessibility / ADA
+    _extend_plain(rf.get("accessibilityFeatures") or [])
+
+    # Lot features
+    _extend_plain(rf.get("lotFeatures") or rf.get("lotDescription") or [])
+
+    # Green / energy efficiency
+    _extend_plain(rf.get("greenEnergyEfficient") or [])
+    _extend_plain(rf.get("greenEnergyGeneration") or [])
+    _extend_plain(rf.get("greenBuildingVerificationType") or [])
+
+    # Construction materials & structure
+    _extend_amenities("Construction", rf.get("constructionMaterials") or [])
+    _extend_amenities("Roof", rf.get("roof") or [])
+    _extend_amenities("Foundation", rf.get("foundationDetails") or rf.get("foundation") or [])
+
+    # Water / sewer (add to utilities too)
+    water = rf.get("waterSource") or rf.get("water") or []
+    sewer = rf.get("sewer") or rf.get("sewerType") or []
+    if water:
+        _extend_amenities("Water", water if isinstance(water, list) else [water])
+    if sewer:
+        _extend_amenities("Sewer", sewer if isinstance(sewer, list) else [sewer])
+    # Also merge water/sewer into utilities_included if not already there
+    combined_utils = []
+    try:
+        combined_utils = json.loads(record.get("utilities_included") or "[]")
+    except (ValueError, TypeError):
+        pass
+    if water and not any("water" in str(u).lower() for u in combined_utils):
+        combined_utils.extend(water if isinstance(water, list) else [water])
+    if sewer and not any("sewer" in str(u).lower() for u in combined_utils):
+        combined_utils.extend(sewer if isinstance(sewer, list) else [sewer])
+    if combined_utils:
+        record["utilities_included"] = _jdumps(combined_utils)
+
+    # Electric
+    elec = rf.get("electricExpenses") or rf.get("electric")
+    if elec:
+        _extend_amenities("Electric", [elec] if isinstance(elec, str) else elec)
+
+    # Other structures (shed, garage, barn, etc.)
+    _extend_plain(rf.get("otherStructures") or [])
+
+    # Fencing
+    _extend_plain(rf.get("fencing") or [])
+
+    # Horse / farm amenities
+    _extend_plain(rf.get("horseAmenities") or [])
+
+    # Fire place
+    fp = rf.get("fireplaceFeatures") or []
+    fp_count = rf.get("fireplaces") or rf.get("fireplaceCount") or 0
+    if fp_count and int(str(fp_count).split(".")[0]) > 0:
+        _extend_plain(fp if fp else ["Fireplace"])
+
+    # Window features
+    _extend_plain(rf.get("windowFeatures") or [])
+
+    # Door features
+    _extend_plain(rf.get("doorFeatures") or [])
+
+    # atAGlanceFacts (Zillow's own summary cards)
     for fact in (rf.get("atAGlanceFacts") or []):
         if isinstance(fact, dict):
             val = fact.get("factValue") or fact.get("value")
             lbl = fact.get("factLabel") or fact.get("label")
-            if val and val not in ("None", "0", "false"):
-                all_amenities.append((lbl + ": " + val) if lbl else str(val))
+            if val and val not in ("None", "0", "false", ""):
+                entry = ((lbl + ": " + str(val)) if lbl else str(val)).strip()
+                if entry not in all_amenities:
+                    all_amenities.append(entry)
+
     if all_amenities:
         record["amenities"] = _jdumps(list(dict.fromkeys(all_amenities)))
+
+    # -- Location context: school district, zoning, walk scores ---------------
+    ctx_parts = []
+
+    # School district
+    district = rf.get("schoolDistrict") or prop.get("schoolDistrict")
+    elem     = rf.get("elementarySchool") or rf.get("elementarySchoolDistrict")
+    middle   = rf.get("middleOrJuniorSchool") or rf.get("middleOrJuniorSchoolDistrict")
+    high     = rf.get("highSchool") or rf.get("highSchoolDistrict")
+    if district:
+        ctx_parts.append("School district: " + str(district))
+    if elem:
+        ctx_parts.append("Elementary: " + str(elem))
+    if middle:
+        ctx_parts.append("Middle school: " + str(middle))
+    if high:
+        ctx_parts.append("High school: " + str(high))
+
+    # Walk / transit / bike scores
+    ws = prop.get("walkScore") or (prop.get("walkScoreData") or {}).get("walkScore")
+    ts = prop.get("transitScore") or (prop.get("walkScoreData") or {}).get("transitScore")
+    bs = prop.get("bikeScore") or (prop.get("walkScoreData") or {}).get("bikeScore")
+    if ws is not None:
+        ctx_parts.append("Walk score: " + str(ws))
+    if ts is not None:
+        ctx_parts.append("Transit score: " + str(ts))
+    if bs is not None:
+        ctx_parts.append("Bike score: " + str(bs))
+
+    # Zoning
+    zoning = rf.get("zoning") or rf.get("zoningDescription")
+    if zoning:
+        ctx_parts.append("Zoning: " + str(zoning))
+
+    if ctx_parts:
+        existing_ctx = record.get("location_context") or ""
+        new_ctx = "; ".join(ctx_parts)
+        record["location_context"] = (existing_ctx + "; " + new_ctx) if existing_ctx else new_ctx
 
     # -- Neighborhood ----------------------------------------------------------
     if not record.get("neighborhood"):
@@ -966,7 +1144,8 @@ def _enrich_from_detail(record, prop):
             prop.get("neighborhoodRegion", {}).get("name") or
             prop.get("neighborhoodName") or
             prop.get("neighborhood") or
-            rf.get("subdivision")
+            rf.get("subdivision") or
+            rf.get("neighborhoodCommunityName")
         )
         record["neighborhood"] = hood
 
@@ -981,11 +1160,10 @@ def _enrich_from_detail(record, prop):
         type_lbl = record["property_type"].replace("_", " ").title()
         record["title"] = bed_pfx + type_lbl + " in " + record["city"]
 
-    # -- Photos (always replace -- detail is far richer) -----------------------
+    # -- Photos (always replace -- detail is far richer, no cap) ---------------
     detail_photos = _collect_photos_detail(prop)
     if detail_photos:
         record["original_image_urls"] = _jdumps(detail_photos)
-    # If detail had no photos, keep search photos
 
     # -- Agent / broker --------------------------------------------------------
     attr = prop.get("attributionInfo") or {}
@@ -993,14 +1171,47 @@ def _enrich_from_detail(record, prop):
         record["agent_name"] = attr.get("agentName") or attr.get("providerName")
     if not record.get("broker_name"):
         record["broker_name"] = attr.get("brokerName") or attr.get("officeName")
+    if not record.get("agent_image_url"):
+        record["agent_image_url"] = attr.get("agentPhoto") or attr.get("agentPhotoUrl")
 
-    # -- Update original_data to mark phase 2 complete ------------------------
+    # Virtual tour / 3D tour / video tour
+    if not record.get("virtual_tour_url"):
+        record["virtual_tour_url"] = (
+            prop.get("virtualTourUrl") or
+            prop.get("threeDimensionalTourUrl") or
+            prop.get("videoTourUrl") or
+            prop.get("tourViewCount") and None  # don't use count as URL
+        )
+
+    # -- Update original_data: mark phase 2 complete + store rich metadata -----
     try:
         od = json.loads(record.get("original_data") or "{}")
     except (ValueError, TypeError):
         od = {}
-    od["_phase"] = "detail"
-    od["zpid"]   = record.get("source_listing_id") or od.get("zpid")
+    od["_phase"]       = "detail"
+    od["zpid"]         = record.get("source_listing_id") or od.get("zpid")
+    od["daysOnMarket"] = prop.get("daysOnZillow") or prop.get("daysOnMarket")
+    od["priceHistory"] = (prop.get("priceHistory") or [])[:5]     # last 5 events
+    od["openHouses"]   = prop.get("openHouseSchedule") or prop.get("openHouses") or []
+    od["mlsId"]        = rf.get("mlsId") or rf.get("listingId") or rf.get("listingContractDate")
+    od["taxHistory"]   = (prop.get("taxHistory") or [])[:3]        # last 3 years
+    od["zillowUrl"]    = record.get("source_url")
+    od["schools"]      = prop.get("schools") or []
+    od["photoCount"]   = len(json.loads(record.get("original_image_urls") or "[]"))
+    # Store full resoFacts for reference (truncated to avoid huge JSON)
+    rf_keys_stored = [
+        "heating","cooling","laundryFeatures","appliances","flooring","parkingFeatures",
+        "garageSpaces","basement","securityDeposit","applicationFee","petFee",
+        "petsAllowed","catsAllowed","dogsAllowed","petsMaxWeight","smokingAllowed",
+        "stories","interiorFeatures","exteriorFeatures","communityFeatures",
+        "poolFeatures","spaFeatures","patioAndPorchFeatures","view","securityFeatures",
+        "accessibilityFeatures","lotFeatures","greenEnergyEfficient",
+        "constructionMaterials","roof","foundationDetails","waterSource","sewer",
+        "fireplaces","fireplaceFeatures","windowFeatures","utilities",
+        "schoolDistrict","elementarySchool","middleOrJuniorSchool","highSchool",
+        "zoning","leaseTerm","leaseTerms","dateAvailable","associationAmenities",
+    ]
+    od["resoFacts"] = {k: rf.get(k) for k in rf_keys_stored if rf.get(k) is not None}
     record["original_data"] = json.dumps(od, default=str)
 
     # -- Recompute quality score & missing fields ------------------------------
@@ -1359,3 +1570,216 @@ def scrape_and_map(
         )
 
     return records, blocked
+
+
+# -- Direct URL scraping (skip search phase entirely) -------------------------
+
+def _extract_zpid_from_url(url):
+    """Extract Zillow property ID (zpid) from a detail page URL.
+    e.g. https://www.zillow.com/homedetails/.../49843423_zpid/ -> '49843423'
+    """
+    m = re.search(r"/(\d+)_zpid", url)
+    return m.group(1) if m else None
+
+
+def _map_from_detail_only(prop, source_url=None, zpid=None):
+    """
+    Create a full pipeline_properties record from a detail-page property dict alone.
+    This is used when scraping specific URLs directly (no search phase).
+    Starts with a blank record and applies the full detail enrichment.
+    """
+    if not prop or not isinstance(prop, dict):
+        return None
+
+    zpid_str = zpid or str(prop.get("zpid") or "")
+    addr = prop.get("address") or {}
+    now  = _now()
+
+    # Blank record -- all fields defaulted, then _enrich_from_detail fills them in
+    record = {
+        "id":                    _gen_id(),
+        "source":                "zillow",
+        "source_url":            source_url,
+        "source_listing_id":     zpid_str,
+        "status":                "scraped",
+        "title":                 None,
+        "address":               addr.get("streetAddress") or addr.get("street"),
+        "unit_number":           None,
+        "city":                  addr.get("city"),
+        "state":                 addr.get("state"),
+        "zip":                   addr.get("zipcode"),
+        "county":                None,
+        "neighborhood":          None,
+        "lat":                   _safe_float(prop.get("latitude")),
+        "lng":                   _safe_float(prop.get("longitude")),
+        "location_context":      None,
+        "property_type":         None,
+        "bedrooms":              _safe_int(prop.get("bedrooms")),
+        "bathrooms":             _safe_float(prop.get("bathrooms")),
+        "half_bathrooms":        None,
+        "total_bathrooms":       _safe_float(prop.get("bathrooms")),
+        "square_footage":        _safe_int(prop.get("livingArea")),
+        "lot_size_sqft":         None,
+        "year_built":            _safe_int(prop.get("yearBuilt")),
+        "floors":                None,
+        "garage_spaces":         None,
+        "total_units":           None,
+        "has_basement":          False,
+        "has_central_air":       False,
+        "virtual_tour_url":      None,
+        "monthly_rent":          _parse_price(prop.get("price") or prop.get("rentZestimate")),
+        "security_deposit":      None,
+        "last_months_rent":      None,
+        "application_fee":       None,
+        "pet_deposit":           None,
+        "admin_fee":             None,
+        "move_in_special":       None,
+        "parking_fee":           None,
+        "hoa_fee":               None,
+        "tax_value":             None,
+        "description":           prop.get("description"),
+        "showing_instructions":  None,
+        "available_date":        None,
+        "minimum_lease_months":  None,
+        "lease_terms":           "[]",
+        "pets_allowed":          None,
+        "pet_types_allowed":     "[]",
+        "pet_weight_limit":      None,
+        "pet_details":           None,
+        "smoking_allowed":       None,
+        "parking":               None,
+        "amenities":             "[]",
+        "appliances":            "[]",
+        "utilities_included":    "[]",
+        "flooring":              "[]",
+        "heating_type":          None,
+        "cooling_type":          None,
+        "laundry_type":          None,
+        "original_image_urls":   "[]",
+        "local_image_paths":     "[]",
+        "agent_name":            None,
+        "broker_name":           None,
+        "agent_image_url":       None,
+        "poster_landlord_id":    None,
+        "original_data":         json.dumps(
+            {"zpid": zpid_str, "detailUrl": source_url, "_source": "zillow", "_phase": "detail"},
+            default=str,
+        ),
+        "edited_fields":         "[]",
+        "inferred_features":     "[]",
+        "published_at":          None,
+        "choice_property_id":    None,
+        "scraped_at":            now,
+        "updated_at":            now,
+    }
+
+    # Apply full detail enrichment (this populates every resoFacts field, photos, etc.)
+    record = _enrich_from_detail(record, prop)
+
+    # Build auto-title from best available data
+    if not record.get("title"):
+        beds     = record.get("bedrooms")
+        ptype    = record.get("property_type") or "Rental"
+        city     = record.get("city")
+        street   = record.get("address")
+        bed_pfx  = (str(beds) + "BR ") if beds else ""
+        type_lbl = ptype.replace("_", " ").title()
+        if city:
+            record["title"] = bed_pfx + type_lbl + " in " + city
+        elif street:
+            record["title"] = street
+        else:
+            record["title"] = "Zillow Rental"
+
+    return record
+
+
+def scrape_urls(urls, verbose=True):
+    """
+    Scrape a list of individual Zillow detail page URLs directly.
+
+    Skips Phase 1 (search) entirely and fetches the full detail page for each
+    URL, extracting all property data including photos, resoFacts, amenities, etc.
+
+    Args:
+        urls    : list of Zillow homedetails URLs (absolute, with or without query params)
+        verbose : print progress to stdout
+
+    Returns:
+        (records: list[dict], failed_urls: list[str])
+    """
+    session  = _make_session()
+    records  = []
+    failed   = []
+    total    = len(urls)
+
+    if verbose:
+        print("  [Zillow] Direct URL scrape: " + str(total) + " listing(s)")
+
+    for i, raw_url in enumerate(urls):
+        # Strip UTM params / query string -- they don't affect the page content
+        clean_url = raw_url.split("?")[0].rstrip("/") + "/"
+        # Make sure it's a full URL
+        if not clean_url.startswith("http"):
+            clean_url = ZILLOW_BASE + clean_url
+        zpid = _extract_zpid_from_url(clean_url) or ""
+
+        if verbose:
+            print(
+                "\n  [" + str(i + 1) + "/" + str(total) + "] "
+                + clean_url
+                + ("  (zpid=" + zpid + ")" if zpid else "")
+            )
+
+        # Polite delay between requests (skip on first)
+        if i > 0:
+            delay = random.uniform(*DETAIL_DELAY)
+            if verbose:
+                print("     Waiting " + str(round(delay, 1)) + "s …")
+            time.sleep(delay)
+
+        prop = _fetch_detail_property(session, clean_url, zpid, verbose=verbose)
+
+        if not prop:
+            if verbose:
+                print("  [failed] Could not extract property data. "
+                      "Check if the listing is still active and your IP is residential.")
+            failed.append(raw_url)
+            continue
+
+        try:
+            rec = _map_from_detail_only(prop, clean_url, zpid)
+            if not rec:
+                failed.append(raw_url)
+                continue
+            records.append(rec)
+            if verbose:
+                addr  = " ".join(filter(None, [rec.get("address"), rec.get("city"), rec.get("state")]))
+                rent  = ("$" + str(rec["monthly_rent"]) + "/mo") if rec.get("monthly_rent") else "no rent"
+                score = rec.get("data_quality_score", 0)
+                imgs  = len(json.loads(rec.get("original_image_urls") or "[]"))
+                print(
+                    "  [ok] " + (addr or "?") + " — " + rent
+                    + "  score=" + str(score)
+                    + "  photos=" + str(imgs)
+                )
+        except Exception as e:
+            if verbose:
+                print("  [error] Failed to map property: " + str(e))
+            failed.append(raw_url)
+            continue
+
+    if verbose:
+        if records:
+            scores = [r.get("data_quality_score", 0) for r in records]
+            avg    = round(sum(scores) / len(scores), 1) if scores else 0
+            print(
+                "\n  [Zillow URL done] " + str(len(records)) + "/" + str(total)
+                + " scraped successfully. Avg score: " + str(avg)
+            )
+        if failed:
+            print("  [failed URLs] " + str(len(failed)) + " could not be scraped:")
+            for u in failed:
+                print("     " + u)
+
+    return records, failed

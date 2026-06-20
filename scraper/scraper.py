@@ -71,6 +71,7 @@ try:
     import os as _os
     _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
     from zillow_scraper import scrape_and_map as _zillow_scrape
+    from zillow_scraper import scrape_urls   as _zillow_scrape_urls
     _ZW_AVAILABLE = True
 except ImportError as _e:
     _ZW_AVAILABLE = False
@@ -604,6 +605,374 @@ def _run_realtor(location, args, started_at):
     return _stage_records(records, location, "realtor", args, started_at)
 
 
+# ── Generic URL scraper (non-Zillow sites: RentProgress, Apartments.com, etc.) ─
+
+def _scrape_generic_url(url):
+    """
+    Best-effort property data extraction from any rental listing URL.
+
+    Tries (in order):
+    1. Schema.org JSON-LD (<script type="application/ld+json">)
+    2. URL path heuristics (rentprogress.com, apartments.com, etc.)
+    3. Returns a minimal stub record so the listing is at least in the pipeline.
+
+    Returns a pipeline record dict or None on hard failure.
+    """
+    import re as _re
+    import json as _json
+    import time as _time
+
+    # ── User-Agent rotation (same pool as zillow scraper) ─────────────────────
+    UAS = [
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    ]
+
+    headers = {
+        "User-Agent": random.choice(UAS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    # ── Detect known sites from URL structure ─────────────────────────────────
+    source_name = "web"
+    source_id   = ""
+
+    # rentprogress.com / Progress Residential
+    # URL: https://rentprogress.com/property-details/{street}/{city}/{state}/{zip}/{id}
+    rp_match = _re.search(
+        r"rentprogress\.com/property-details/([^/?#]+)/([^/?#]+)/([^/?#]+)/([^/?#]+)/([^/?#]+)",
+        url,
+    )
+    if rp_match:
+        source_name = "rentprogress"
+        raw_street, raw_city, raw_state, raw_zip, raw_id = rp_match.groups()
+        source_id   = raw_id
+        # Convert hyphenated slugs to human-readable
+        def _slug(s):
+            return s.replace("-", " ").title()
+        url_address = _slug(raw_street)
+        url_city    = _slug(raw_city)
+        url_state   = raw_state.upper()
+        url_zip     = raw_zip
+    else:
+        url_address = url_city = url_state = url_zip = None
+
+    # ── Fetch page HTML ───────────────────────────────────────────────────────
+    try:
+        resp = _requests.get(url.split("?")[0], headers=headers, timeout=20)
+        html = resp.text
+    except Exception as e:
+        print("  [generic url] HTTP error: " + str(e))
+        return None
+
+    # ── Try __NEXT_DATA__ (Next.js pages like rentprogress.com) ───────────────
+    nd_match = _re.search(r'<script[^>]+id="__NEXT_DATA__"[^>]*>(\{.*?\})</script>', html, _re.DOTALL)
+    ld_prop  = None
+
+    if nd_match:
+        try:
+            nd = _json.loads(nd_match.group(1))
+            # Walk pageProps for a property object
+            pp = (nd.get("props") or {}).get("pageProps") or {}
+            ld_prop = (
+                pp.get("property")
+                or pp.get("propertyDetails")
+                or pp.get("listing")
+                or pp.get("data")
+                or {}
+            )
+            if not ld_prop:
+                # rentprogress buries data a level deeper
+                for v in pp.values():
+                    if isinstance(v, dict) and (v.get("address") or v.get("price") or v.get("bedrooms")):
+                        ld_prop = v
+                        break
+        except Exception:
+            ld_prop = None
+
+    # ── Try JSON-LD schema.org ────────────────────────────────────────────────
+    jsonld_prop = None
+    for ld_match in _re.finditer(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, _re.DOTALL
+    ):
+        try:
+            obj = _json.loads(ld_match.group(1))
+            if not isinstance(obj, dict):
+                continue
+            types = [obj.get("@type", "")] if isinstance(obj.get("@type"), str) else (obj.get("@type") or [])
+            if any(t in ("Residence", "SingleFamilyResidence", "RealEstateAgent",
+                         "RentAction", "LodgingBusiness", "Apartment") for t in types):
+                jsonld_prop = obj
+                break
+            # Fallback: any ld+json that has an address
+            if isinstance(obj.get("address"), dict) and not jsonld_prop:
+                jsonld_prop = obj
+        except Exception:
+            pass
+
+    # ── Extract fields from best available data source ────────────────────────
+    def _pick(*args):
+        "Return first truthy value."
+        for a in args:
+            if a:
+                return a
+        return None
+
+    def _price(v):
+        if not v:
+            return None
+        m = _re.search(r"[\d,]+", str(v).replace(",", ""))
+        try:
+            return int(m.group(0)) if m else None
+        except Exception:
+            return None
+
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Pull values from __NEXT_DATA__ first (usually richer), then JSON-LD
+    nd  = ld_prop  or {}
+    jld = jsonld_prop or {}
+
+    address_block = nd.get("address") or jld.get("address") or {}
+    if isinstance(address_block, str):
+        address_block = {}
+
+    address   = _pick(nd.get("streetAddress"), nd.get("address1"),
+                      address_block.get("streetAddress"), url_address)
+    city      = _pick(nd.get("city"), address_block.get("addressLocality"), url_city)
+    state     = _pick(nd.get("state"), nd.get("stateCode"),
+                      address_block.get("addressRegion"), url_state)
+    zip_code  = _pick(nd.get("zipCode"), nd.get("zip"), nd.get("postalCode"),
+                      address_block.get("postalCode"), url_zip)
+    bedrooms  = _pick(nd.get("bedrooms"), nd.get("beds"), nd.get("bedroom"),
+                      jld.get("numberOfRooms"))
+    bathrooms = _pick(nd.get("bathrooms"), nd.get("baths"), nd.get("bathroom"))
+    sqft      = _pick(nd.get("squareFeet"), nd.get("livingArea"),
+                      nd.get("sqft"), nd.get("size"))
+    price     = _price(_pick(nd.get("price"), nd.get("rent"), nd.get("monthlyRent"),
+                             jld.get("priceRange")))
+    desc      = _pick(nd.get("description"), nd.get("propertyDescription"),
+                      jld.get("description"))
+
+    def _safe_int(v):
+        try:
+            return int(float(str(v).replace(",", "")))
+        except Exception:
+            return None
+
+    def _safe_float(v):
+        try:
+            return float(str(v).replace(",", ""))
+        except Exception:
+            return None
+
+    # Photos
+    photos = []
+    for key in ("photos", "images", "propertyPhotos", "photoUrls"):
+        raw = nd.get(key) or []
+        for p in raw:
+            if isinstance(p, str) and p.startswith("http"):
+                photos.append(p)
+            elif isinstance(p, dict):
+                u = p.get("url") or p.get("src") or p.get("href")
+                if u and isinstance(u, str) and u.startswith("http"):
+                    photos.append(u)
+        if photos:
+            break
+
+    # Build a quality score
+    filled = sum(1 for v in [address, city, state, zip_code, price, bedrooms, bathrooms, sqft]
+                 if v is not None)
+    score  = min(100, filled * 12 + len(photos) * 2)
+
+    missing = [f for f, v in {
+        "address": address, "city": city, "state": state, "zip": zip_code,
+        "monthly_rent": price, "bedrooms": bedrooms, "bathrooms": bathrooms,
+        "square_footage": sqft,
+    }.items() if not v]
+
+    title = None
+    if city and bedrooms:
+        title = str(bedrooms) + "BR Rental in " + city
+    elif address:
+        title = address
+
+    record = {
+        "id":                    _gen_id(),
+        "source":                source_name,
+        "source_url":            url.split("?")[0],
+        "source_listing_id":     source_id,
+        "status":                "scraped",
+        "title":                 title,
+        "address":               address,
+        "unit_number":           None,
+        "city":                  city,
+        "state":                 state,
+        "zip":                   zip_code,
+        "county":                None,
+        "neighborhood":          None,
+        "lat":                   _safe_float(nd.get("latitude") or nd.get("lat")),
+        "lng":                   _safe_float(nd.get("longitude") or nd.get("lng")),
+        "location_context":      None,
+        "property_type":         nd.get("propertyType") or nd.get("homeType"),
+        "bedrooms":              _safe_int(bedrooms),
+        "bathrooms":             _safe_float(bathrooms),
+        "half_bathrooms":        None,
+        "total_bathrooms":       _safe_float(bathrooms),
+        "square_footage":        _safe_int(sqft),
+        "lot_size_sqft":         None,
+        "year_built":            _safe_int(nd.get("yearBuilt")),
+        "floors":                None,
+        "garage_spaces":         None,
+        "total_units":           None,
+        "has_basement":          None,
+        "has_central_air":       None,
+        "virtual_tour_url":      None,
+        "monthly_rent":          price,
+        "security_deposit":      _price(nd.get("depositAmount") or nd.get("securityDeposit")),
+        "application_fee":       _price(nd.get("applicationFee")),
+        "pet_deposit":           None,
+        "admin_fee":             None,
+        "move_in_special":       None,
+        "parking_fee":           None,
+        "hoa_fee":               None,
+        "last_months_rent":      None,
+        "tax_value":             None,
+        "description":           desc,
+        "showing_instructions":  None,
+        "available_date":        nd.get("availableDate") or nd.get("availableDateNormalized"),
+        "minimum_lease_months":  None,
+        "lease_terms":           "[]",
+        "pets_allowed":          None,
+        "pet_types_allowed":     "[]",
+        "pet_weight_limit":      None,
+        "pet_details":           None,
+        "smoking_allowed":       None,
+        "parking":               None,
+        "amenities":             json.dumps(list(nd.get("amenities") or []) or []),
+        "appliances":            "[]",
+        "utilities_included":    "[]",
+        "flooring":              "[]",
+        "heating_type":          None,
+        "cooling_type":          None,
+        "laundry_type":          None,
+        "original_image_urls":   json.dumps(photos[:30]),
+        "local_image_paths":     "[]",
+        "agent_name":            None,
+        "broker_name":           None,
+        "agent_image_url":       None,
+        "poster_landlord_id":    None,
+        "original_data":         json.dumps({
+            "_source":   source_name,
+            "_phase":    "url_direct",
+            "_url":      url,
+            "_nd_keys":  list(nd.keys())[:30] if nd else [],
+        }, default=str),
+        "edited_fields":         "[]",
+        "inferred_features":     "[]",
+        "data_quality_score":    score,
+        "missing_fields":        json.dumps(missing),
+        "published_at":          None,
+        "choice_property_id":    None,
+        "scraped_at":            now,
+        "updated_at":            now,
+    }
+    return record
+
+
+# ── URL-list scrape runner ─────────────────────────────────────────────────────
+
+def _run_urls(urls, args, started_at):
+    """
+    Scrape a list of individual listing URLs (Zillow or other sites) into the pipeline.
+    Zillow URLs get full Phase 2 enrichment; other URLs get best-effort generic extraction.
+    """
+    if not urls:
+        return 0, 0, 0
+
+    zillow_urls  = [u for u in urls if "zillow.com" in u]
+    generic_urls = [u for u in urls if "zillow.com" not in u]
+
+    all_records = []
+
+    # ── Zillow URLs ───────────────────────────────────────────────────────────
+    if zillow_urls:
+        if not _ZW_AVAILABLE:
+            print("❌  Zillow module unavailable — cannot scrape Zillow URLs.")
+        else:
+            print("\n" + ("─" * 55))
+            print("🏠  Zillow URL scrape: " + str(len(zillow_urls)) + " listing(s)")
+            print("─" * 55)
+            try:
+                z_records, z_failed = _zillow_scrape_urls(zillow_urls, verbose=True)
+                all_records.extend(z_records)
+                if z_failed:
+                    print("  ⚠  " + str(len(z_failed)) + " Zillow URL(s) failed to scrape.")
+            except Exception as e:
+                print("❌  Zillow URL scrape error: " + str(e))
+
+    # ── Generic URLs ──────────────────────────────────────────────────────────
+    if generic_urls:
+        print("\n" + ("─" * 55))
+        print("🌐  Generic URL scrape: " + str(len(generic_urls)) + " listing(s)")
+        print("─" * 55)
+        for i, url in enumerate(generic_urls):
+            print("  [" + str(i + 1) + "/" + str(len(generic_urls)) + "] " + url)
+            if i > 0:
+                time.sleep(random.uniform(1.5, 3.0))
+            try:
+                rec = _scrape_generic_url(url)
+                if rec:
+                    all_records.append(rec)
+                    addr = " ".join(filter(None, [rec.get("address"), rec.get("city"), rec.get("state")]))
+                    print("  [ok] " + (addr or "?") + " score=" + str(rec.get("data_quality_score", 0)))
+                else:
+                    print("  [failed] Could not extract data from: " + url)
+            except Exception as e:
+                print("  [error] " + str(e))
+
+    if not all_records:
+        print("\n❌  No records extracted from any URL.")
+        return 0, 0, 0
+
+    # ── Dry run ───────────────────────────────────────────────────────────────
+    if args.dry_run:
+        print("\n🔍  DRY RUN — would stage " + str(len(all_records)) + " record(s):")
+        for r in all_records:
+            addr  = " ".join(filter(None, [r.get("address"), r.get("city"), r.get("state"), r.get("zip")]))
+            rent  = ("$" + str(r["monthly_rent"]) + "/mo") if r.get("monthly_rent") else "no rent"
+            score = r.get("data_quality_score", 0)
+            imgs  = len(json.loads(r.get("original_image_urls") or "[]"))
+            src   = r.get("source", "?")
+            print("  [" + src + "] " + (addr or "?") + " — " + rent
+                  + "  Q=" + str(score) + "  photos=" + str(imgs))
+        return len(all_records), 0, 0
+
+    # ── Insert into pipeline ──────────────────────────────────────────────────
+    new_count = dup_count = err_count = 0
+    for rec in all_records:
+        result = _upsert_one(rec, args.upsert)
+        if result == "new":
+            new_count += 1
+        elif result == "dup":
+            dup_count += 1
+        else:
+            err_count += 1
+
+    print("\n" + ("═" * 55))
+    print("  URL scrape results:")
+    print("  Staged new  : " + str(new_count))
+    print("  Skipped/dup : " + str(dup_count))
+    print("  Errors      : " + str(err_count))
+    print("═" * 55)
+
+    _log_run("url-list", "url", new_count, dup_count, err_count, None, started_at)
+    return new_count, dup_count, err_count
+
+
 # ── Zillow scrape for one location ────────────────────────────────────────────
 
 def _run_zillow(location, args, started_at):
@@ -686,18 +1055,42 @@ def _run_location(location, args, started_at):
 
 def run(args):
     print("\n🏠  Choice Properties — Scraper v4")
+    print(f"   Dry run      : {args.dry_run}")
+    print(f"   Upsert       : {args.upsert}")
+
+    started_at = _now()
+
+    # ── URL mode — scrape specific listing URLs directly ──────────────────────
+    urls = list(getattr(args, "url", None) or [])
+    urls_file = getattr(args, "urls_file", None)
+    if urls_file:
+        try:
+            with open(urls_file) as f:
+                for line in f:
+                    u = line.strip()
+                    if u and not u.startswith("#"):
+                        urls.append(u)
+        except FileNotFoundError:
+            print(f"❌  URLs file not found: {urls_file}")
+            return 1
+
+    if urls:
+        print(f"   Mode         : URL scrape ({len(urls)} URL(s))")
+        if not _ZW_AVAILABLE:
+            print(f"⚠   Zillow module unavailable: {_ZW_IMPORT_ERR}")
+        new, dup, err = _run_urls(urls, args, started_at)
+        return 0
+
+    # ── Location mode — city / ZIP / region search ────────────────────────────
     print(f"   Source       : {args.source}")
     print(f"   Past days    : {args.past_days}")
     print(f"   Price/mo     : ${args.price_min or 0} – ${args.price_max or 'no max'}")
     print(f"   Beds         : {args.beds_min or 'any'} – {args.beds_max or 'any'}")
     print(f"   Limit/loc    : {args.limit}")
     print(f"   Min score    : {args.min_score}")
-    print(f"   Upsert       : {args.upsert}")
     print(f"   Extra data   : {args.extra}")
-    print(f"   Zillow details: {'DISABLED (--no-details)' if getattr(args, 'no_details', False) else 'ENABLED (Phase 2 full enrichment)'}")
-    print(f"   Dry run      : {args.dry_run}")
+    print(f"   Zillow detail: {'DISABLED (--no-details)' if getattr(args, 'no_details', False) else 'ENABLED (Phase 2)'}")
 
-    # ── Collect locations ─────────────────────────────────────────────────────
     locations = list(args.location) if args.location else []
     if args.locations_file:
         try:
@@ -711,19 +1104,19 @@ def run(args):
             return 1
 
     if not locations:
-        print("❌  No locations specified. Use --location or --locations-file.")
+        print("❌  No locations or URLs specified.")
+        print("    Use --location \"Dallas, TX\" for a city search, or")
+        print("    use --url https://www.zillow.com/homedetails/... for specific listings.")
         return 1
 
-    print(f"   Locations  : {len(locations)}")
+    print(f"   Locations    : {len(locations)}")
 
-    # ── Source availability check ─────────────────────────────────────────────
     if args.source in ("realtor", "both") and not _HH_AVAILABLE:
         print("⚠   homeharvest not installed — Realtor.com scraping will be skipped.")
         print("    Run: pip install homeharvest")
     if args.source in ("zillow", "both") and not _ZW_AVAILABLE:
         print(f"⚠   Zillow module unavailable: {_ZW_IMPORT_ERR}")
 
-    started_at = _now()
     grand_new = grand_dup = grand_err = 0
 
     for loc in locations:
@@ -750,27 +1143,51 @@ def _build_parser():
         prog="scraper",
         description=(
             "Choice Properties -- Scraper v4\n"
-            "Stages Realtor.com and/or Zillow for-rent listings into pipeline.pipeline_properties.\n"
-            "Zillow now runs in two phases: search (fast) + detail pages (full data)."
+            "Two modes:\n"
+            "  URL mode   : scrape specific listing URLs (--url / --urls-file)\n"
+            "  Search mode: scrape all rentals in a city/ZIP (--location / --locations-file)"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  python scraper.py --location "Austin, TX"
-  python scraper.py --location "Dallas, TX" --source zillow
-  python scraper.py --location "Dallas, TX" --source zillow --no-details
-  python scraper.py --location "Dallas, TX" --source both
-  python scraper.py --location "Dallas, TX" --location "Houston, TX" --source both
-  python scraper.py --locations-file cities.txt --source both --min-score 40
-  python scraper.py --location "30301" --past-days 3 --price-max 2500
-  python scraper.py --location "Los Angeles, CA" --beds-min 2 --beds-max 4 --limit 500
-  python scraper.py --location "Miami, FL" --upsert --past-days 7
-  python scraper.py --location "Miami, FL" --dry-run
+URL mode (Zillow -- run from iSH / residential IP):
+  python3 scraper.py --url "https://www.zillow.com/homedetails/123-Main-St/49843423_zpid/"
+  python3 scraper.py --url "https://www.zillow.com/..." --url "https://www.zillow.com/..."
+  python3 scraper.py --urls-file my_links.txt --dry-run
+  python3 scraper.py --url "https://rentprogress.com/property-details/730-parker-st/..."
+
+Search mode (Realtor.com is safe from Replit; Zillow needs residential IP):
+  python3 scraper.py --location "Austin, TX"
+  python3 scraper.py --location "Dallas, TX" --source zillow
+  python3 scraper.py --location "Dallas, TX" --source both
+  python3 scraper.py --locations-file cities.txt --source both --min-score 40
+  python3 scraper.py --location "Miami, FL" --upsert --past-days 7 --dry-run
         """,
     )
+
+    # ── URL mode args ─────────────────────────────────────────────────────────
+    p.add_argument(
+        "--url", action="append", metavar="URL", dest="url",
+        help=(
+            "Scrape a specific listing URL directly (repeatable). "
+            "Supports Zillow detail pages (full Phase 2 enrichment: all photos, "
+            "appliances, heating/cooling/laundry, deposits, schools, walk scores, etc.) "
+            "and other sites (RentProgress, Apartments.com) via best-effort extraction. "
+            "Zillow URLs must be run from a residential IP (iSH or home WiFi)."
+        ),
+    )
+    p.add_argument(
+        "--urls-file", metavar="FILE", dest="urls_file",
+        help=(
+            "Text file with one listing URL per line (# comments ignored). "
+            "Same as passing each line as --url. "
+            "Great for pasting a batch of shared Zillow links."
+        ),
+    )
+
+    # ── Search mode args ──────────────────────────────────────────────────────
     p.add_argument(
         "--location", action="append", metavar="LOCATION",
-        help='Location to search (repeatable). Accepts: city, "City, ST", ZIP, county.',
+        help='City/ZIP to search (repeatable). e.g. "Dallas, TX" or "75201".',
     )
     p.add_argument(
         "--locations-file", metavar="FILE",
@@ -779,28 +1196,32 @@ Examples:
     p.add_argument(
         "--source", choices=["realtor", "zillow", "both"], default="realtor",
         help=(
-            "Which source(s) to scrape.\n"
-            "  realtor — Realtor.com via HomeHarvest (default)\n"
-            "  zillow  — Zillow via __NEXT_DATA__ HTML parsing\n"
+            "Search mode source(s).\n"
+            "  realtor — Realtor.com via HomeHarvest (safe from Replit, default)\n"
+            "  zillow  — Zillow via __NEXT_DATA__ HTML parsing (needs residential IP)\n"
             "  both    — run both in sequence\n"
-            "Zillow works best from a residential IP."
+            "Not used in URL mode (source is auto-detected from the URL)."
         ),
     )
     p.add_argument(
         "--past-days", type=int, default=7, metavar="N",
         help="Realtor.com only: listings from the last N days (default: 7).",
     )
-    p.add_argument("--beds-min",  type=int, default=None, metavar="N")
-    p.add_argument("--beds-max",  type=int, default=None, metavar="N")
-    p.add_argument("--price-min", type=int, default=None, metavar="$")
-    p.add_argument("--price-max", type=int, default=None, metavar="$")
+    p.add_argument("--beds-min",  type=int, default=None, metavar="N",
+                   help="Minimum bedrooms filter.")
+    p.add_argument("--beds-max",  type=int, default=None, metavar="N",
+                   help="Maximum bedrooms filter.")
+    p.add_argument("--price-min", type=int, default=None, metavar="$",
+                   help="Minimum monthly rent filter.")
+    p.add_argument("--price-max", type=int, default=None, metavar="$",
+                   help="Maximum monthly rent filter.")
     p.add_argument(
         "--property-type", default=None, metavar="TYPE",
         help="Realtor.com only. Comma-separated: single_family, multi_family, condos, townhomes, apartment, mobile",
     )
     p.add_argument(
         "--limit", type=int, default=200, metavar="N",
-        help="Max listings per location per source (default: 200).",
+        help="Max listings per location per source (default: 200). Not used in URL mode.",
     )
     p.add_argument(
         "--min-score", type=int, default=0, metavar="N",
@@ -808,7 +1229,7 @@ Examples:
     )
     p.add_argument(
         "--upsert", action="store_true",
-        help="Update existing pipeline listings rather than skipping duplicates.",
+        help="Update an existing pipeline record if the source_listing_id already exists.",
     )
     p.add_argument(
         "--extra", action="store_true",
@@ -817,14 +1238,13 @@ Examples:
     p.add_argument(
         "--no-details", action="store_true",
         help=(
-            "Zillow only: skip Phase 2 detail-page enrichment. "
-            "Faster but leaves many fields empty (no heating/cooling/laundry/appliances/etc). "
-            "Use when you only need basic listing data quickly."
+            "Zillow search mode only: skip Phase 2 detail-page enrichment. "
+            "Has no effect in URL mode (URL mode always does full detail scrape)."
         ),
     )
     p.add_argument(
         "--dry-run", action="store_true",
-        help="Print what would be staged without writing to the database.",
+        help="Preview what would be staged without writing to the database.",
     )
     return p
 
