@@ -300,3 +300,4 @@ Scraped listings land in `pipeline.pipeline_properties` with `status = 'scraped'
 
 ## Recent Edge Function Deployments
 - `import-pipeline-photos` — deployed via `npx supabase@latest functions deploy --use-api`. Fetches pipeline source photos server-side and uploads to ImageKit. Accepts `{ property_id }` only — looks up pipeline record by `choice_property_id` internally.
+- `imagekit-watermark` — deployed via `npx supabase@latest functions deploy --use-api`. Applies a "Choice Properties" text overlay to an ImageKit photo via URL transformation. Accepts `{ url, file_id, property_id }`, updates `property_photos.url` and sets `watermark_status='applied'`. Admin-only.
