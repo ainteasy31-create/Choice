@@ -622,11 +622,9 @@
       + appsHtml
       + inqsHtml;
 
-    // Update appbar title + sub with live property data
-    const _pgTitle = document.getElementById('page-title');
-    if (_pgTitle) _pgTitle.textContent = p.title || 'Property detail';
-    const _pgSub = document.getElementById('page-sub');
-    if (_pgSub) _pgSub.textContent = [p.city, p.state].filter(Boolean).join(', ');
+    // Update page subtitle
+    const sub = document.querySelector('[data-page-sub]');
+    if (sub) sub.textContent = p.title || 'Property detail';
 
     // ── Bind interactions ──
     bindGallery(urls);
@@ -700,10 +698,13 @@
       const clone = {
         title: (p.title || 'Untitled') + ' (Copy)',
         address: p.address || null, city: p.city || null, state: p.state || null, zip: p.zip || null,
+        county: p.county || null, neighborhood: p.neighborhood || null,
+        location_context: p.location_context || null,
         unit_number: p.unit_number || null, property_type: p.property_type || null,
         bedrooms: p.bedrooms ?? null, bathrooms: p.bathrooms ?? null, half_bathrooms: p.half_bathrooms ?? null,
         square_footage: p.square_footage ?? null, lot_size_sqft: p.lot_size_sqft ?? null,
         year_built: p.year_built ?? null, floors: p.floors ?? null,
+        has_basement: p.has_basement ?? null, has_central_air: p.has_central_air ?? null,
         monthly_rent: p.monthly_rent ?? null, security_deposit: p.security_deposit ?? null,
         application_fee: p.application_fee ?? null, admin_fee: p.admin_fee ?? null,
         last_months_rent: p.last_months_rent ?? null, minimum_lease_months: p.minimum_lease_months ?? null,
@@ -723,21 +724,21 @@
         lat: p.lat ?? null, lng: p.lng ?? null,
         landlord_id: p.landlord_id || null,
         status: 'draft',
-        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       };
       const { data: nd, error: ne } = await CP.sb().from('properties').insert([clone]).select('id').single();
       if (ne) { S.toast('Duplicate failed: ' + ne.message, 'error'); return; }
       S.toast('Property duplicated — opening new draft…', 'success');
       // Audit log for duplicate (non-blocking)
-      CP.sb().auth.getUser().then(({ data: ud }) => {
+      try {
+        const { data: { session: _dupSess } } = await CP.Auth.getSession();
         CP.sb().from('admin_actions').insert([{
-          user_id:     ud?.user?.id || null,
+          user_id:     _dupSess?.user?.id || null,
           action:      'property.duplicate',
           target_type: 'property',
           target_id:   String(nd.id),
           metadata:    { source_id: propId, source_title: p.title || null, status: 'draft' }
         }]).catch(() => {});
-      }).catch(() => {});
+      } catch (_) {}
       setTimeout(() => { location.href = '/admin/property-detail.html?id=' + encodeURIComponent(nd.id) + '&edit=1'; }, 700);
     });
 
