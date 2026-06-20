@@ -690,7 +690,7 @@
       ${row('Deposit',      v('deposit') ? `$${parseInt(v('deposit')).toLocaleString()}` : 'Not specified')}
       ${row('Available',    v('availDate') || 'Immediately')}
       ${row('Lease Terms',  leaseTerms.length ? leaseTerms.join(', ') : null)}
-      ${row('App. Fee',     appFee > 0 ? `$${appFee}` : 'Free — No fee')}
+      ${row('App. Fee',     appFee > 0 ? `$${appFee}` : '$50')}
       ${section('Features & Policies')}
       ${row('Pets',         petsAllowed ? (v('petDetails') || 'Allowed') : 'No Pets')}
       ${row('Parking',      v('parking') || null)}

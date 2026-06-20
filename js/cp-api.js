@@ -767,7 +767,7 @@ function buildApplyURL(property) {
       zip:              property.zip              || '',
       monthly_rent:     property.monthly_rent     || null,
       security_deposit: property.security_deposit || null,
-      application_fee:  property.application_fee  || 0,
+      application_fee:  property.application_fee  || 50,
       available_date:   property.available_date   || null,
       landlord_id:      property.landlord_id      || null,
       bedrooms:         property.bedrooms         || null,

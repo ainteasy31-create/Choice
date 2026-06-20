@@ -160,8 +160,8 @@
         <div class="form-group"><label class="form-label" for="availDate">Available Date</label><input type="date" class="form-input" id="availDate" value="${prop.available_date||''}"></div>
         <div class="form-group">
           <label class="form-label" for="appFee">Application Fee</label>
-          <div style="position:relative"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">$</span><input type="number" class="form-input" id="appFee" value="${prop.application_fee ?? 0}" style="padding-left:28px" min="0" placeholder="0"></div>
-          <div class="form-hint">Enter 0 if free to apply.</div>
+          <div style="position:relative"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">$</span><input type="number" class="form-input" id="appFee" value="${prop.application_fee ?? 50}" style="padding-left:28px" min="0" placeholder="50"></div>
+          <div class="form-hint">Standard application fee is $50.</div>
         </div>
       </div>
       <div class="form-grid-2">
