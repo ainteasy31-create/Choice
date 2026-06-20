@@ -312,7 +312,8 @@ function renderProperty(p) {
   if (p.parking)      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Parking",        "value": true });
   if (p.pets_allowed) amenities.push({ "@type": "LocationFeatureSpecification", "name": "Pets Allowed",   "value": true });
   if (p.laundry)      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Laundry",        "value": p.laundry });
-  if (p.ac)           amenities.push({ "@type": "LocationFeatureSpecification", "name": "Air Conditioning","value": true });
+  if (p.has_central_air || (p.cooling_type && p.cooling_type !== 'None' && p.cooling_type !== ''))
+                      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Air Conditioning","value": true });
   sd.textContent = JSON.stringify({
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
@@ -424,6 +425,18 @@ function renderProperty(p) {
     document.getElementById('detailAddress').insertAdjacentElement('afterend', attr);
   }
 
+  // Neighborhood / location context — shown below the address/attribution
+  if (p.neighborhood || p.location_context) {
+    const nbrEl = document.createElement('div');
+    nbrEl.style.cssText = 'font-size:13px;color:#64748b;margin-top:5px;line-height:1.6;display:flex;flex-wrap:wrap;gap:4px;align-items:center';
+    const parts = [];
+    if (p.neighborhood)     parts.push(`<span><i class="fas fa-location-dot" style="color:#c9a55c;margin-right:3px;font-size:11px"></i>${esc(p.neighborhood)}</span>`);
+    if (p.location_context) parts.push(`<span>${esc(p.location_context)}</span>`);
+    nbrEl.innerHTML = parts.join('<span style="color:#cbd5e1;margin:0 2px">·</span>');
+    const _listedBy = document.querySelector('.detail-listed-by');
+    (_listedBy || document.getElementById('detailAddress')).insertAdjacentElement('afterend', nbrEl);
+  }
+
   // Meta row
   const metas = [];
   if (p.bedrooms != null) metas.push({ label:'Bedrooms', value: p.bedrooms === 0 ? 'Studio' : p.bedrooms, icon:'fa-bed' });
@@ -439,6 +452,8 @@ function renderProperty(p) {
   if (p.year_built)     metas.push({ label:'Year Built', value: p.year_built, icon:'fa-calendar-days' });
   if (p.floors > 1)    metas.push({ label:'Floors', value: p.floors, icon:'fa-layer-group' });
   if (p.lot_size_sqft)  metas.push({ label:'Lot Size', value: Number(p.lot_size_sqft).toLocaleString() + ' sqft', icon:'fa-ruler' });
+  if (p.has_basement === true)    metas.push({ label:'Basement',    value:'Yes', icon:'fa-dungeon' });
+  if (p.has_central_air === true) metas.push({ label:'Central Air', value:'Yes', icon:'fa-snowflake' });
   document.getElementById('detailMeta').innerHTML = metas.map(m => `
     <div class="detail-meta-item">
       <div class="detail-meta-icon"><i class="fas ${m.icon}"></i></div>
@@ -644,8 +659,7 @@ function renderProperty(p) {
       btn.href = applyURL;
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        showToast('Taking you to our secure application portal…', 'info');
-        setTimeout(() => { window.location.href = applyURL; }, 700);
+        window.location.href = applyURL;
       });
     };
     _wireApply('applyBtn');
@@ -1447,7 +1461,7 @@ function initAdminPropertyPanel(prop) {
         <div style="font-size:10px;color:#64748b;margin-top:2px">Saves</div>
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#1e293b">${prop.inquiries_count??0}</div>
+        <div id="adminInqCountVal" style="font-size:20px;font-weight:700;color:#1e293b">—</div>
         <div style="font-size:10px;color:#64748b;margin-top:2px">Inquiries</div>
       </div>
     </div>
@@ -1476,6 +1490,18 @@ function initAdminPropertyPanel(prop) {
   const breadcrumb = detailMain?.querySelector('.detail-breadcrumb');
   if (breadcrumb) breadcrumb.parentNode.insertBefore(section, breadcrumb.nextSibling);
   else if (detailMain) detailMain.prepend(section);
+
+  // Fetch real inquiries count — inquiries_count column doesn't exist on properties table
+  (async () => {
+    try {
+      const { count } = await window.CP.sb()
+        .from('inquiries')
+        .select('id', { count: 'exact', head: true })
+        .eq('property_id', prop.id);
+      const el = document.getElementById('adminInqCountVal');
+      if (el) el.textContent = count ?? 0;
+    } catch(e) { /* non-fatal — leave placeholder dash */ }
+  })();
 
   // Admin notes standalone save
   document.getElementById('adminNotesSaveBtn')?.addEventListener('click', async () => {

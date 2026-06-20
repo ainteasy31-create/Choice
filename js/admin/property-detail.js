@@ -676,7 +676,6 @@
     });
 
     // Upload photos shortcut — opens photo manager focused on the upload zone
-    document.getElementById('pd-btn-upload')?.addEventListener('click', () => openPhotoManager(true));
 
     // No-photo zone click → open photo manager for upload
     const noPhotoZone = document.getElementById('pd-no-photo-zone');
