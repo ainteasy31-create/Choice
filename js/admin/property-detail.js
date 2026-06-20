@@ -2022,7 +2022,12 @@
     }
 
     const ok = await S.requireAdmin();
-    if (!ok) return;
+    if (!ok) {
+      document.getElementById('pd-root').innerHTML =
+        '<div class="empty"><h3>Access denied</h3><p>You don\'t have admin access, or your session expired.</p>' +
+        '<a href="/admin/login.html" class="btn btn-primary" style="margin-top:14px">Sign in as admin</a></div>';
+      return;
+    }
 
     // Phase 1: load property first for fast first paint
     const propRes = await CP.sb()
