@@ -13,9 +13,12 @@ Phase 2 (Detail): Visit each individual listing page concurrently and extract
          high-resolution full photo gallery, and much more.
 
 Bot-detection notes:
-  * Requires a residential IP (home/office WiFi or mobile data).
-  * Datacenter IPs (Replit, AWS, GCP) will receive 403 from DataDome.
-  * Run from iSH on iPhone using mobile data or home WiFi.
+  * curl_cffi (preferred): impersonates Chrome 124 TLS fingerprint (JA3/JA4),
+    bypassing DataDome bot-detection. Install with: pip install curl-cffi
+    Falls back to plain requests if curl_cffi is not available (e.g. iSH/Alpine).
+  * Still requires a residential IP (home/office WiFi or mobile data).
+    Datacenter IPs (Replit, AWS, GCP) will receive 403 from DataDome regardless.
+  * Run from iSH on iPhone using mobile data or home WiFi (or any residential IP).
   * User-agents are rotated across requests to reduce fingerprint.
   * Inter-page and inter-detail delays are randomised to mimic human browsing.
   * Use --no-details flag to skip Phase 2 if speed matters more than completeness.
@@ -39,12 +42,24 @@ import threading
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Prefer curl_cffi for browser-accurate TLS fingerprinting (bypasses DataDome JA3
+# detection that blocks plain Python requests even on residential IPs).
+# Falls back to requests if curl_cffi is not installed -- useful when running on
+# iSH/Alpine where pre-built musl wheels may not be available.
 try:
-    import requests as _req
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
+    from curl_cffi import requests as _req
+    _CURL_CFFI = True
 except ImportError:
-    raise ImportError("requests not installed. Run: pip install requests")
+    _CURL_CFFI = False
+    try:
+        import requests as _req
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+    except ImportError:
+        raise ImportError(
+            "Neither curl_cffi nor requests is installed. "
+            "Run: pip install curl-cffi  (or: pip install requests)"
+        )
 
 
 # -- Constants -----------------------------------------------------------------
@@ -145,7 +160,28 @@ _TRACKABLE_MISSING = [
 # -- HTTP session --------------------------------------------------------------
 
 def _make_session():
-    """Create an HTTP session with a random UA and retry adapter."""
+    """
+    Create an HTTP session.
+
+    When curl_cffi is available, the session impersonates Chrome 124 at the
+    TLS layer (JA3/JA4 fingerprint), which bypasses DataDome bot-detection
+    that blocks plain Python requests even from residential IPs.
+
+    Falls back to a requests.Session with a retry adapter when curl_cffi is
+    not installed (e.g. on iSH/Alpine where musl wheels may be unavailable).
+    """
+    ua = random.choice(_USER_AGENTS)
+    headers = dict(_BASE_HEADERS)
+    headers["User-Agent"] = ua
+
+    if _CURL_CFFI:
+        # impersonate="chrome124" sets the correct TLS ClientHello fingerprint.
+        # curl_cffi does not support HTTPAdapter/mount -- retries handled manually.
+        s = _req.Session(impersonate="chrome124")
+        s.headers.update(headers)
+        return s
+
+    # --- requests fallback ---
     s = _req.Session()
     adapter = HTTPAdapter(
         max_retries=Retry(
@@ -158,9 +194,6 @@ def _make_session():
     )
     s.mount("https://", adapter)
     s.mount("http://",  adapter)
-    ua = random.choice(_USER_AGENTS)
-    headers = dict(_BASE_HEADERS)
-    headers["User-Agent"] = ua
     s.headers.update(headers)
     return s
 
