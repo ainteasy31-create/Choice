@@ -552,7 +552,7 @@ def scrape_and_map(
     blocked  = False
 
     if verbose:
-        print(f"  🔍  Zillow: fetching rentals for "{location}"")
+        print(f"  🔍  Zillow: fetching rentals for: {location}")
 
     for page in range(1, MAX_PAGES + 1):
         if len(raw_kept) >= limit:
@@ -662,6 +662,6 @@ def scrape_and_map(
             continue
 
     if verbose:
-        print(f"  ✅  Zillow: {len(records)} pipeline-ready records for "{location}"")
+        print(f"  ✅  Zillow: {len(records)} pipeline-ready records for: {location}")
 
     return records, blocked
