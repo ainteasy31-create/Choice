@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
 """
-Choice Properties — HomeHarvest Scraper (v2)
-=============================================
-Scrapes for-rent listings from Realtor.com via HomeHarvest and stages them
-in pipeline.pipeline_properties for admin review and publishing.
-
-Performance improvements over v1:
-  • Batch inserts  — 50 records per POST instead of one-at-a-time
-  • Parallel workers — concurrent batch writes via ThreadPoolExecutor
-  • Retry/backoff   — 3 retries with exponential back-off on failures
-  • Connection pool — requests.Session with Keep-Alive
-  • .env auto-load  — no manual "source .env" required
-  • Multi-location  — --location can be passed multiple times
-  • Locations file  — --locations-file runs a whole list of cities
-  • Upsert mode     — --upsert refreshes existing scraped listings
-  • Quality filter  — --min-score skips low-quality junk
+Choice Properties — Scraper (v3)
+=================================
+Scrapes for-rent listings from Realtor.com (via HomeHarvest) and/or Zillow
+(via __NEXT_DATA__ HTML parsing) and stages them in pipeline.pipeline_properties
+for admin review and publishing.
 
 Usage:
-  python scraper.py --location "Dallas, TX"
-  python scraper.py --location "Austin, TX" --location "Houston, TX"
-  python scraper.py --locations-file cities.txt --min-score 40
-  python scraper.py --location "92104" --upsert --past-days 3
+  python scraper.py --location "Dallas, TX"                          # Realtor only (default)
+  python scraper.py --location "Dallas, TX" --source zillow          # Zillow only
+  python scraper.py --location "Dallas, TX" --source both            # Realtor + Zillow
+  python scraper.py --location "Austin, TX" --location "Houston, TX" # multi-city
+  python scraper.py --locations-file cities.txt --source both        # bulk from file
+  python scraper.py --location "Miami, FL" --upsert --past-days 3
+  python scraper.py --location "Miami, FL" --dry-run
 
 Requirements:
   pip install homeharvest requests
@@ -28,6 +21,12 @@ Requirements:
 Environment variables (.env file auto-loaded if present):
   SUPABASE_URL              (default: https://tlfmwetmhthpyrytrcfo.supabase.co)
   SUPABASE_SERVICE_ROLE_KEY (required)
+
+Zillow note:
+  The Zillow scraper works by parsing __NEXT_DATA__ JSON from Zillow's
+  Next.js pages. It works best from residential IPs. Datacenter/cloud IPs
+  may be blocked by Zillow's DataDome bot-detection layer. Run locally,
+  or set HTTP_PROXY / HTTPS_PROXY to a residential proxy.
 """
 
 import os
@@ -42,7 +41,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── .env auto-loader ──────────────────────────────────────────────────────────
 def _load_dotenv():
-    """Load key=value pairs from .env in cwd or parent dir (no dependency needed)."""
     for candidate in [".env", "../.env"]:
         if os.path.isfile(candidate):
             with open(candidate) as f:
@@ -59,16 +57,26 @@ def _load_dotenv():
 
 _load_dotenv()
 
-# ── Guard imports ─────────────────────────────────────────────────────────────
+# ── Guard: Realtor.com scraper (HomeHarvest) ──────────────────────────────────
 try:
     from homeharvest import scrape_property
     from homeharvest.exceptions import InvalidListingType, AuthenticationError
+    _HH_AVAILABLE = True
 except ImportError:
-    sys.exit(
-        "❌  homeharvest is not installed.\n"
-        "    Run:  pip install homeharvest requests\n"
-    )
+    _HH_AVAILABLE = False
 
+# ── Guard: Zillow scraper module ──────────────────────────────────────────────
+try:
+    import sys as _sys
+    import os as _os
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from zillow_scraper import scrape_and_map as _zillow_scrape
+    _ZW_AVAILABLE = True
+except ImportError as _e:
+    _ZW_AVAILABLE = False
+    _ZW_IMPORT_ERR = str(_e)
+
+# ── Guard: requests ───────────────────────────────────────────────────────────
 try:
     import requests as _requests
     from requests.adapters import HTTPAdapter
@@ -89,19 +97,17 @@ if not SERVICE_ROLE_KEY:
         "    Add it to a .env file or export it before running."
     )
 
-BATCH_SIZE   = 50    # records per POST
-MAX_WORKERS  = 4     # parallel batch-insert threads
-MAX_RETRIES  = 3     # DB write retries per batch
-RETRY_DELAY  = 1.5   # seconds (doubles each retry)
+BATCH_SIZE  = 50
+MAX_WORKERS = 4
+MAX_RETRIES = 3
+RETRY_DELAY = 1.5
 
-# ── HTTP session (connection pool + retry for transient network errors) ────────
+# ── HTTP session (Supabase) ───────────────────────────────────────────────────
 _session_local = threading.local()
 
-def _get_session():
-    """Return a thread-local requests.Session with connection pooling."""
+def _get_sb_session():
     if not hasattr(_session_local, "session"):
         s = _requests.Session()
-        # Retry on connection errors / 5xx, but NOT on 4xx (those are logic errors)
         retry = Retry(
             total=3,
             backoff_factor=0.5,
@@ -127,7 +133,7 @@ def _get_session():
 def _sb_get(table, qs=""):
     url = f"{SUPABASE_URL}/rest/v1/{table}?{qs}"
     try:
-        r = _get_session().get(url, timeout=20)
+        r = _get_sb_session().get(url, timeout=20)
         r.raise_for_status()
         return r.json(), None
     except _requests.HTTPError as e:
@@ -137,47 +143,34 @@ def _sb_get(table, qs=""):
 
 
 def _sb_post_batch(table, records, upsert=False):
-    """
-    Insert or upsert a list of records in one POST.
-    Returns (inserted_count, error_string_or_None).
-    Retries up to MAX_RETRIES times with exponential back-off.
-    """
     prefer = "return=representation"
     if upsert:
         prefer += ",resolution=merge-duplicates"
-
     url  = f"{SUPABASE_URL}/rest/v1/{table}"
     body = json.dumps(records, default=str).encode()
-
-    headers_override = {"Prefer": prefer}
-
     delay = RETRY_DELAY
     last_err = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            r = _get_session().post(url, data=body, headers=headers_override, timeout=30)
+            r = _get_sb_session().post(
+                url, data=body,
+                headers={"Prefer": prefer},
+                timeout=30,
+            )
             r.raise_for_status()
             data = r.json()
             return len(data) if isinstance(data, list) else len(records), None
         except _requests.HTTPError as e:
             err_text = e.response.text[:300] if e.response else str(e)
-            # 4xx → logic error, no point retrying
             if e.response is not None and 400 <= e.response.status_code < 500:
                 return 0, err_text
             last_err = err_text
         except Exception as e:
             last_err = str(e)
-
         if attempt < MAX_RETRIES:
             time.sleep(delay)
             delay *= 2
-
     return 0, last_err
-
-
-def _sb_upsert_conflict_col():
-    """Column used as unique key for upsert conflict resolution."""
-    return "source_listing_id"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -185,20 +178,17 @@ def _sb_upsert_conflict_col():
 def _gen_id():
     return "PP-" + uuid.uuid4().hex[:8].upper()
 
-
 def _safe_int(v):
     try:
         return int(v) if v is not None else None
     except (ValueError, TypeError):
         return None
 
-
 def _safe_float(v):
     try:
         return float(v) if v is not None else None
     except (ValueError, TypeError):
         return None
-
 
 def _jdumps(v):
     if v is None:
@@ -207,12 +197,11 @@ def _jdumps(v):
         return v
     return json.dumps([str(x) for x in v if x])
 
-
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
-# ── Property-type normalisation ───────────────────────────────────────────────
+# ── Realtor.com property mapper ───────────────────────────────────────────────
 _STYLE_MAP = {
     "SINGLE_FAMILY":               "SINGLE_FAMILY",
     "MULTI_FAMILY":                "MULTI_FAMILY",
@@ -229,17 +218,13 @@ _STYLE_MAP = {
     "FARM":                        "FARM",
 }
 
-
-# ── Pet policy parser ─────────────────────────────────────────────────────────
-
 def _parse_pet_policy(pp):
     if pp is None:
         return None, []
     if isinstance(pp, bool):
         return pp, []
     if isinstance(pp, dict):
-        types   = []
-        allowed = False
+        types, allowed = [], False
         if pp.get("cats"):  types.append("cats");  allowed = True
         if pp.get("dogs"):  types.append("dogs");  allowed = True
         if pp.get("pets_allowed") and not allowed:
@@ -247,25 +232,18 @@ def _parse_pet_policy(pp):
         return allowed if (types or pp.get("pets_allowed") is not None) else None, types
     return None, []
 
-
-# ── Photo collector ───────────────────────────────────────────────────────────
-
 def _collect_photos(prop):
-    urls    = []
-    seen    = set()
-    primary = getattr(prop, "primary_photo", None)
-    if primary:
-        s = str(primary).strip()
-        if s and s not in seen:
-            urls.append(s); seen.add(s)
+    urls, seen = [], set()
+    for src in [getattr(prop, "primary_photo", None)]:
+        if src:
+            s = str(src).strip()
+            if s and s not in seen:
+                urls.append(s); seen.add(s)
     for p in (getattr(prop, "alt_photos", None) or []):
         s = str(p).strip()
         if s and s not in seen:
             urls.append(s); seen.add(s)
     return urls[:40]
-
-
-# ── Parking stringifier ───────────────────────────────────────────────────────
 
 def _parking_str(parking):
     if parking is None:
@@ -278,8 +256,7 @@ def _parking_str(parking):
         return ", ".join(parts) if parts else json.dumps(parking)
     return str(parking)
 
-
-# ── Data-quality scoring ──────────────────────────────────────────────────────
+# ── Quality scoring (shared logic; mirrors zillow_scraper.py) ─────────────────
 _IMPORTANT = [
     "address", "city", "state", "zip", "lat", "lng",
     "bedrooms", "bathrooms", "square_footage", "monthly_rent",
@@ -295,7 +272,6 @@ _TRACKABLE_MISSING = [
     "available_date", "heating_type", "cooling_type", "laundry_type",
 ]
 
-
 def _quality_score(r):
     sc = 0
     for f in _IMPORTANT:
@@ -308,23 +284,17 @@ def _quality_score(r):
     sc += 6 if n >= 5 else (3 if n >= 1 else 0)
     return min(sc, 100)
 
-
 def _missing_fields(r):
     return [f for f in _TRACKABLE_MISSING if r.get(f) in (None, "", "[]")]
 
-
-# ── Field mapper ──────────────────────────────────────────────────────────────
-
-def _map_property(prop):
+def _map_realtor_property(prop):
     desc = getattr(prop, "description", None)
     addr = getattr(prop, "address",     None)
-
     street   = getattr(addr, "street",   None) if addr else None
     unit     = getattr(addr, "unit",     None) if addr else None
     city     = getattr(addr, "city",     None) if addr else None
     state    = getattr(addr, "state",    None) if addr else None
     zipcode  = getattr(addr, "zip_code", None) if addr else None
-
     beds     = _safe_int(getattr(desc, "beds",       None)) if desc else None
     bath_f   = _safe_int(getattr(desc, "baths_full", None)) if desc else None
     bath_h   = _safe_int(getattr(desc, "baths_half", None)) if desc else None
@@ -336,33 +306,24 @@ def _map_property(prop):
     desc_txt  = getattr(desc, "text",  None) if desc else None
     style_raw = str(getattr(desc, "style", None) or getattr(desc, "type", None) or "").upper()
     prop_type = _STYLE_MAP.get(style_raw, style_raw or None)
-
     bed_pfx  = f"{beds}BR " if beds else ""
     type_lbl = (prop_type or "Rental").replace("_", " ").title()
     title    = f"{bed_pfx}{type_lbl} in {city}" if city else (street or "Rental Property")
-
-    ld             = getattr(prop, "list_date", None)
+    ld       = getattr(prop, "list_date", None)
     available_date = None
     if ld:
         try:    available_date = ld.strftime("%Y-%m-%d")
         except: available_date = str(ld)[:10]
-
     photos = _collect_photos(prop)
-
     pets_allowed, pet_types = _parse_pet_policy(getattr(prop, "pet_policy", None))
-
     tags      = getattr(prop, "tags", None) or []
     amenities = _jdumps(tags)
-
     hoods = getattr(prop, "neighborhoods", None) or []
     hood  = str(hoods[0]) if hoods else None
-
-    rent = _safe_int(getattr(prop, "list_price", None))
-
+    rent  = _safe_int(getattr(prop, "list_price", None))
     bath_total = None
     if bath_f is not None:
         bath_total = round((bath_f or 0) + (bath_h or 0) * 0.5, 1)
-
     original_data = {
         "property_url":   getattr(prop, "property_url",   None),
         "property_id":    getattr(prop, "property_id",    None),
@@ -380,9 +341,7 @@ def _map_property(prop):
         "office_name":    getattr(prop, "office_name",    None),
         "_source":        "realtor",
     }
-
     now = _now()
-
     record = {
         "id":                    _gen_id(),
         "source":                "realtor",
@@ -392,7 +351,6 @@ def _map_property(prop):
             getattr(prop, "mls_id",      None) or ""
         ),
         "status":                "scraped",
-
         "title":                 title,
         "address":               street,
         "unit_number":           unit,
@@ -404,7 +362,6 @@ def _map_property(prop):
         "lat":                   _safe_float(getattr(prop, "latitude",  None)),
         "lng":                   _safe_float(getattr(prop, "longitude", None)),
         "location_context":      None,
-
         "property_type":         prop_type,
         "bedrooms":              beds,
         "bathrooms":             bath_f,
@@ -419,7 +376,6 @@ def _map_property(prop):
         "has_basement":          False,
         "has_central_air":       False,
         "virtual_tour_url":      None,
-
         "monthly_rent":          rent,
         "security_deposit":      rent,
         "last_months_rent":      None,
@@ -430,19 +386,16 @@ def _map_property(prop):
         "parking_fee":           None,
         "hoa_fee":               _safe_int(getattr(prop, "hoa_fee",            None)),
         "tax_value":             _safe_int(getattr(prop, "tax_assessed_value", None)),
-
         "description":           desc_txt,
         "showing_instructions":  None,
         "available_date":        available_date,
         "minimum_lease_months":  None,
         "lease_terms":           "[]",
-
         "pets_allowed":          pets_allowed,
         "pet_types_allowed":     _jdumps(pet_types),
         "pet_weight_limit":      None,
         "pet_details":           None,
         "smoking_allowed":       None,
-
         "parking":               _parking_str(getattr(prop, "parking", None)),
         "amenities":             amenities,
         "appliances":            "[]",
@@ -451,15 +404,12 @@ def _map_property(prop):
         "heating_type":          None,
         "cooling_type":          None,
         "laundry_type":          None,
-
         "original_image_urls":   _jdumps(photos),
         "local_image_paths":     "[]",
-
         "agent_name":            getattr(prop, "agent_name",  None),
         "broker_name":           getattr(prop, "broker_name", None),
         "agent_image_url":       None,
         "poster_landlord_id":    None,
-
         "original_data":         json.dumps(original_data, default=str),
         "edited_fields":         "[]",
         "inferred_features":     "[]",
@@ -468,17 +418,14 @@ def _map_property(prop):
         "scraped_at":            now,
         "updated_at":            now,
     }
-
     record["data_quality_score"] = _quality_score(record)
     record["missing_fields"]     = _jdumps(_missing_fields(record))
-
     return record
 
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
 
 def _get_existing_ids(source_ids):
-    """Return set of source_listing_ids already in pipeline."""
     if not source_ids:
         return set()
     import urllib.parse
@@ -495,10 +442,10 @@ def _get_existing_ids(source_ids):
 
 # ── Scrape-run logger ─────────────────────────────────────────────────────────
 
-def _log_run(location, count_total, count_new, avg_score,
-             error_msg, started_at, count_dup=0, count_img_fail=0):
+def _log_run(location, source, count_total, count_new, avg_score,
+             error_msg, started_at, count_dup=0, count_err=0):
     payload = {
-        "source":                    "realtor",
+        "source":                    source,
         "location":                  location,
         "count_total":               count_total,
         "count_new":                 count_new,
@@ -509,41 +456,101 @@ def _log_run(location, count_total, count_new, avg_score,
         "count_duplicate":           count_dup,
         "count_watermarked":         0,
         "count_validation_rejected": 0,
-        "count_image_failed":        count_img_fail,
+        "count_image_failed":        count_err,
         "partial":                   False,
     }
-    inserted, err = _sb_post_batch("pipeline_scrape_runs", [payload])
-    if err:
-        print(f"  ⚠  Could not log scrape run: {err[:120]}")
-    else:
-        print(f"   📋  Scrape run logged")
+    _sb_post_batch("pipeline_scrape_runs", [payload])
 
 
 # ── Batch insert worker ───────────────────────────────────────────────────────
 
-def _insert_batch(batch, upsert, batch_num, total_batches):
-    """Insert one batch; called from thread pool. Returns (ok_count, err_count)."""
+def _insert_batch(batch, upsert, batch_num, total_batches, source_label):
     inserted, err = _sb_post_batch("pipeline_properties", batch, upsert=upsert)
     if err:
-        print(f"  ❌  Batch {batch_num}/{total_batches} failed ({len(batch)} records): {err[:160]}")
+        print(f"  ❌  [{source_label}] Batch {batch_num}/{total_batches} failed: {err[:160]}")
         return 0, len(batch)
     print(
-        f"  ✅  Batch {batch_num}/{total_batches} — "
+        f"  ✅  [{source_label}] Batch {batch_num}/{total_batches} — "
         f"{inserted} record(s) {'upserted' if upsert else 'inserted'}"
     )
     return inserted, 0
 
 
-# ── Single-location runner ────────────────────────────────────────────────────
+# ── Shared staging logic ──────────────────────────────────────────────────────
 
-def _run_location(location, args, global_started_at):
-    """Scrape + stage one location. Returns (count_new, count_dup, count_err, avg_score)."""
-    print(f"\n{'═'*55}")
-    print(f"📍  Location: {location}")
-    print(f"{'═'*55}")
+def _stage_records(records, location, source_label, args, started_at):
+    """
+    Dedup + batch-insert a list of pipeline-ready records.
+    Returns (count_new, count_dup, count_err, avg_score).
+    """
+    if not records:
+        _log_run(location, source_label, 0, 0, 0, None, started_at)
+        return 0, 0, 0, 0
 
-    # ── Scrape ───────────────────────────────────────────────────────────────
-    print("⏳  Scraping Realtor.com via HomeHarvest…")
+    total_scraped = len(records)
+
+    # Dedup
+    if not args.dry_run and not args.upsert:
+        source_ids = [r.get("source_listing_id", "") for r in records]
+        existing   = _get_existing_ids([s for s in source_ids if s])
+        pre_dedup  = len(records)
+        records    = [r for r in records if r.get("source_listing_id", "") not in existing]
+        count_dup  = pre_dedup - len(records)
+        print(f"   [{source_label}] {count_dup} duplicates skipped, {len(records)} to stage")
+    else:
+        count_dup = 0
+
+    scores = [r["data_quality_score"] for r in records]
+
+    if args.dry_run:
+        print(f"\n   [DRY RUN — {source_label}] Would stage {len(records)} listings, "
+              f"avg score = {round(sum(scores)/len(scores),1) if scores else 0}")
+        for r in records[:8]:
+            addr = f"{r.get('address','')} {r.get('city','')}".strip()
+            print(f"  [DRY] {r['id']}  ${r['monthly_rent'] or '?'}/mo  "
+                  f"score={r['data_quality_score']}  {addr}")
+        if len(records) > 8:
+            print(f"  ... and {len(records)-8} more")
+        avg_score = round(sum(scores)/len(scores), 1) if scores else 0
+        return len(records), count_dup, 0, avg_score
+
+    if not records:
+        _log_run(location, source_label, total_scraped, 0, 0, None, started_at, count_dup)
+        return 0, count_dup, 0, 0
+
+    batches       = [records[i:i+BATCH_SIZE] for i in range(0, len(records), BATCH_SIZE)]
+    total_batches = len(batches)
+    workers       = min(MAX_WORKERS, total_batches)
+    print(f"\n📦  [{source_label}] Staging {len(records)} listing(s) in "
+          f"{total_batches} batch(es) [{workers} worker(s)]…")
+
+    count_new = count_err = 0
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(_insert_batch, b, args.upsert, i+1, total_batches, source_label): i
+            for i, b in enumerate(batches)
+        }
+        for f in as_completed(futures):
+            ok, err_cnt = f.result()
+            count_new += ok
+            count_err += err_cnt
+
+    avg_score = round(sum(scores)/len(scores), 1) if scores else 0
+    _log_run(location, source_label, total_scraped, count_new, avg_score,
+             None, started_at, count_dup, count_err)
+    return count_new, count_dup, count_err, avg_score
+
+
+# ── Realtor.com scrape for one location ───────────────────────────────────────
+
+def _run_realtor(location, args, started_at):
+    if not _HH_AVAILABLE:
+        print("❌  homeharvest is not installed. Run: pip install homeharvest")
+        return 0, 0, 0, 0
+
+    print(f"\n{'─'*55}")
+    print(f"🏠  Realtor.com scrape: {location}")
+    print(f"{'─'*55}")
     t0 = time.time()
 
     scrape_kwargs = dict(
@@ -554,145 +561,142 @@ def _run_location(location, args, global_started_at):
         limit               = args.limit,
         extra_property_data = args.extra,
     )
-    if args.beds_min       is not None: scrape_kwargs["beds_min"]       = args.beds_min
-    if args.beds_max       is not None: scrape_kwargs["beds_max"]       = args.beds_max
-    if args.price_min      is not None: scrape_kwargs["price_min"]      = args.price_min
-    if args.price_max      is not None: scrape_kwargs["price_max"]      = args.price_max
-    if args.property_type:              scrape_kwargs["property_type"]  = args.property_type.split(",")
+    if args.beds_min       is not None: scrape_kwargs["beds_min"]      = args.beds_min
+    if args.beds_max       is not None: scrape_kwargs["beds_max"]      = args.beds_max
+    if args.price_min      is not None: scrape_kwargs["price_min"]     = args.price_min
+    if args.price_max      is not None: scrape_kwargs["price_max"]     = args.price_max
+    if args.property_type:              scrape_kwargs["property_type"] = args.property_type.split(",")
 
     try:
         props = scrape_property(**scrape_kwargs)
     except (InvalidListingType, AuthenticationError) as e:
         print(f"❌  Scrape error: {e}")
-        _log_run(location, 0, 0, 0, str(e), global_started_at)
+        _log_run(location, "realtor", 0, 0, 0, str(e), started_at)
         return 0, 0, 0, 0
     except Exception as e:
         print(f"❌  Unexpected scrape error: {e}")
-        _log_run(location, 0, 0, 0, str(e), global_started_at)
+        _log_run(location, "realtor", 0, 0, 0, str(e), started_at)
         return 0, 0, 0, 0
 
-    elapsed       = round(time.time() - t0, 1)
-    total_scraped = len(props)
-    print(f"✅  Found {total_scraped} listings in {elapsed}s")
+    elapsed = round(time.time() - t0, 1)
+    print(f"✅  HomeHarvest found {len(props)} listings in {elapsed}s")
 
     if not props:
-        print("   Nothing to stage.")
-        _log_run(location, 0, 0, 0, None, global_started_at)
+        _log_run(location, "realtor", 0, 0, 0, None, started_at)
         return 0, 0, 0, 0
 
-    # ── Map all records ───────────────────────────────────────────────────────
-    source_ids = [
-        str(getattr(p, "property_id", None) or getattr(p, "mls_id", None) or "")
-        for p in props
-    ]
-
-    # ── Deduplication (skip for upsert mode — upsert handles conflicts) ───────
-    if not args.dry_run and not args.upsert:
-        existing = _get_existing_ids([sid for sid in source_ids if sid])
-        print(f"   {len(existing)} already in pipeline — will be skipped")
-    else:
-        existing = set()
-
-    # ── Build records to stage ────────────────────────────────────────────────
-    to_insert = []
-    count_dup  = 0
-    scores     = []
-
-    for prop, sid in zip(props, source_ids):
-        if not args.upsert and sid and sid in existing:
-            count_dup += 1
+    # Map + quality filter + address validation
+    records = []
+    for prop in props:
+        rec = _map_realtor_property(prop)
+        if rec["data_quality_score"] < args.min_score:
             continue
-
-        record = _map_property(prop)
-
-        # Quality filter
-        if record["data_quality_score"] < args.min_score:
-            count_dup += 1  # count as skipped
+        has_addr   = bool(rec.get("address") and rec.get("city"))
+        has_coords = rec.get("lat") is not None and rec.get("lng") is not None
+        if not has_addr and not has_coords:
             continue
+        records.append(rec)
 
-        # Basic validation: must have at least address or coordinates
-        has_address = bool(record.get("address") and record.get("city"))
-        has_coords  = record.get("lat") is not None and record.get("lng") is not None
-        if not has_address and not has_coords:
-            count_dup += 1
-            continue
+    dropped = len(props) - len(records)
+    if dropped:
+        print(f"   {dropped} listing(s) dropped (below min-score or no address/coords)")
 
-        scores.append(record["data_quality_score"])
-        to_insert.append(record)
+    return _stage_records(records, location, "realtor", args, started_at)
 
-    if args.dry_run:
-        print(f"\n   [DRY RUN] Would stage {len(to_insert)} listings "
-              f"(skip {count_dup}), avg score = "
-              f"{round(sum(scores)/len(scores),1) if scores else 0}")
-        for r in to_insert[:10]:
-            addr_label = f"{r.get('address','')} {r.get('city','')}".strip()
-            print(
-                f"  [DRY] {r['id']}  ${r['monthly_rent'] or '?'}/mo  "
-                f"score={r['data_quality_score']}  {addr_label}"
-            )
-        if len(to_insert) > 10:
-            print(f"  ... and {len(to_insert)-10} more")
-        return len(to_insert), count_dup, 0, round(sum(scores)/len(scores),1) if scores else 0
 
-    if not to_insert:
-        avg_score = 0
-        _log_run(location, total_scraped, 0, avg_score, None, global_started_at, count_dup)
-        return 0, count_dup, 0, avg_score
+# ── Zillow scrape for one location ────────────────────────────────────────────
 
-    # ── Batch insert (parallel) ───────────────────────────────────────────────
-    batches = [to_insert[i:i+BATCH_SIZE] for i in range(0, len(to_insert), BATCH_SIZE)]
-    total_batches = len(batches)
-    print(f"\n📦  Staging {len(to_insert)} listings in {total_batches} batch(es) "
-          f"[{min(MAX_WORKERS, total_batches)} workers]…")
-
-    count_new = count_err = 0
-    futures = {}
-
-    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, total_batches)) as executor:
-        for i, batch in enumerate(batches, 1):
-            f = executor.submit(_insert_batch, batch, args.upsert, i, total_batches)
-            futures[f] = i
-
-        for f in as_completed(futures):
-            ok, err_cnt = f.result()
-            count_new += ok
-            count_err += err_cnt
-
-    avg_score = round(sum(scores) / len(scores), 1) if scores else 0
+def _run_zillow(location, args, started_at):
+    if not _ZW_AVAILABLE:
+        print(f"❌  Zillow scraper unavailable: {_ZW_IMPORT_ERR}")
+        return 0, 0, 0, 0
 
     print(f"\n{'─'*55}")
-    print(f"  Location      : {location}")
-    print(f"  Scraped total : {total_scraped}")
-    print(f"  Staged (new)  : {count_new}")
-    print(f"  Skipped/dup   : {count_dup}")
-    print(f"  Errors        : {count_err}")
-    print(f"  Avg score     : {avg_score}")
+    print(f"🏠  Zillow scrape: {location}")
     print(f"{'─'*55}")
 
-    _log_run(location, total_scraped, count_new, avg_score,
-             None, global_started_at, count_dup, count_err)
+    try:
+        records, blocked = _zillow_scrape(
+            location  = location,
+            limit     = args.limit,
+            beds_min  = args.beds_min,
+            beds_max  = args.beds_max,
+            price_min = args.price_min,
+            price_max = args.price_max,
+            min_score = args.min_score,
+            verbose   = True,
+        )
+    except Exception as e:
+        print(f"❌  Zillow scrape error: {e}")
+        _log_run(location, "zillow", 0, 0, 0, str(e), started_at)
+        return 0, 0, 0, 0
 
-    return count_new, count_dup, count_err, avg_score
+    if blocked:
+        msg = "Zillow blocked the request (bot detection). Run from a residential IP."
+        print(f"  ⛔  {msg}")
+        _log_run(location, "zillow", 0, 0, 0, msg, started_at)
+        return 0, 0, 0, 0
+
+    if not records:
+        print("   No Zillow listings found.")
+        _log_run(location, "zillow", 0, 0, 0, None, started_at)
+        return 0, 0, 0, 0
+
+    return _stage_records(records, location, "zillow", args, started_at)
+
+
+# ── Per-location dispatcher ───────────────────────────────────────────────────
+
+def _run_location(location, args, started_at):
+    print(f"\n{'═'*55}")
+    print(f"📍  Location : {location}")
+    print(f"    Source   : {args.source}")
+    print(f"{'═'*55}")
+
+    total_new = total_dup = total_err = 0
+    scores = []
+
+    if args.source in ("realtor", "both"):
+        new, dup, err, score = _run_realtor(location, args, started_at)
+        total_new += new; total_dup += dup; total_err += err
+        if score:
+            scores.append(score)
+
+    if args.source in ("zillow", "both"):
+        new, dup, err, score = _run_zillow(location, args, started_at)
+        total_new += new; total_dup += dup; total_err += err
+        if score:
+            scores.append(score)
+
+    avg = round(sum(scores)/len(scores), 1) if scores else 0
+
+    print(f"\n{'─'*55}")
+    print(f"  Location    : {location}  [{args.source}]")
+    print(f"  Staged new  : {total_new}")
+    print(f"  Skipped/dup : {total_dup}")
+    print(f"  Errors      : {total_err}")
+    print(f"  Avg score   : {avg}")
+    print(f"{'─'*55}")
+
+    return total_new, total_dup, total_err, avg
 
 
 # ── Main runner ───────────────────────────────────────────────────────────────
 
 def run(args):
-    print("\n🏠  Choice Properties — HomeHarvest Scraper v2")
+    print("\n🏠  Choice Properties — Scraper v3")
+    print(f"   Source     : {args.source}")
     print(f"   Past days  : {args.past_days}")
-    price_range = f"${args.price_min or 0} – ${args.price_max or '∞'}"
-    beds_range  = f"{args.beds_min or 'any'} – {args.beds_max or 'any'}"
-    print(f"   Price/mo   : {price_range}")
-    print(f"   Beds       : {beds_range}")
+    print(f"   Price/mo   : ${args.price_min or 0} – ${args.price_max or '∞'}")
+    print(f"   Beds       : {args.beds_min or 'any'} – {args.beds_max or 'any'}")
     print(f"   Limit/loc  : {args.limit}")
     print(f"   Min score  : {args.min_score}")
     print(f"   Upsert     : {args.upsert}")
     print(f"   Extra data : {args.extra}")
     print(f"   Dry run    : {args.dry_run}")
 
-    # ── Collect all locations ─────────────────────────────────────────────────
+    # ── Collect locations ─────────────────────────────────────────────────────
     locations = list(args.location) if args.location else []
-
     if args.locations_file:
         try:
             with open(args.locations_file) as f:
@@ -710,6 +714,13 @@ def run(args):
 
     print(f"   Locations  : {len(locations)}")
 
+    # ── Source availability check ─────────────────────────────────────────────
+    if args.source in ("realtor", "both") and not _HH_AVAILABLE:
+        print("⚠   homeharvest not installed — Realtor.com scraping will be skipped.")
+        print("    Run: pip install homeharvest")
+    if args.source in ("zillow", "both") and not _ZW_AVAILABLE:
+        print(f"⚠   Zillow module unavailable: {_ZW_IMPORT_ERR}")
+
     started_at = _now()
     grand_new = grand_dup = grand_err = 0
 
@@ -719,12 +730,12 @@ def run(args):
         grand_dup += dup
         grand_err += err
 
-    if len(locations) > 1:
+    if len(locations) > 1 or args.source == "both":
         print(f"\n{'═'*55}")
-        print(f"  GRAND TOTAL — {len(locations)} locations")
-        print(f"  Staged (new)  : {grand_new}")
-        print(f"  Skipped/dup   : {grand_dup}")
-        print(f"  Errors        : {grand_err}")
+        print(f"  GRAND TOTAL — {len(locations)} location(s) [{args.source}]")
+        print(f"  Staged new  : {grand_new}")
+        print(f"  Skipped/dup : {grand_dup}")
+        print(f"  Errors      : {grand_err}")
         print(f"{'═'*55}\n")
 
     return 0
@@ -736,65 +747,72 @@ def _build_parser():
     p = argparse.ArgumentParser(
         prog="scraper",
         description=(
-            "Choice Properties — HomeHarvest Scraper v2\n"
-            "Stages Realtor.com for-rent listings into pipeline.pipeline_properties."
+            "Choice Properties — Scraper v3\n"
+            "Stages Realtor.com and/or Zillow for-rent listings into pipeline.pipeline_properties."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python scraper.py --location "Austin, TX"
-  python scraper.py --location "Dallas, TX" --location "Houston, TX"
-  python scraper.py --locations-file cities.txt --min-score 40
+  python scraper.py --location "Dallas, TX" --source zillow
+  python scraper.py --location "Dallas, TX" --source both
+  python scraper.py --location "Dallas, TX" --location "Houston, TX" --source both
+  python scraper.py --locations-file cities.txt --source both --min-score 40
   python scraper.py --location "30301" --past-days 3 --price-max 2500
   python scraper.py --location "Los Angeles, CA" --beds-min 2 --beds-max 4 --limit 500
   python scraper.py --location "Miami, FL" --upsert --past-days 7
   python scraper.py --location "Miami, FL" --dry-run
         """,
     )
-
     p.add_argument(
         "--location", action="append", metavar="LOCATION",
-        help='Location to search (can be specified multiple times). '
-             'Accepts: city, "City, ST", ZIP, address, county.',
+        help='Location to search (repeatable). Accepts: city, "City, ST", ZIP, county.',
     )
     p.add_argument(
         "--locations-file", metavar="FILE",
-        help="Path to a text file with one location per line (# comments supported).",
+        help="Text file with one location per line (# comments supported).",
     )
     p.add_argument(
-        "--past-days", type=int, default=7, metavar="N",
-        help="Return listings listed/updated in the last N days (default: 7).",
-    )
-    p.add_argument("--beds-min",  type=int, default=None, metavar="N", help="Minimum bedrooms filter.")
-    p.add_argument("--beds-max",  type=int, default=None, metavar="N", help="Maximum bedrooms filter.")
-    p.add_argument("--price-min", type=int, default=None, metavar="$", help="Minimum monthly rent filter.")
-    p.add_argument("--price-max", type=int, default=None, metavar="$", help="Maximum monthly rent filter.")
-    p.add_argument(
-        "--property-type", default=None, metavar="TYPE",
+        "--source", choices=["realtor", "zillow", "both"], default="realtor",
         help=(
-            "Comma-separated HomeHarvest property types to filter.\n"
-            "Options: single_family, multi_family, condos, townhomes, duplex_triplex, apartment, mobile"
+            "Which source(s) to scrape.\n"
+            "  realtor — Realtor.com via HomeHarvest (default)\n"
+            "  zillow  — Zillow via __NEXT_DATA__ HTML parsing\n"
+            "  both    — run both in sequence\n"
+            "Zillow works best from a residential IP."
         ),
     )
     p.add_argument(
+        "--past-days", type=int, default=7, metavar="N",
+        help="Realtor.com only: listings from the last N days (default: 7).",
+    )
+    p.add_argument("--beds-min",  type=int, default=None, metavar="N")
+    p.add_argument("--beds-max",  type=int, default=None, metavar="N")
+    p.add_argument("--price-min", type=int, default=None, metavar="$")
+    p.add_argument("--price-max", type=int, default=None, metavar="$")
+    p.add_argument(
+        "--property-type", default=None, metavar="TYPE",
+        help="Realtor.com only. Comma-separated: single_family, multi_family, condos, townhomes, apartment, mobile",
+    )
+    p.add_argument(
         "--limit", type=int, default=200, metavar="N",
-        help="Maximum number of listings to fetch per location (default: 200).",
+        help="Max listings per location per source (default: 200).",
     )
     p.add_argument(
         "--min-score", type=int, default=0, metavar="N",
-        help="Skip listings with a data quality score below N (default: 0 = accept all).",
+        help="Skip listings with data quality score below N (default: 0).",
     )
     p.add_argument(
         "--upsert", action="store_true",
-        help="Update existing pipeline listings instead of skipping duplicates.",
+        help="Update existing pipeline listings rather than skipping duplicates.",
     )
     p.add_argument(
         "--extra", action="store_true",
-        help="Fetch extra data per property (schools, tax history). Slower — adds 1 request/listing.",
+        help="Realtor.com only: fetch extra data per property (schools, tax history). Slower.",
     )
     p.add_argument(
         "--dry-run", action="store_true",
-        help="Print results without writing to the database.",
+        help="Print what would be staged without writing to the database.",
     )
     return p
 
