@@ -87,6 +87,7 @@
         <div class="pl-meta">${S.esc([l.city, l.state].filter(Boolean).join(', '))} ${S.esc(l.zip||'')} · ${fmtBeds(l)}${l.square_footage ? ' · ' + fmtSqft(l) : ''}</div>
         <div class="pl-tags">
           <strong style="font-size:.82rem;color:var(--text)">${fmt$$(l.monthly_rent)}/mo</strong>
+          ${l.source ? `<span class="src-badge src-${S.esc(l.source)}" title="Listing source">${l.source === 'zillow' ? 'Zillow' : l.source === 'realtor' ? 'Realtor' : S.esc(l.source)}</span>` : ''}
           ${qsBadge(score)}
           ${missing.length ? `<span class="qs-badge qs-low" title="Missing fields">${missing.length} missing</span>` : ''}
           ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none" target="_blank">Live ↗</a>` : ''}
