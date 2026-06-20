@@ -52,6 +52,7 @@ let isAdminMode       = false;
 let adminStatusFilter = 'all';
 let adminLandlordId   = null;
 let adminLandlordName = null;
+let _adminSelected    = new Set(); // property IDs checked for bulk ops
 
 function loadSavedIds() {
   try {
@@ -226,6 +227,27 @@ function injectAdminToolbar() {
   if (pageHeader) pageHeader.parentNode.insertBefore(toolbar, pageHeader);
   else document.body.prepend(toolbar);
 
+  // Bulk action bar (hidden until cards are selected)
+  const bulkBar = document.createElement('div');
+  bulkBar.id = 'adminBulkBar';
+  bulkBar.style.cssText = 'display:none;align-items:center;gap:10px;background:#1e293b;padding:8px 20px;border-bottom:2px solid #006aff;flex-wrap:wrap;position:sticky;top:' + (toolbar.offsetHeight || 90) + 'px;z-index:99';
+  bulkBar.innerHTML = `
+    <span id="bulkSelLabel" style="color:#e2e8f0;font-size:13px;font-weight:600;min-width:120px"></span>
+    <select id="bulkStatusSel" style="background:#0a1628;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600">
+      <option value="">— Set status —</option>
+      <option value="active">Active</option>
+      <option value="rented">Rented</option>
+      <option value="inactive">Inactive</option>
+      <option value="maintenance">Maintenance</option>
+      <option value="draft">Draft</option>
+      <option value="paused">Paused</option>
+      <option value="archived">Archived</option>
+    </select>
+    <button id="bulkApplyBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer">Apply</button>
+    <button id="bulkClearBtn" style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Clear selection</button>
+    <button id="bulkSelAllBtn" style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Select all on page</button>`;
+  toolbar.insertAdjacentElement('afterend', bulkBar);
+
   // Wire chip clicks
   toolbar.querySelectorAll('[data-admin-status]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -239,9 +261,27 @@ function injectAdminToolbar() {
         b.style.color = active ? col : '#374151';
         b.classList.toggle('admin-chip-active', active);
       });
+      // Clear selection when filter changes — selected set no longer matches visible cards
+      _adminSelected.clear();
+      _updateBulkBar();
       currentPage = 1;
       fetchAndRender();
     });
+  });
+
+  // Wire bulk bar buttons
+  document.getElementById('bulkApplyBtn')?.addEventListener('click', _bulkStatusChange);
+  document.getElementById('bulkClearBtn')?.addEventListener('click', () => {
+    _adminSelected.clear();
+    document.querySelectorAll('[data-admin-id]').forEach(c => { c.checked = false; });
+    _updateBulkBar();
+  });
+  document.getElementById('bulkSelAllBtn')?.addEventListener('click', () => {
+    document.querySelectorAll('[data-admin-id]').forEach(c => {
+      c.checked = true;
+      _adminSelected.add(c.dataset.adminId);
+    });
+    _updateBulkBar();
   });
 
   // Wire CSV export
@@ -259,13 +299,31 @@ function applyAdminCardOverlays(grid, props) {
     if (!prop) return;
     const imgEl = card.querySelector('.property-card-img');
     if (!imgEl) return;
+    imgEl.style.position = 'relative';
 
-    // Status badge
+    // Bulk-select checkbox (top-left corner)
+    const chkWrap = document.createElement('label');
+    chkWrap.title = 'Select for bulk action';
+    chkWrap.style.cssText = 'position:absolute;top:8px;left:8px;z-index:10;cursor:pointer;width:22px;height:22px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.85);border-radius:5px;box-shadow:0 1px 3px rgba(0,0,0,.25)';
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.dataset.adminId = id;
+    chk.checked = _adminSelected.has(id);
+    chk.style.cssText = 'width:15px;height:15px;cursor:pointer;accent-color:#006aff';
+    chk.addEventListener('change', () => {
+      if (chk.checked) _adminSelected.add(id);
+      else _adminSelected.delete(id);
+      _updateBulkBar();
+    });
+    chk.addEventListener('click', e => e.stopPropagation());
+    chkWrap.appendChild(chk);
+    imgEl.appendChild(chkWrap);
+
+    // Status badge (shifted right to not overlap checkbox)
     const badge = document.createElement('div');
     const col = STATUS_COLORS[prop.status] || '#6b7280';
-    badge.style.cssText = `position:absolute;top:10px;left:10px;background:${col};color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;text-transform:uppercase;letter-spacing:.05em;z-index:5;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.3)`;
+    badge.style.cssText = `position:absolute;top:10px;left:40px;background:${col};color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;text-transform:uppercase;letter-spacing:.05em;z-index:5;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.3)`;
     badge.textContent = prop.status || 'unknown';
-    imgEl.style.position = 'relative';
     imgEl.appendChild(badge);
 
     // Admin edit button
@@ -285,6 +343,50 @@ function applyAdminCardOverlays(grid, props) {
       imgEl.appendChild(fBadge);
     }
   });
+  _updateBulkBar();
+}
+
+function _updateBulkBar() {
+  const bar = document.getElementById('adminBulkBar');
+  if (!bar) return;
+  const n = _adminSelected.size;
+  if (n === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  const label = bar.querySelector('#bulkSelLabel');
+  if (label) label.textContent = n + ' propert' + (n === 1 ? 'y' : 'ies') + ' selected';
+}
+
+async function _bulkStatusChange() {
+  const ids = [..._adminSelected];
+  if (!ids.length) return;
+  const bar = document.getElementById('adminBulkBar');
+  const sel = bar?.querySelector('#bulkStatusSel');
+  const newStatus = sel?.value;
+  if (!newStatus) { window.showToast?.('Pick a status first', 'error'); return; }
+
+  const btn = bar?.querySelector('#bulkApplyBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  let ok = 0, fail = 0;
+  await Promise.all(ids.map(async id => {
+    try {
+      const res = await window.CP.Properties.update(id, { status: newStatus });
+      if (res && res.ok !== false) ok++;
+      else fail++;
+    } catch { fail++; }
+  }));
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+  window.showToast?.(ok + ' updated' + (fail ? ', ' + fail + ' failed' : ''), fail ? 'error' : 'success');
+  _adminSelected.clear();
+  _updateBulkBar();
+  // Uncheck all visible checkboxes
+  document.querySelectorAll('[data-admin-id]').forEach(c => { c.checked = false; });
+  // Refresh the grid to show new statuses
+  await fetchAndRender();
 }
 
 async function adminCSVExport() {

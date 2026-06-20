@@ -1047,7 +1047,10 @@
               <div class="pd-edit-group-title">Landlord Assignment</div>
               <label class="pd-edit-label">Assigned landlord
                 <span class="pd-edit-hint">Change which landlord manages this property</span>
-                <select class="pd-edit-input" name="landlord_id" id="pd-landlord-select">
+                <input type="text" id="pd-landlord-search" class="pd-edit-input" placeholder="Search landlords…"
+                  style="margin-bottom:6px" autocomplete="off">
+                <select class="pd-edit-input" name="landlord_id" id="pd-landlord-select" size="4"
+                  style="height:auto;min-height:80px">
                   <option value="${esc(String(p.landlord_id || ''))}">Loading landlords…</option>
                 </select>
               </label>
@@ -1124,7 +1127,7 @@
       });
     }
 
-    // ── localStorage autosave every 30 s ──
+    // ── sessionStorage autosave every 30 s (per-tab, avoids multi-tab collisions) ──
     const _autoKey = 'pd_draft_' + propId;
     if (_autosaveTimer) clearInterval(_autosaveTimer);
     _autosaveTimer = setInterval(() => {
@@ -1138,7 +1141,7 @@
         for (const [tn, opts] of [['amenities', AMENITY_OPTIONS], ['appliances', APPLIANCE_OPTIONS], ['flooring', FLOORING_OPTIONS], ['utilities_included', UTILITY_OPTIONS]]) {
           snap['_tags_' + tn] = _readTags(form, tn, opts);
         }
-        localStorage.setItem(_autoKey, JSON.stringify({ ts: Date.now(), data: snap }));
+        sessionStorage.setItem(_autoKey, JSON.stringify({ ts: Date.now(), data: snap }));
         const badge = document.getElementById('pd-autosave-badge');
         if (badge) {
           badge.classList.add('show');
@@ -1147,9 +1150,9 @@
       } catch (e) { /* storage unavailable */ }
     }, 30_000);
 
-    // Check for a saved draft
+    // Check for a saved draft (sessionStorage is per-tab — no cross-tab collision)
     try {
-      const saved = JSON.parse(localStorage.getItem(_autoKey) || 'null');
+      const saved = JSON.parse(sessionStorage.getItem(_autoKey) || 'null');
       if (saved && saved.ts && Date.now() - saved.ts < 24 * 3600_000) {
         const form = document.getElementById('pd-edit-form');
         if (form) {
@@ -1157,10 +1160,16 @@
             const el = form.elements[k];
             if (el && el.type !== 'checkbox') el.value = v;
           }
-          // Restore tag picker checkboxes
-          for (const tn of ['amenities', 'appliances', 'flooring', 'utilities_included']) {
+          // Restore tag picker checkboxes and any custom "other" values
+          for (const [tn, opts] of [['amenities', AMENITY_OPTIONS], ['appliances', APPLIANCE_OPTIONS], ['flooring', FLOORING_OPTIONS], ['utilities_included', UTILITY_OPTIONS]]) {
             const vals = new Set(saved.data['_tags_' + tn] || []);
             form.querySelectorAll(`[data-tag="${tn}"]`).forEach(cb => { cb.checked = vals.has(cb.value); });
+            // Repopulate the "other" text input with non-standard values from _tags_*
+            const otherEl = form.elements[tn + '_other'];
+            if (otherEl) {
+              const custom = [...vals].filter(v => !opts.includes(v));
+              if (custom.length) otherEl.value = custom.join(', ');
+            }
           }
           _markDirty();
           S.toast('Draft restored from auto-save', 'success');
@@ -1193,7 +1202,7 @@
       clearInterval(_autosaveTimer);
       _autosaveTimer = null;
       _formDirty = false;
-      try { localStorage.removeItem('pd_draft_' + propId); } catch(e) {}
+      try { sessionStorage.removeItem('pd_draft_' + propId); } catch(e) {}
       panel.classList.remove('open');
       setTimeout(() => panel.remove(), 300);
     }));
@@ -1295,19 +1304,36 @@
       }
     });
 
-    // ── Populate landlord dropdown (cached across panel opens) ──
-    function _populateLandlordSel(rows) {
+    // ── Populate landlord dropdown with live search filter ──
+    function _populateLandlordSel(rows, filter) {
       const sel = document.getElementById('pd-landlord-select');
       if (!sel) return;
+      const q = (filter || '').toLowerCase().trim();
+      const visible = q ? rows.filter(l => {
+        const name = (l.business_name || l.contact_name || '').toLowerCase();
+        return name.includes(q) || String(l.id).includes(q);
+      }) : rows;
       sel.innerHTML = '<option value="">— Unassigned —</option>' +
-        rows.map(l => {
+        visible.map(l => {
           const label = esc(l.business_name || l.contact_name || l.id);
           const selected = l.id === p.landlord_id ? ' selected' : '';
           return `<option value="${esc(l.id)}"${selected}>${label}</option>`;
         }).join('');
+      // Re-select current landlord if still visible
+      if (p.landlord_id) {
+        const cur = sel.querySelector(`option[value="${esc(String(p.landlord_id))}"]`);
+        if (cur) cur.selected = true;
+      }
+    }
+    function _initLandlordSearch(rows) {
+      _populateLandlordSel(rows);
+      const search = document.getElementById('pd-landlord-search');
+      if (search) {
+        search.addEventListener('input', () => _populateLandlordSel(rows, search.value));
+      }
     }
     if (_landlordCache) {
-      _populateLandlordSel(_landlordCache);
+      _initLandlordSearch(_landlordCache);
     } else {
       CP.sb().rpc('admin_list_landlords', { p_page: 0, p_per_page: 200 }).then(({ data, error }) => {
         if (error || !data) {
@@ -1316,7 +1342,7 @@
           return;
         }
         _landlordCache = data.rows || [];
-        _populateLandlordSel(_landlordCache);
+        _initLandlordSearch(_landlordCache);
       }).catch(() => {
         const sel = document.getElementById('pd-landlord-select');
         if (sel) sel.innerHTML = '<option value="">— Could not load landlords —</option>';
