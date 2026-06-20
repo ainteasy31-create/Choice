@@ -1,0 +1,5 @@
+- [GitHub push method](github-push.md) — blob→tree→commit→PATCH refs/heads/main; always capture full SHAs from blob responses.
+- [Autosave isolation](autosave-isolation.md) — use sessionStorage (not localStorage) for draft autosave to prevent multi-tab collisions on the same property.
+- [Lease SELECT fields](lease-select-fields.md) — rent_due_day_of_month and rent_proration_method must be in CP.Applications.getAll() SELECT or form pre-population silently falls back to defaults.
+- [Audit log pattern](audit-log-pattern.md) — use CP.Auth.getSession() (not auth.getUser().then()) to get userId; insert to admin_actions non-blocking inside try/catch; include source:'bulk' in metadata for batch ops.
+- [Bulk action pattern](bulk-action-pattern.md) — resolve session once before parallel map; read oldVal from pageProperties before update; confirm dialog before any write; re-render grid after; audit log each success.
