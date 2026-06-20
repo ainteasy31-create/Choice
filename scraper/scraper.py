@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Choice Properties — Scraper (v3)
+Choice Properties — Scraper (v5)
 =================================
 Scrapes for-rent listings from Realtor.com (via HomeHarvest) and/or Zillow
 (via __NEXT_DATA__ HTML parsing) and stages them in pipeline.pipeline_properties
@@ -204,7 +204,7 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
-# ── Realtor.com property mapper ───────────────────────────────────────────────
+# ── Realtor.com property mapper (v5) ─────────────────────────────────────────
 _STYLE_MAP = {
     "SINGLE_FAMILY":               "SINGLE_FAMILY",
     "MULTI_FAMILY":                "MULTI_FAMILY",
@@ -221,45 +221,96 @@ _STYLE_MAP = {
     "FARM":                        "FARM",
 }
 
-def _parse_pet_policy(pp):
-    if pp is None:
-        return None, []
-    if isinstance(pp, bool):
-        return pp, []
-    if isinstance(pp, dict):
-        types, allowed = [], False
-        if pp.get("cats"):  types.append("cats");  allowed = True
-        if pp.get("dogs"):  types.append("dogs");  allowed = True
-        if pp.get("pets_allowed") and not allowed:
-            allowed = True
-        return allowed if (types or pp.get("pets_allowed") is not None) else None, types
-    return None, []
+# ── Mapper helpers ─────────────────────────────────────────────────────────────
+
+def _list_to_str(v):
+    """Normalize list or string to comma-joined string, or None."""
+    if not v:
+        return None
+    if isinstance(v, list):
+        parts = [str(x).strip() for x in v if x and str(x).strip()]
+        return ", ".join(parts) if parts else None
+    s = str(v).strip()
+    return s or None
+
+def _parse_fee_str(s):
+    """Extract integer dollar amount from a display string like '$1,200/mo' or '500'."""
+    if s is None:
+        return None
+    if isinstance(s, (int, float)):
+        return int(s) if s else None
+    clean = re.sub(r"[^\d.]", "", str(s))
+    try:
+        return int(float(clean)) if clean else None
+    except Exception:
+        return None
+
+def _get_attr(obj, key):
+    """Get attribute from pydantic model or dict."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(key)
+    return getattr(obj, key, None)
+
+def _details_texts(detail_list, *keywords):
+    """
+    Search a HomeDetails/PropertyDetails list for entries whose category or
+    parent_category contains any keyword (case-insensitive substring match).
+    Returns a flat deduplicated list of all text strings found.
+    Handles both pydantic model instances and raw dicts.
+    """
+    out, seen = [], set()
+    for d in (detail_list or []):
+        cat  = (_get_attr(d, "category")        or "").lower()
+        pcat = (_get_attr(d, "parent_category") or "").lower()
+        if any(kw.lower() in cat or kw.lower() in pcat for kw in keywords):
+            texts = _get_attr(d, "text") or []
+            if isinstance(texts, str):
+                texts = [texts]
+            for t in (texts or []):
+                t = str(t).strip()
+                if t and t not in seen:
+                    out.append(t)
+                    seen.add(t)
+    return out
 
 def _collect_photos(prop):
+    """
+    Collect all photo URLs from a HomeHarvest Property object.
+    Checks all three locations: prop.description.(primary_photo/alt_photos),
+    prop.photos (list of dicts), and legacy direct attrs on prop.
+    """
     urls, seen = [], set()
-    for src in [getattr(prop, "primary_photo", None)]:
-        if src:
-            s = str(src).strip()
-            if s and s not in seen:
-                urls.append(s); seen.add(s)
+
+    def _add(u):
+        if not u:
+            return
+        s = str(u).strip()
+        if s and s.startswith("http") and s not in seen:
+            urls.append(s)
+            seen.add(s)
+
+    # New model: photos live on description sub-object
+    desc = getattr(prop, "description", None)
+    if desc:
+        _add(getattr(desc, "primary_photo", None))
+        for p in (getattr(desc, "alt_photos", None) or []):
+            _add(p)
+
+    # prop.photos is a list of raw dicts from GraphQL (href key)
+    for p in (getattr(prop, "photos", None) or []):
+        if isinstance(p, dict):
+            _add(p.get("href") or p.get("url") or p.get("src"))
+
+    # Legacy: primary_photo / alt_photos directly on prop (older HH versions)
+    _add(getattr(prop, "primary_photo", None))
     for p in (getattr(prop, "alt_photos", None) or []):
-        s = str(p).strip()
-        if s and s not in seen:
-            urls.append(s); seen.add(s)
+        _add(p)
+
     return urls[:40]
 
-def _parking_str(parking):
-    if parking is None:
-        return None
-    if isinstance(parking, dict):
-        parts = []
-        if parking.get("garage"):  parts.append(f"Garage ({parking['garage']} sp.)")
-        if parking.get("carport"): parts.append("Carport")
-        if parking.get("open"):    parts.append("Open parking")
-        return ", ".join(parts) if parts else json.dumps(parking)
-    return str(parking)
-
-# ── Quality scoring (shared logic; mirrors zillow_scraper.py) ─────────────────
+# ── Quality scoring (mirrors zillow_scraper.py) ───────────────────────────────
 _IMPORTANT = [
     "address", "city", "state", "zip", "lat", "lng",
     "bedrooms", "bathrooms", "square_footage", "monthly_rent",
@@ -268,6 +319,7 @@ _IMPORTANT = [
 _BONUS = [
     "county", "neighborhood", "year_built", "parking",
     "pets_allowed", "security_deposit", "amenities", "appliances",
+    "heating_type", "cooling_type",
 ]
 _TRACKABLE_MISSING = [
     "lat", "lng", "county", "neighborhood", "year_built", "square_footage",
@@ -291,13 +343,28 @@ def _missing_fields(r):
     return [f for f in _TRACKABLE_MISSING if r.get(f) in (None, "", "[]")]
 
 def _map_realtor_property(prop):
-    desc = getattr(prop, "description", None)
-    addr = getattr(prop, "address",     None)
-    street   = getattr(addr, "street",   None) if addr else None
-    unit     = getattr(addr, "unit",     None) if addr else None
-    city     = getattr(addr, "city",     None) if addr else None
-    state    = getattr(addr, "state",    None) if addr else None
-    zipcode  = getattr(addr, "zip_code", None) if addr else None
+    """
+    Map a HomeHarvest Property pydantic object to a pipeline_properties record.
+    Extracts every available field from:
+      - prop.description   (beds/baths/sqft/yr_built/stories/garage/style/text)
+      - prop.address       (street/unit/city/state/zip)
+      - prop.details       (HomeDetails list: heating/cooling/appliances/flooring/
+                            laundry/utilities/interior features/amenities/parking/basement)
+      - prop.terms         (PropertyDetails list: lease terms/deposits/fees/smoking)
+      - prop.monthly_fees  (HomMonthlyFee: parking fee etc.)
+      - prop.one_time_fees (HomeOneTimeFee list: security deposit/app fee/pet deposit)
+      - prop.parking       (HomeParkingDetails: description/assigned_space_rent)
+      - prop.pet_policy    (PetPolicy: cats/dogs/dogs_small/dogs_large booleans)
+      - prop.units         (Unit list: availability dates for multi-family)
+      - prop.advertisers   (Advertisers: agent/broker/office names)
+      - prop.tags          (list of amenity tags)
+      - prop.photos        (GraphQL photo dict list)
+    """
+
+    # ── Description sub-object ────────────────────────────────────────────────
+    desc     = getattr(prop, "description", None)
+    addr_obj = getattr(prop, "address",     None)
+
     beds     = _safe_int(getattr(desc, "beds",       None)) if desc else None
     bath_f   = _safe_int(getattr(desc, "baths_full", None)) if desc else None
     bath_h   = _safe_int(getattr(desc, "baths_half", None)) if desc else None
@@ -305,50 +372,324 @@ def _map_realtor_property(prop):
     lot_sqft = _safe_int(getattr(desc, "lot_sqft",   None)) if desc else None
     yr_built = _safe_int(getattr(desc, "year_built", None)) if desc else None
     floors   = _safe_int(getattr(desc, "stories",    None)) if desc else None
-    garage   = _safe_int(getattr(desc, "garage",     None)) if desc else None
-    desc_txt  = getattr(desc, "text",  None) if desc else None
-    style_raw = str(getattr(desc, "style", None) or getattr(desc, "type", None) or "").upper()
+    garage   = _safe_float(getattr(desc, "garage",   None)) if desc else None
+    desc_txt = getattr(desc, "text", None)                  if desc else None
+
+    # style can be a PropertyType enum or a plain string
+    style_raw = getattr(desc, "style", None) or getattr(desc, "type", None) if desc else None
+    if style_raw is not None and hasattr(style_raw, "value"):
+        style_raw = style_raw.value
+    style_raw = str(style_raw or "").upper()
     prop_type = _STYLE_MAP.get(style_raw, style_raw or None)
-    bed_pfx  = f"{beds}BR " if beds else ""
-    type_lbl = (prop_type or "Rental").replace("_", " ").title()
-    title    = f"{bed_pfx}{type_lbl} in {city}" if city else (street or "Rental Property")
-    ld       = getattr(prop, "list_date", None)
-    available_date = None
-    if ld:
-        try:    available_date = ld.strftime("%Y-%m-%d")
-        except: available_date = str(ld)[:10]
-    photos = _collect_photos(prop)
-    pets_allowed, pet_types = _parse_pet_policy(getattr(prop, "pet_policy", None))
-    tags      = getattr(prop, "tags", None) or []
-    amenities = _jdumps(tags)
-    hoods = getattr(prop, "neighborhoods", None) or []
-    hood  = str(hoods[0]) if hoods else None
-    rent  = _safe_int(getattr(prop, "list_price", None))
+
+    # ── Address ───────────────────────────────────────────────────────────────
+    # full_line is the complete street address string; prefer it over reconstructed street
+    street  = (getattr(addr_obj, "full_line", None) or
+               getattr(addr_obj, "street",    None)) if addr_obj else None
+    unit    = getattr(addr_obj, "unit",  None) if addr_obj else None
+    city    = getattr(addr_obj, "city",  None) if addr_obj else None
+    state   = getattr(addr_obj, "state", None) if addr_obj else None
+    # IMPORTANT: field is addr.zip (NOT zip_code — that attribute does not exist)
+    zipcode = getattr(addr_obj, "zip",   None) if addr_obj else None
+
+    # ── Title ─────────────────────────────────────────────────────────────────
     bath_total = None
     if bath_f is not None:
         bath_total = round((bath_f or 0) + (bath_h or 0) * 0.5, 1)
+    bed_pfx  = (str(beds) + "BR ") if beds else ""
+    type_lbl = (prop_type or "Rental").replace("_", " ").title()
+    title    = (bed_pfx + type_lbl + " in " + city) if city else (street or "Rental Property")
+
+    # ── Photos ────────────────────────────────────────────────────────────────
+    photos = _collect_photos(prop)
+
+    # ── prop.details — HomeDetails list ──────────────────────────────────────
+    # Each item: category (str), text (list[str]), parent_category (str)
+    # This is the richest source of structured property facts from Realtor.com's
+    # GraphQL API and is populated from the search results (no extra fetch needed).
+    details = getattr(prop, "details", None) or []
+
+    heating_items   = _details_texts(details, "heating",    "heat type", "heat source")
+    cooling_items   = _details_texts(details, "cooling",    "air conditioning", "a/c", "ac type")
+    appliance_items = _details_texts(details, "appliance")
+    flooring_items  = _details_texts(details, "flooring",   "floor description", "floor type")
+    laundry_items   = _details_texts(details, "laundry")
+    utility_items   = _details_texts(details, "utilities",  "utility", "water/sewer",
+                                     "electric", "gas include", "trash include")
+    amenity_items   = _details_texts(details, "interior features", "exterior features",
+                                     "community features", "amenities", "security features",
+                                     "pool features", "spa", "recreation",
+                                     "accessibility features", "lot features")
+    parking_items   = _details_texts(details, "parking features", "parking type",
+                                     "garage description", "parking description")
+    basement_items  = _details_texts(details, "basement")
+    fireplace_items = _details_texts(details, "fireplace")
+
+    heating_type = _list_to_str(heating_items)
+    cooling_type = _list_to_str(cooling_items)
+    laundry_type = _list_to_str(laundry_items)
+
+    # has_basement
+    has_basement = False
+    if basement_items:
+        btext = " ".join(basement_items).lower()
+        if any(w in btext for w in ("full", "finished", "unfinished", "partial",
+                                    "yes", "true", "walk", "daylight")):
+            has_basement = True
+
+    # has_central_air
+    has_central_air = False
+    if cooling_items:
+        ctext = " ".join(cooling_items).lower()
+        if "central" in ctext or "refrigerated" in ctext:
+            has_central_air = True
+
+    # ── prop.tags → base amenity set ─────────────────────────────────────────
+    tags = getattr(prop, "tags", None) or []
+    amenity_set = set(str(t).strip() for t in tags if t and str(t).strip())
+    for item in amenity_items:
+        amenity_set.add(item)
+    if fireplace_items:
+        amenity_set.add("Fireplace")
+
+    # ── prop.terms — PropertyDetails list ────────────────────────────────────
+    # Contains rental-specific info: lease terms, deposits, fees, policies
+    terms = getattr(prop, "terms", None) or []
+
+    lease_term_items = _details_texts(terms, "lease term",  "lease type",  "lease length",
+                                             "rental term",  "lease option")
+    available_items  = _details_texts(terms, "available",   "date available", "move-in date",
+                                             "occupancy",    "possession")
+    deposit_items    = _details_texts(terms, "security deposit", "deposit amount")
+    pet_dep_items    = _details_texts(terms, "pet deposit",  "pet fee",     "animal fee")
+    app_fee_items    = _details_texts(terms, "application fee", "app fee")
+    park_fee_items   = _details_texts(terms, "parking fee",  "parking rent", "parking cost")
+    smoking_items    = _details_texts(terms, "smoking",      "tobacco",     "no smoking")
+    admin_fee_items  = _details_texts(terms, "admin fee",    "administrative fee")
+
+    # ── minimum_lease_months from lease terms ─────────────────────────────────
+    minimum_lease_months = None
+    for lt in lease_term_items:
+        lt_lo = lt.lower()
+        m_mo  = re.search(r"(\d+)\s*month", lt_lo)
+        if m_mo:
+            minimum_lease_months = int(m_mo.group(1))
+            break
+        if re.search(r"month[- ]to[- ]month|month/month|m2m|mtm", lt_lo):
+            minimum_lease_months = 1
+            break
+        if re.search(r"\byear\b|12[\s-]*month|annual", lt_lo):
+            minimum_lease_months = 12
+            break
+
+    # ── available_date — terms first, then units, NOT list_date ───────────────
+    available_date = None
+    for raw in available_items:
+        raw = raw.strip()
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%B %d, %Y", "%b %d, %Y",
+                    "%m-%d-%Y", "%d/%m/%Y"):
+            try:
+                available_date = datetime.strptime(raw[:10], fmt[:len(raw[:10])]).strftime("%Y-%m-%d")
+                break
+            except Exception:
+                pass
+        if available_date:
+            break
+        # Store raw text if it looks like a date expression
+        if any(w in raw.lower() for w in ("immediate", "now", "ready", "available")):
+            available_date = raw[:40]
+            break
+
+    # Try units (multi-family individual unit availability)
+    if not available_date:
+        for u_obj in (getattr(prop, "units", None) or []):
+            avail = getattr(u_obj, "availability", None)
+            if avail:
+                d = getattr(avail, "date", None)
+                if d:
+                    try:
+                        available_date = d.strftime("%Y-%m-%d")
+                    except Exception:
+                        available_date = str(d)[:10]
+                    break
+
+    # ── Fee extraction helpers ─────────────────────────────────────────────────
+    def _first_fee(items):
+        for s in items:
+            v = _parse_fee_str(s)
+            if v and v > 0:
+                return v
+        return None
+
+    security_deposit = _first_fee(deposit_items)
+    pet_deposit      = _first_fee(pet_dep_items)
+    application_fee  = _first_fee(app_fee_items)
+    parking_fee      = _first_fee(park_fee_items)
+    admin_fee        = _first_fee(admin_fee_items)
+
+    # ── prop.monthly_fees (HomMonthlyFee: description + display_amount) ───────
+    monthly_fees = getattr(prop, "monthly_fees", None)
+    if monthly_fees:
+        mf_desc = (_get_attr(monthly_fees, "description") or "").lower()
+        mf_amt  = _parse_fee_str(_get_attr(monthly_fees, "display_amount"))
+        if mf_amt:
+            if "parking" in mf_desc and not parking_fee:
+                parking_fee = mf_amt
+            elif "pet" in mf_desc and not pet_deposit:
+                pet_deposit = mf_amt
+
+    # ── prop.one_time_fees (list[HomeOneTimeFee]) ─────────────────────────────
+    for fee_obj in (getattr(prop, "one_time_fees", None) or []):
+        fee_desc = (_get_attr(fee_obj, "description") or "").lower()
+        fee_amt  = _parse_fee_str(_get_attr(fee_obj, "display_amount"))
+        if not fee_amt:
+            continue
+        if "security" in fee_desc and not security_deposit:
+            security_deposit = fee_amt
+        elif "application" in fee_desc and not application_fee:
+            application_fee  = fee_amt
+        elif "pet" in fee_desc and not pet_deposit:
+            pet_deposit      = fee_amt
+        elif "admin" in fee_desc and not admin_fee:
+            admin_fee        = fee_amt
+        elif "parking" in fee_desc and not parking_fee:
+            parking_fee      = fee_amt
+
+    # ── prop.parking (HomeParkingDetails) ─────────────────────────────────────
+    parking_obj = getattr(prop, "parking", None)
+    parking_str = None
+    if parking_obj:
+        if isinstance(parking_obj, dict):
+            parking_str = parking_obj.get("description")
+            if not parking_fee:
+                r_val = parking_obj.get("assigned_space_rent") or parking_obj.get("unassigned_space_rent")
+                if r_val:
+                    parking_fee = _safe_int(r_val)
+            # Legacy format: {garage: N, carport: bool, open: bool}
+            if not parking_str:
+                parts = []
+                if parking_obj.get("garage"):
+                    parts.append("Garage (" + str(parking_obj["garage"]) + " sp.)")
+                if parking_obj.get("carport"):
+                    parts.append("Carport")
+                if parking_obj.get("open"):
+                    parts.append("Open parking")
+                parking_str = ", ".join(parts) if parts else None
+        else:
+            parking_str = getattr(parking_obj, "description", None)
+            if not parking_fee:
+                r_val = (getattr(parking_obj, "assigned_space_rent", None) or
+                         getattr(parking_obj, "unassigned_space_rent", None))
+                if r_val:
+                    parking_fee = _safe_int(r_val)
+
+    # Merge parking_items from details into parking string
+    all_parking_parts = []
+    if parking_str:
+        all_parking_parts.append(parking_str)
+    if parking_items:
+        all_parking_parts.extend(parking_items)
+    parking_final = _list_to_str(all_parking_parts)
+
+    # ── prop.pet_policy (PetPolicy pydantic model) ────────────────────────────
+    # Fields: cats (bool), dogs (bool), dogs_small (bool), dogs_large (bool)
+    pet_policy_obj = getattr(prop, "pet_policy", None)
+    pets_allowed   = None
+    pet_types      = []
+    if pet_policy_obj is not None:
+        cats_ok  = _get_attr(pet_policy_obj, "cats")
+        dogs_ok  = _get_attr(pet_policy_obj, "dogs")
+        dogs_s   = _get_attr(pet_policy_obj, "dogs_small")
+        dogs_l   = _get_attr(pet_policy_obj, "dogs_large")
+        if cats_ok:
+            pet_types.append("cats")
+            pets_allowed = True
+        if dogs_ok or dogs_s or dogs_l:
+            if "dogs" not in pet_types:
+                pet_types.append("dogs")
+            pets_allowed = True
+        if pets_allowed is None:
+            # All explicitly False = no pets
+            if any(v is False for v in (cats_ok, dogs_ok)):
+                pets_allowed = False
+
+    # ── smoking_allowed from terms ────────────────────────────────────────────
+    smoking_allowed = None
+    if smoking_items:
+        stext = " ".join(smoking_items).lower()
+        if any(w in stext for w in ("no smoking", "not allowed", "prohibited", "non-smoking")):
+            smoking_allowed = False
+        elif any(w in stext for w in ("allowed", "permitted", "yes")):
+            smoking_allowed = True
+
+    # ── Neighborhood ──────────────────────────────────────────────────────────
+    # prop.neighborhoods is a comma-separated string in current HomeHarvest
+    hood_raw = getattr(prop, "neighborhoods", None)
+    if isinstance(hood_raw, str):
+        hood = hood_raw.split(",")[0].strip() or None
+    elif isinstance(hood_raw, (list, tuple)):
+        hood = str(hood_raw[0]).strip() if hood_raw else None
+    else:
+        hood = None
+
+    # ── Financials ────────────────────────────────────────────────────────────
+    rent     = _safe_int(getattr(prop, "list_price", None))
+    hoa_fee  = _safe_int(getattr(prop, "hoa_fee",    None))
+    tax_val  = _safe_int(
+        getattr(prop, "assessed_value", None) or
+        getattr(prop, "tax_assessed_value", None) or
+        getattr(prop, "tax", None)
+    )
+
+    # ── Agent / broker from advertisers ───────────────────────────────────────
+    advertisers = getattr(prop, "advertisers", None)
+    agent_name  = None
+    broker_name = None
+    office_name = None
+    if advertisers:
+        agent_obj  = _get_attr(advertisers, "agent")
+        broker_obj = _get_attr(advertisers, "broker")
+        office_obj = _get_attr(advertisers, "office")
+        agent_name  = _get_attr(agent_obj,  "name")
+        broker_name = _get_attr(broker_obj, "name")
+        office_name = _get_attr(office_obj, "name")
+    # Legacy fallback (older HH versions exposed these directly)
+    if not agent_name:
+        agent_name  = getattr(prop, "agent_name",  None)
+    if not broker_name:
+        broker_name = getattr(prop, "broker_name", None) or office_name
+
+    # ── original_data (full audit record) ────────────────────────────────────
+    ld = getattr(prop, "list_date", None)
     original_data = {
-        "property_url":   getattr(prop, "property_url",   None),
-        "property_id":    getattr(prop, "property_id",    None),
-        "listing_id":     getattr(prop, "listing_id",     None),
-        "mls_id":         getattr(prop, "mls_id",         None),
-        "status":         str(getattr(prop, "status",     None)),
-        "list_price":     getattr(prop, "list_price",     None),
-        "list_price_min": getattr(prop, "list_price_min", None),
-        "list_price_max": getattr(prop, "list_price_max", None),
-        "list_date":      str(ld),
-        "neighborhoods":  [str(n) for n in hoods],
-        "hoa_fee":        getattr(prop, "hoa_fee",        None),
-        "agent_name":     getattr(prop, "agent_name",     None),
-        "broker_name":    getattr(prop, "broker_name",    None),
-        "office_name":    getattr(prop, "office_name",    None),
-        "_source":        "realtor",
+        "property_url":     str(getattr(prop, "property_url",   None) or ""),
+        "property_id":      getattr(prop, "property_id",        None),
+        "listing_id":       getattr(prop, "listing_id",         None),
+        "mls_id":           getattr(prop, "mls_id",             None),
+        "mls":              getattr(prop, "mls",                None),
+        "status":           str(getattr(prop, "status",         None) or ""),
+        "list_price":       rent,
+        "list_price_min":   getattr(prop, "list_price_min",     None),
+        "list_price_max":   getattr(prop, "list_price_max",     None),
+        "list_date":        str(ld) if ld else None,
+        "days_on_mls":      getattr(prop, "days_on_mls",        None),
+        "neighborhoods":    hood_raw,
+        "hoa_fee":          hoa_fee,
+        "nearby_schools":   getattr(prop, "nearby_schools",     None),
+        "fips_code":        getattr(prop, "fips_code",          None),
+        "tax":              getattr(prop, "tax",                 None),
+        "new_construction": getattr(prop, "new_construction",   None),
+        "agent_name":       agent_name,
+        "broker_name":      broker_name,
+        "office_name":      office_name,
+        "_source":          "realtor",
+        "_version":         "v5",
     }
     now = _now()
     record = {
         "id":                    _gen_id(),
         "source":                "realtor",
-        "source_url":            getattr(prop, "property_url",  None),
+        "source_url":            str(getattr(prop, "property_url", None) or ""),
         "source_listing_id":     str(
             getattr(prop, "property_id", None) or
             getattr(prop, "mls_id",      None) or ""
@@ -374,43 +715,43 @@ def _map_realtor_property(prop):
         "lot_size_sqft":         lot_sqft,
         "year_built":            yr_built,
         "floors":                floors,
-        "garage_spaces":         garage,
+        "garage_spaces":         _safe_int(garage) if garage is not None else None,
         "total_units":           None,
-        "has_basement":          False,
-        "has_central_air":       False,
+        "has_basement":          has_basement,
+        "has_central_air":       has_central_air,
         "virtual_tour_url":      None,
         "monthly_rent":          rent,
-        "security_deposit":      rent,
+        "security_deposit":      security_deposit,
         "last_months_rent":      None,
-        "application_fee":       None,
-        "pet_deposit":           None,
-        "admin_fee":             None,
+        "application_fee":       application_fee,
+        "pet_deposit":           pet_deposit,
+        "admin_fee":             admin_fee,
         "move_in_special":       None,
-        "parking_fee":           None,
-        "hoa_fee":               _safe_int(getattr(prop, "hoa_fee",            None)),
-        "tax_value":             _safe_int(getattr(prop, "tax_assessed_value", None)),
+        "parking_fee":           parking_fee,
+        "hoa_fee":               hoa_fee,
+        "tax_value":             tax_val,
         "description":           desc_txt,
         "showing_instructions":  None,
         "available_date":        available_date,
-        "minimum_lease_months":  None,
-        "lease_terms":           "[]",
+        "minimum_lease_months":  minimum_lease_months,
+        "lease_terms":           _jdumps(lease_term_items),
         "pets_allowed":          pets_allowed,
         "pet_types_allowed":     _jdumps(pet_types),
         "pet_weight_limit":      None,
         "pet_details":           None,
-        "smoking_allowed":       None,
-        "parking":               _parking_str(getattr(prop, "parking", None)),
-        "amenities":             amenities,
-        "appliances":            "[]",
-        "utilities_included":    "[]",
-        "flooring":              "[]",
-        "heating_type":          None,
-        "cooling_type":          None,
-        "laundry_type":          None,
+        "smoking_allowed":       smoking_allowed,
+        "parking":               parking_final,
+        "amenities":             _jdumps(sorted(amenity_set)) if amenity_set else "[]",
+        "appliances":            _jdumps(appliance_items),
+        "utilities_included":    _jdumps(utility_items),
+        "flooring":              _jdumps(flooring_items),
+        "heating_type":          heating_type,
+        "cooling_type":          cooling_type,
+        "laundry_type":          laundry_type,
         "original_image_urls":   _jdumps(photos),
         "local_image_paths":     "[]",
-        "agent_name":            getattr(prop, "agent_name",  None),
-        "broker_name":           getattr(prop, "broker_name", None),
+        "agent_name":            agent_name,
+        "broker_name":           broker_name,
         "agent_image_url":       None,
         "poster_landlord_id":    None,
         "original_data":         json.dumps(original_data, default=str),
@@ -732,7 +1073,7 @@ def _scrape_generic_url(url):
         except Exception:
             return None
 
-    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Pull values from __NEXT_DATA__ first (usually richer), then JSON-LD
     nd  = ld_prop  or {}
