@@ -132,7 +132,7 @@
 
     // ── KPI strip ──
     document.getElementById('kpi-strip').innerHTML = [
-      kpi({ label:'Active listings',   value:activeListings,                tone:'gold',    sub:'Live on platform', href:'listings.html' }),
+      kpi({ label:'Active listings',   value:activeListings,                tone:'gold',    sub:'Live on platform', href:'properties.html?status=active' }),
       kpi({ label:'Total apps',        value:c.total||0,                    tone:'brand',   sub:(c.this_month||0) + ' this month', href:'applications.html' }),
       kpi({ label:'Pending',           value:c.pending||0,                  tone:'warn',    sub:'Awaiting decision', href:'applications.html?status=pending' }),
       kpi({ label:'Approved',          value:c.approved||0,                 tone:'success', sub:(c.unpaid_approved||0) + ' unpaid', href:'applications.html?status=approved' }),
