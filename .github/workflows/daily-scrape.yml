@@ -1,0 +1,100 @@
+name: Daily Property Scraper
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 2 AM UTC every day
+  workflow_dispatch:
+    inputs:
+      locations:
+        description: 'Comma-separated locations (blank = default markets.txt)'
+        required: false
+        default: ''
+      past_days:
+        description: 'Days back to search (default: 3)'
+        required: false
+        default: '3'
+      limit:
+        description: 'Max listings per market (default: 200)'
+        required: false
+        default: '200'
+
+jobs:
+  scrape:
+    name: Scrape rental listings
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install homeharvest
+
+      - name: Resolve market list
+        id: markets
+        run: |
+          if [ -n "${{ github.event.inputs.locations }}" ]; then
+            echo "${{ github.event.inputs.locations }}" | tr ',' '\n' | xargs -I{} echo {} > /tmp/markets.txt
+          else
+            grep -v '^\s*#' scraper/markets.txt | grep -v '^\s*$' > /tmp/markets.txt
+          fi
+          COUNT=$(wc -l < /tmp/markets.txt | xargs)
+          echo "Scraping $COUNT market(s):"
+          cat /tmp/markets.txt
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+
+      - name: Run scraper for each market
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          PAST_DAYS="${{ github.event.inputs.past_days || '3' }}"
+          LIMIT="${{ github.event.inputs.limit || '200' }}"
+          ERROR_COUNT=0
+
+          while IFS= read -r location; do
+            location="$(echo "$location" | xargs)"
+            [ -z "$location" ] && continue
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  Market: $location"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            python scraper/scraper.py \
+              --location "$location" \
+              --past-days "$PAST_DAYS" \
+              --limit "$LIMIT" \
+              || ERROR_COUNT=$((ERROR_COUNT + 1))
+
+            # Brief pause between markets to avoid rate-limiting
+            sleep 4
+          done < /tmp/markets.txt
+
+          echo ""
+          echo "━━━ All markets complete. Errors: $ERROR_COUNT ━━━"
+          echo "error_count=$ERROR_COUNT" >> $GITHUB_ENV
+
+      - name: Write step summary
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python scraper/summarize.py --github-summary
+
+      - name: Send email notification
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+        run: python scraper/summarize.py --send-email
+        continue-on-error: true

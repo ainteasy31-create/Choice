@@ -1,0 +1,43 @@
+# Choice Properties — Default Daily Scrape Markets
+# One location per line. Lines starting with # are ignored.
+# Format: City, ST  OR  Zip code  OR  County, ST
+# Edit this file to add/remove markets. Changes take effect on next scheduled run.
+
+# ── Texas ────────────────────────────────────────────────────
+Dallas, TX
+Houston, TX
+Austin, TX
+San Antonio, TX
+Fort Worth, TX
+
+# ── Southeast ────────────────────────────────────────────────
+Atlanta, GA
+Charlotte, NC
+Raleigh, NC
+Nashville, TN
+Jacksonville, FL
+Tampa, FL
+Orlando, FL
+Miami, FL
+
+# ── Southwest ────────────────────────────────────────────────
+Phoenix, AZ
+Las Vegas, NV
+Albuquerque, NM
+
+# ── Mountain / West ──────────────────────────────────────────
+Denver, CO
+Salt Lake City, UT
+
+# ── Midwest ──────────────────────────────────────────────────
+Columbus, OH
+Indianapolis, IN
+Kansas City, MO
+Louisville, KY
+Memphis, TN
+Oklahoma City, OK
+Tulsa, OK
+
+# ── Mid-Atlantic ─────────────────────────────────────────────
+Baltimore, MD
+Richmond, VA
