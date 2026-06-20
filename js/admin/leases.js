@@ -472,6 +472,17 @@
       await load();
     });
 
+    // Pre-filter from URL param — e.g. dashboard links to ?lease_status=signed
+    const _urlLease = new URLSearchParams(location.search).get('lease_status');
+    if (_urlLease) {
+      _filter = _urlLease;
+      const chip = document.querySelector(`#filter-tabs [data-lease="${_urlLease}"]`);
+      if (chip) {
+        document.querySelectorAll('#filter-tabs .chip').forEach(b => b.classList.remove('active'));
+        chip.classList.add('active');
+      }
+    }
+
     const okAuth = await S.requireAdmin();
     if(!okAuth) return;
     await load().catch(err => {
