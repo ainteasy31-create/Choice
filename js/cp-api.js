@@ -217,7 +217,7 @@ const Auth = {
     if (!data || !data.id) { location.href = redirectTo; return null; }
     return data;
   },
-  async requireAdmin(redirectTo = '../admin/login.html') {
+  async requireAdmin(redirectTo = '/admin/login.html') {
     const isAdmin = await Auth.isAdmin();
     if (!isAdmin) { location.href = redirectTo; return false; }
     return true;
@@ -1229,5 +1229,7 @@ window.CP.UI = Object.assign(window.CP.UI || {}, UI);
 // Landlord pages and property.html import these by name.
 // Each export delegates to the function defined above - no
 // duplicated logic, no separate window.* assignments needed.
-export const supabase = sb();
+let _supabaseExport = null;
+try { _supabaseExport = sb(); } catch (_) { /* CONFIG/SDK not ready at module init; use CP.sb() for lazy init */ }
+export { _supabaseExport as supabase };
 export { SavedProperties, buildApplyURL, incrementCounter, getSession, getLandlordProfile, requireAuth, signIn, signUp, signOut, resetPassword, updateNav };
