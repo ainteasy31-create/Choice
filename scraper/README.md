@@ -76,7 +76,9 @@ python scraper/scraper.py --location <location> [--source realtor|zillow|both] [
 | `--source zillow` | Zillow only via `__NEXT_DATA__` HTML parsing |
 | `--source both` | Both sources in sequence for each location |
 
-> **Zillow note:** The Zillow scraper works best from a **residential IP** (home or office network). Cloud/datacenter IPs (like Replit) may be blocked by Zillow's DataDome bot detection. Run locally, or set `HTTP_PROXY` / `HTTPS_PROXY` to a residential proxy.
+> **Zillow note:** The Zillow scraper requires a **residential IP**. Replit/cloud/datacenter IPs are blocked by Zillow's DataDome bot detection. The recommended approach is to run the Zillow scraper from **iSH Shell on iPhone** (free Alpine Linux terminal on the App Store) — your iPhone's mobile data counts as a residential IP and Zillow does not block it. Alternatively, set `HTTP_PROXY` / `HTTPS_PROXY` to a residential proxy service.
+
+> **iSH Python version:** iSH uses Python 3.9 (Alpine). Do not use Unicode curly quotes (`"`, `"`) inside f-strings — they cause a SyntaxError on Python 3.9. Use plain ASCII `'` or `"` only.
 
 ### Location flags
 

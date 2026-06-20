@@ -10,23 +10,24 @@ Nationwide rental property marketplace and management platform. Static HTML/CSS/
 - **Images:** ImageKit.io CDN
 - **Maps:** Leaflet + Geoapify
 - **Auth:** Supabase Auth (PKCE flow)
-- **Scraper (Realtor.com):** Python + HomeHarvest CLI (`scraper/scraper.py`) — run from Replit shell → stages into `pipeline.pipeline_properties`
-- **Scraper (Zillow):** `scraper/zillow_scraper.py` — run from **iSH Shell on iPhone** (requires residential IP; Zillow blocks datacenter IPs) → same pipeline table
+- **Scraper (Realtor.com):** `scraper/scraper.py` — run from Replit shell → stages into `pipeline.pipeline_properties`
+- **Scraper (Zillow):** `scraper/zillow_scraper.py` — run from **iSH Shell on iPhone** (requires residential IP; Zillow blocks Replit/datacenter IPs) → same pipeline table
 
-## iSH Shell (iPhone Scraper)
-The Zillow scraper must run from a residential IP. The owner runs it from **iSH** (Alpine Linux terminal app for iOS):
+## iSH Shell (iPhone — Zillow Scraper)
+The Zillow scraper must run from a residential IP. The owner uses **iSH** (free Alpine Linux terminal app for iOS, available on the App Store).
 
-**Setup (one-time):**
+**One-time setup in iSH:**
 ```bash
-# In iSH on iPhone
 apk add python3 py3-pip git
 pip3 install homeharvest requests python-dotenv
 git clone https://ghp_<TOKEN>@github.com/choice121/Choice.git
 cd Choice/scraper
-# Create .env with SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+# Create .env:
+echo 'SUPABASE_URL=https://tlfmwetmhthpyrytrcfo.supabase.co' > .env
+echo 'SUPABASE_SERVICE_ROLE_KEY=eyJ...' >> .env
 ```
 
-**Pulling latest code in iSH:**
+**Pulling latest code in iSH (run before every scrape session):**
 ```bash
 cd ~/Choice
 git pull https://ghp_<TOKEN>@github.com/choice121/Choice.git
@@ -40,11 +41,11 @@ python3 scraper.py --location "Dallas, TX" --source zillow              # real r
 python3 scraper.py --location "Dallas, TX" --source both               # Zillow + Realtor
 ```
 
-**Key iSH constraints:**
-- Python 3.9 (Alpine) — no f-strings with Unicode curly quotes (`"`, `"`)
-- No Docker, no Supabase CLI
+**Key iSH constraints (important for future edits to scraper files):**
+- Python 3.9 (Alpine Linux) — f-strings with Unicode curly quotes (`"`, `"`) cause SyntaxError. Use plain ASCII quotes only.
+- No Docker, no Supabase CLI, no `git push` (use `git pull` with token URL)
 - Realtor.com scraper works fine from Replit shell (datacenter IP is OK)
-- Zillow scraper needs iSH / any residential IP (mobile data or home WiFi)
+- Zillow scraper needs iSH or any residential IP (mobile data or home WiFi)
 
 ## Repository
 - GitHub: https://github.com/choice121/Choice
@@ -68,6 +69,16 @@ Content-Type: application/json
 Body: { "query": "SQL here" }
 ```
 Write the SQL to `/tmp/payload.json` via Python `json.dumps`, then send with `curl --data-binary @/tmp/payload.json` to avoid shell-escaping issues with complex SQL.
+
+## How to Deploy Edge Functions
+Use the Supabase CLI via npx — no Docker, no local Supabase install needed:
+```bash
+SUPABASE_ACCESS_TOKEN=sbp_... \
+  npx supabase@latest functions deploy <function-name> \
+  --project-ref tlfmwetmhthpyrytrcfo \
+  --use-api
+```
+The `--use-api` flag bundles server-side (skips Docker). `SUPABASE_ACCESS_TOKEN` is the personal access token (starts with `sbp_`). The `SUPABASE_MANAGEMENT_TOKEN` env var does **not** work for function deployment — use `SUPABASE_ACCESS_TOKEN` only.
 
 ## Key Files
 
@@ -103,17 +114,23 @@ Write the SQL to `/tmp/payload.json` via Python `json.dumps`, then send with `cu
 - `property.html` + `js/property.js` — Public property detail; admin banner overlay when admin
 
 ### Scraper (`scraper/`)
-- `scraper.py` — HomeHarvest CLI scraper: pulls Realtor.com for-rent listings → `pipeline.pipeline_properties`
-- `requirements.txt` — `pip install homeharvest`
-- `README.md` — Usage guide
+| File | Purpose |
+|------|---------|
+| `scraper.py` | Main CLI — orchestrates Realtor.com + Zillow, batch inserts, dedup, logging |
+| `zillow_scraper.py` | Zillow `__NEXT_DATA__` HTML parser module (called by `scraper.py`) |
+| `requirements.txt` | `pip install homeharvest requests python-dotenv` |
+| `README.md` | Full scraper usage guide |
+| `cities.txt` *(optional)* | One location per line for `--locations-file` bulk runs |
 
 ### Database
-- `supabase/migrations/` — Full schema history (source of truth, ~80 migration files)
+- `supabase/migrations/` — Full schema history (source of truth)
+- `supabase/functions/` — Edge Functions (Deno/TypeScript)
 
 ## User Preferences
 - This project is for Cloudflare Pages only. Never configure Replit workflows or production servers.
 - Push all changes to GitHub via the Git Data API (blob → tree → commit → PATCH refs/heads/main).
 - Apply SQL to Supabase via the Management API (write JSON to `/tmp/`, use `curl --data-binary`).
+- Deploy edge functions via `npx supabase@latest functions deploy --use-api --project-ref tlfmwetmhthpyrytrcfo` with `SUPABASE_ACCESS_TOKEN` env var.
 - Admin portal is at `/admin/` — requires entry in `admin_roles` Supabase table.
 - `config.js` does not exist in the repo — generated at Cloudflare build time.
 
@@ -122,7 +139,7 @@ Write the SQL to `/tmp/payload.json` via Python `json.dumps`, then send with `cu
 ### Supabase Connection
 - Project ref: `tlfmwetmhthpyrytrcfo`
 - URL: `https://tlfmwetmhthpyrytrcfo.supabase.co`
-- Management API token stored as `SUPABASE_MANAGEMENT_TOKEN` env var in Replit
+- Management API token stored as `SUPABASE_MANAGEMENT_TOKEN` env var in Replit (for DB queries only — NOT for edge function deployment)
 
 ### Landlord RLS
 Migration `20260425000013` restricts the `authenticated` role to only these landlord columns: `id, user_id, contact_name, business_name, avatar_url, verified, tagline`. Never query `phone` or `email` directly on landlords from the frontend — use `admin_list_landlords()` RPC for full admin access.
@@ -148,7 +165,16 @@ The `pipeline` schema is private (service_role only via direct REST). Frontend a
 | `pipeline_list(status, limit, offset)` | Paginated listing fetch |
 | `pipeline_save(id, patch)` | Edit a pipeline listing (auto-promotes scraped → edited) |
 | `pipeline_archive(id)` | Mark archived |
-| `pipeline_publish(id, landlord_id)` | Create `public.properties` draft + mark published |
+| `pipeline_publish(id, landlord_id)` | Create `public.properties` draft + mark published; sets `choice_property_id` on the pipeline record |
+
+## Edge Functions (`supabase/functions/`)
+
+### Deployed functions relevant to the scraper/pipeline workflow
+| Function | Purpose |
+|----------|---------|
+| `import-pipeline-photos` | Fetches source photos (Zillow/Realtor CDN) server-side, uploads to ImageKit, stores in `property_photos` via `add_property_photo` RPC. Accepts `{ property_id }` — looks up the pipeline source automatically via `choice_property_id`. Returns `{ transferred, skipped, no_source }`. |
+| `imagekit-upload` | Uploads a base64-encoded file to ImageKit; optionally persists to `property_photos` when `propertyId` is provided. Rate-limited to 60 uploads per 10 min per user. |
+| `imagekit-watermark` | Applies watermark to an existing ImageKit photo by URL + file_id. Called from property-detail watermark button. |
 
 ## Admin Portal — Current State (June 2026)
 
@@ -163,12 +189,32 @@ The `pipeline` schema is private (service_role only via direct REST). Frontend a
 - Operations: Inspections
 - Admin: Audit Log, Watermark Review, Deposit Accounting, State Law Reference
 
-### Pipeline (scraped listings review)
-- Scraper (`scraper/scraper.py`) stages raw Realtor.com listings into `pipeline.pipeline_properties`
-- `/admin/pipeline.html` — filter chips (New/Edited/Published/Archived/All) with live counts
-- Click a card → right-side panel: photo strip, editable fields, Save / Publish / Archive
-- **Publish** → calls `pipeline_publish()` RPC → creates `public.properties` record (status=`draft`) → admin then opens property-detail to add ImageKit photos and activate
-- Dashboard widget shows pipeline counts and surfaces an action card when listings await review
+### Pipeline (`/admin/pipeline.html`)
+Scraper stages listings into `pipeline.pipeline_properties`. Admin reviews and publishes from this page.
+
+**Filter chips (two rows):**
+- Row 1 — Status: New / Edited / All / Published / Archived (live counts from `pipeline_count()` RPC)
+- Row 2 — Source: All / Zillow / Realtor (client-side filter, no server round-trip)
+
+**Card features:**
+- Thumbnail from first source photo
+- Source badge: blue `ZILLOW` or red `REALTOR`
+- Quality score badge (0–100), missing fields count
+- Checkbox in top-left corner of thumbnail for bulk selection
+
+**Bulk action bar (slides up from bottom when cards are checked):**
+- Select all / clear
+- "Publish all →" — publishes all selected non-published/non-archived listings as drafts
+
+**Single publish flow (via panel):**
+1. Click a card → right-side panel opens
+2. Edit fields → Save changes
+3. "Publish as draft →" → calls `pipeline_publish()` RPC → creates `public.properties` draft
+4. Auto-opens `property-detail.html` in new tab
+5. Auto-triggers `import-pipeline-photos` edge function in background (transfers up to 20 photos to ImageKit)
+6. Toast: "Transferring X photos…" then "X photos added to ImageKit ✓"
+
+> **Note:** Bulk publish does NOT auto-transfer photos (rate limit). Use "Import source photos" button on each property-detail page instead.
 
 ### Admin mode on /listings.html
 - `CP.Auth.isAdmin()` checked at boot; if true, admin toolbar injected (sticky dark header)
@@ -192,6 +238,7 @@ The `pipeline` schema is private (service_role only via direct REST). Frontend a
 - Photo gallery refreshes in place after delete
 - HEIC/HEIF uploads blocked with user-facing error
 - Watermark apply → `imagekit-watermark` edge function with Bearer token
+- **"Import source photos" button** → calls `import-pipeline-photos` edge function with `{ property_id }`. Finds the pipeline source automatically, downloads up to 20 photos from the Zillow/Realtor CDN server-side (no CORS issues), uploads to ImageKit, saves to `property_photos`. Gallery refreshes in place. Shows `no_source` message if property wasn't from the scraper.
 
 ### Cross-links
 - `audit-log.js` property target links → `/property.html?id=`
@@ -202,7 +249,7 @@ The `pipeline` schema is private (service_role only via direct REST). Frontend a
 | Page | Status |
 |------|--------|
 | dashboard.js | `dashboard_pulse` RPC + pipeline staging widget (`pipeline_stats` RPC); action queue, KPI strip, recent activity |
-| pipeline.js | Browse/filter scraped listings; edit panel; publish to draft; archive |
+| pipeline.js | Source filter chips + bulk select/publish; edit panel; single publish with auto photo transfer; archive |
 | leases.js | Generate/send/countersign/void/download; `rent_due_day_of_month` + `rent_proration_method` pre-populated |
 | move-ins.js | Confirm, schedule, prep guide, date/notes edit |
 | messages.js | Thread view + admin reply |
@@ -213,23 +260,33 @@ The `pipeline` schema is private (service_role only via direct REST). Frontend a
 | state-law.js | State law reference table, sortable + searchable |
 | landlords.js | admin_list_landlords RPC, verify/unverify, property links → /property.html |
 | audit-log.js | property.* actions, smart target links |
+| property-detail.js | Full edit + upload + "Import source photos" button → import-pipeline-photos edge fn |
 
-## Scraper Usage
+## Scraper Usage (v3)
 
-Run locally (Python 3.9+ required):
+Two sources, one command. Run Realtor.com from Replit shell; run Zillow from iSH on iPhone.
+
 ```bash
-pip install homeharvest
-export SUPABASE_URL="https://tlfmwetmhthpyrytrcfo.supabase.co"
-export SUPABASE_SERVICE_ROLE_KEY="..."
-
-# Basic scrape
+# Realtor.com only (default) — safe to run from Replit
 python scraper/scraper.py --location "Dallas, TX"
+
+# Zillow only — run from iSH on iPhone (residential IP required)
+python3 scraper.py --location "Dallas, TX" --source zillow
+
+# Both sources — run from iSH; Replit will be blocked by Zillow
+python3 scraper.py --location "Dallas, TX" --source both
+
+# Multiple cities, both sources
+python3 scraper.py --location "Dallas, TX" --location "Houston, TX" --source both
+
+# From a cities file
+python3 scraper.py --locations-file cities.txt --source both
 
 # Filtered
 python scraper/scraper.py --location "Miami, FL" --past-days 14 --beds-min 2 --price-max 3000
 
-# Preview only
-python scraper/scraper.py --location "Austin, TX" --dry-run
+# Dry run — preview without writing to DB
+python3 scraper.py --location "Austin, TX" --source zillow --dry-run
 ```
 
 Scraped listings land in `pipeline.pipeline_properties` with `status = 'scraped'`. All runs logged to `pipeline.pipeline_scrape_runs`. Deduplication is by `source_listing_id`.
@@ -240,3 +297,6 @@ Scraped listings land in `pipeline.pipeline_properties` with `status = 'scraped'
 - `20260620000003_pipeline_stats_rpc.sql` — `pipeline_stats()` RPC for dashboard widget
 - `20260620000004_pipeline_rpcs.sql` — `pipeline_count`, `pipeline_list`, `pipeline_save`, `pipeline_archive`, `pipeline_publish` RPCs
 - `20260621000001_property_location_features.sql` — adds `county`, `neighborhood`, `location_context`, `has_basement`, `has_central_air` to `properties`; adds `rent_due_day_of_month`, `rent_proration_method` to `applications`
+
+## Recent Edge Function Deployments
+- `import-pipeline-photos` — deployed via `npx supabase@latest functions deploy --use-api`. Fetches pipeline source photos server-side and uploads to ImageKit. Accepts `{ property_id }` only — looks up pipeline record by `choice_property_id` internally.
