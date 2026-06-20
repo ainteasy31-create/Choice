@@ -4,11 +4,12 @@
   let S;            // AdminShell
   let _status   = 'scraped';
   let _source   = null;    // null = all, 'zillow', 'realtor'
+  let _search   = '';      // address search query
   let _page     = 0;
   const PAGE    = 40;
   let _hasMore  = false;
   let _loading  = false;
-  let _pageData = [];   // all fetched listings (unfiltered by source)
+  let _pageData = [];   // all fetched listings (unfiltered by source/search)
   let _current  = null; // listing open in panel
   let _dirty    = {};   // unsaved field changes
   let _landlords = [];  // cache for publish landlord picker
@@ -51,10 +52,37 @@
     return od && od._phase === 'detail';
   }
 
-  // Returns _pageData filtered by the active source chip
+  // Returns _pageData filtered by the active source chip and search query
   function visibleListings(){
-    if(!_source) return _pageData;
-    return _pageData.filter(l => (l.source || '') === _source);
+    let list = _pageData;
+    if(_source) list = list.filter(l => (l.source || '') === _source);
+    if(_search){
+      const q = _search.toLowerCase();
+      list = list.filter(l => {
+        const addr = (l.address  || '').toLowerCase();
+        const city = (l.city    || '').toLowerCase();
+        const st   = (l.state   || '').toLowerCase();
+        const zip  = (l.zip     || '').toLowerCase();
+        const unit = (l.unit_number || '').toLowerCase();
+        return addr.includes(q) || city.includes(q) || st.includes(q) || zip.includes(q) || unit.includes(q);
+      });
+    }
+    return list;
+  }
+
+  // Update search result count display
+  function updateSearchCount(visible){
+    const el  = document.getElementById('pl-search-count');
+    const clr = document.getElementById('pl-search-clear');
+    if(!el) return;
+    if(_search){
+      el.textContent  = visible.length + ' result' + (visible.length !== 1 ? 's' : '') + ' for "' + _search + '"';
+      el.style.display = 'block';
+      if(clr) clr.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+      if(clr) clr.style.display = 'none';
+    }
   }
 
   // Sync the bulk action bar visibility + count
@@ -155,18 +183,22 @@
 
   function renderList(listings, append){
     const wrap = document.getElementById('pl-list');
+    updateSearchCount(listings);
     if(!append){
       wrap.innerHTML = listings.length
         ? listings.map(renderCard).join('')
         : `<div class="pl-empty">
              <svg class="i"><use href="#i-check"/></svg>
-             <h3>Nothing here</h3>
-             <p>No listings with status "${_status}"${_source ? ' from ' + _source : ''} in the pipeline.</p>
+             <h3>${_search ? 'No matches' : 'Nothing here'}</h3>
+             <p>${_search
+               ? 'No listings match <strong>' + S.esc(_search) + '</strong>. Try a different address or clear the search.'
+               : 'No listings with status "' + _status + '"' + (_source ? ' from ' + _source : '') + ' in the pipeline.'
+             }</p>
            </div>`;
     } else {
       listings.forEach(l => wrap.insertAdjacentHTML('beforeend', renderCard(l)));
     }
-    document.getElementById('load-more-wrap').style.display = _hasMore ? '' : 'none';
+    document.getElementById('load-more-wrap').style.display = _hasMore && !_search ? '' : 'none';
   }
 
   // ── Render: detail panel ─────────────────────────────────────────────────────
@@ -683,6 +715,8 @@
       _page   = 0;
       _selected.clear();
       updateBulkBar();
+      // Preserve search across status switches — data reloads from server so
+      // filtering re-applies automatically via visibleListings() in load()
       load(false);
     });
   }
@@ -734,6 +768,36 @@
     const pubBtn = document.getElementById('pl-bulk-pub');
     if(pubBtn){
       pubBtn.addEventListener('click', () => doBulkPublish());
+    }
+  }
+
+  function wireSearch(){
+    const input = document.getElementById('pl-search');
+    const clear = document.getElementById('pl-search-clear');
+    if(!input) return;
+
+    let _debounce;
+    input.addEventListener('input', () => {
+      clearTimeout(_debounce);
+      _debounce = setTimeout(() => {
+        _search = input.value.trim();
+        _selected.clear();
+        updateBulkBar();
+        renderList(visibleListings(), false);
+        wireCardEvents();
+      }, 200);
+    });
+
+    if(clear){
+      clear.addEventListener('click', () => {
+        input.value = '';
+        _search = '';
+        _selected.clear();
+        updateBulkBar();
+        renderList(visibleListings(), false);
+        wireCardEvents();
+        input.focus();
+      });
     }
   }
 
@@ -797,6 +861,7 @@
       if(!ok) return;
       wireChips();
       wireSourceChips();
+      wireSearch();
       wireBackdrop();
       wireLoadMore();
       wireBulkBar();
