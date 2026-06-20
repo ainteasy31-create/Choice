@@ -940,7 +940,11 @@ async function updateNav() {
           'holding_fee_requested,holding_fee_requested_at,holding_fee_amount,' +
           'holding_fee_due_date,holding_fee_paid,holding_fee_paid_at,' +
           'management_signed,management_signer_name,management_signed_at,management_notes,' +
-          'management_cosigned,management_cosigned_by,management_cosigned_at'
+          'management_cosigned,management_cosigned_by,management_cosigned_at,' +
+          'first_month_rent,last_month_rent,pet_deposit,pet_rent,admin_fee,' +
+          'key_deposit,parking_fee,cleaning_fee,cleaning_fee_refundable,' +
+          'lease_late_fee_flat,lease_state_code,lease_landlord_name,lease_landlord_address,' +
+          'utility_responsibilities,move_out_date_actual,prorated_first_month'
         )
         .order('created_at', { ascending: false });
 
