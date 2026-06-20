@@ -98,6 +98,56 @@
     return { ok: countsOk || appsOk, counts: c, recent: appsOk ? (recent || []) : [], source:'legacy' };
   }
 
+  // ── Pipeline stats ─────────────────────────────────────────────────────────
+  // Calls the pipeline_stats() RPC (SECURITY DEFINER — can read pipeline schema).
+  // Renders a KPI strip showing scraped / edited / published counts.
+  async function loadPipelineStats(queue){
+    const section = document.getElementById('pipeline-section');
+    const strip   = document.getElementById('pipeline-kpi-strip');
+    const stamp   = document.getElementById('pipeline-stamp');
+    if(!section) return;
+
+    try {
+      const { data, error } = await CP.sb().rpc('pipeline_stats');
+      if(error || !data) { section.style.display = 'none'; return; }
+
+      const p = (typeof data === 'string') ? JSON.parse(data) : data;
+      const scraped   = Number(p.scraped   || 0);
+      const edited    = Number(p.edited    || 0);
+      const published = Number(p.published || 0);
+      const archived  = Number(p.archived  || 0);
+      const total     = Number(p.total     || 0);
+
+      if(total === 0) { section.style.display = 'none'; return; }
+
+      // Surface action card if listings are pending review
+      const reviewable = scraped + edited;
+      if(reviewable > 0){
+        queue.push(actionCard({
+          icon:  'i-listings',
+          tone:  'info',
+          count: reviewable,
+          label: reviewable === 1 ? 'Scraped listing awaiting pipeline review' : 'Scraped listings awaiting pipeline review',
+          cta:   'Open pipeline',
+          href:  'https://github.com/choice121/property-pipeline',
+        }));
+      }
+
+      strip.innerHTML = [
+        kpi({ label:'Scraped (new)',  value:scraped,   tone: scraped > 0 ? 'warn' : '',    sub:'Pending review',     href:'#' }),
+        kpi({ label:'Edited',         value:edited,    tone: edited  > 0 ? 'info' : '',    sub:'Ready to publish',   href:'#' }),
+        kpi({ label:'Published',      value:published, tone:'success',                      sub:'Sent to live site',  href:'/listings.html' }),
+        kpi({ label:'Archived',       value:archived,  tone:'',                             sub:'In pipeline archive',href:'#' }),
+      ].join('');
+
+      stamp.textContent = total.toLocaleString() + ' total in pipeline';
+      section.style.display = '';
+    } catch(e) {
+      console.warn('[dashboard] pipeline_stats failed:', e);
+      section.style.display = 'none';
+    }
+  }
+
   async function load(){
     const stamp = document.getElementById('greeting-stamp');
     const okAuth = await S.requireAdmin();
@@ -122,6 +172,9 @@
     if((c.lease_signed||0) > 0)   queue.push(actionCard({ icon:'i-check',  tone:'urgent',  count:c.lease_signed,   label:'Leases awaiting your countersignature', cta:'Countersign', href:'leases.html?lease_status=signed' }));
     if((c.movein_pending||0) > 0) queue.push(actionCard({ icon:'i-door',   tone:'info',    count:c.movein_pending, label:'Move-ins to confirm',                   cta:'Confirm',     href:'move-ins.html' }));
     if(failedEmails > 0) queue.push(actionCard({ icon:'i-mail', tone:'urgent', count:failedEmails, label:'Failed emails (last 48h)', cta:'Investigate', href:'email-logs.html?status=failed' }));
+
+    // Load pipeline stats in parallel; it appends its own action card to queue.
+    await loadPipelineStats(queue);
 
     document.getElementById('action-queue').innerHTML = queue.length
       ? queue.join('')
