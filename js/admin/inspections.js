@@ -59,7 +59,7 @@
       +     '<div style="min-width:0">'
       +       '<div class="text-xs muted" style="font-family:monospace">' + esc(a.app_id || row.app_id) + '</div>'
       +       '<div class="row-title">' + esc(tenantName) + ' — ' + esc(labelType(row.inspection_type)) + '</div>'
-      +       '<div class="row-sub">' + esc(a.property_address || '—') + (a.city ? ' · ' + esc(a.city) : '') + (a.state ? ', ' + esc(a.state) : '') + '</div>'
+      +       '<div class="row-sub">' + esc(a.property_address || '—') + '</div>'
       +       '<div style="margin-top:6px">'
       +         '<span class="pill pill-info">' + esc(labelType(row.inspection_type)) + '</span>'
       +         statusPill(status)
@@ -202,7 +202,7 @@
             id, app_id, inspection_type, photos_count, completed_at,
             tenant_signed_at, landlord_signed_at,
             created_at, updated_at,
-            applications:app_id ( app_id, first_name, last_name, email, property_address, city, state )
+            applications:app_id ( app_id, first_name, last_name, email, property_address )
           `)
           .order('updated_at', { ascending: false })
           .limit(500),
