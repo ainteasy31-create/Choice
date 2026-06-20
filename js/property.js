@@ -66,9 +66,10 @@ if (!propertyId && !isPreview) {
   }
 }
 
-let currentProperty = null;
-let photoIndex      = 0;
-let allPhotos       = [];
+let currentProperty  = null;
+let photoIndex       = 0;
+let allPhotos        = [];
+let _isAdminViewer   = false;
 let savedIds = new Set(JSON.parse(localStorage.getItem('cp_saved') || '[]'));
 
 if (isPreview) {
@@ -136,8 +137,16 @@ async function loadProperty(id) {
     prop.photo_file_ids = [];
   }
 
-  // Guard non-active listings from public view
-  if (prop.status !== 'active') {
+  // Check admin status early — admin sees all properties regardless of status
+  try {
+    const session = await getSession();
+    if (session?.user) {
+      _isAdminViewer = await (window.CP?.Auth?.isAdmin?.().catch(() => false) ?? false);
+    }
+  } catch(e) { /* non-fatal */ }
+
+  // Guard non-active listings from public view (owner or admin may bypass)
+  if (prop.status !== 'active' && !_isAdminViewer) {
     try {
       const session    = await getSession();
       const viewerId   = session?.user?.id || null;
@@ -171,6 +180,7 @@ async function loadProperty(id) {
   // and the error reporter so we can fix it.
   try {
     renderProperty(prop);
+    if (_isAdminViewer) initAdminPropertyPanel(prop);
   } catch (e) {
     console.error('[property] renderProperty crashed:', e);
     if (typeof window.cpReportError === 'function') {
@@ -1267,6 +1277,182 @@ async function toggleSave(id, btn) {
   } finally {
     btn.disabled = false;
   }
+}
+
+/* ── Admin property panel ─────────────────────────────────────────────────
+   Injected immediately after renderProperty() when _isAdminViewer is true.
+   Shows a sticky top banner (status toggle + edit link) plus an admin section
+   below the gallery with metrics, admin notes, and quick action links.
+   ──────────────────────────────────────────────────────────────────────── */
+function initAdminPropertyPanel(prop) {
+  const STATUS_COLORS = {
+    active:'#10b981', rented:'#3b82f6', inactive:'#6b7280',
+    maintenance:'#f59e0b', draft:'#8b5cf6', paused:'#f97316', archived:'#ef4444'
+  };
+  const STATUSES = ['active','rented','inactive','maintenance','draft','paused','archived'];
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  // ── Sticky admin banner at top of detail content ──
+  const banner = document.createElement('div');
+  banner.id = 'adminPropBanner';
+  banner.style.cssText = [
+    'background:#0a1628','color:#e2e8f0','padding:10px 20px',
+    'display:flex','align-items:center','gap:12px','flex-wrap:wrap',
+    'border-bottom:3px solid #006aff','z-index:90','position:relative'
+  ].join(';');
+  banner.innerHTML = `
+    <span style="background:#006aff;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.05em;flex-shrink:0">ADMIN</span>
+    <span style="font-size:13px;font-weight:600;flex-shrink:0">${esc(prop.title||'Untitled')}</span>
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+      <span style="font-size:12px;color:#94a3b8">Status:</span>
+      <select id="adminStatusSelect" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:4px 8px;font-size:13px;font-weight:600;cursor:pointer">
+        ${STATUSES.map(s => `<option value="${s}" ${s===prop.status?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+      </select>
+      <button id="adminStatusSaveBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;display:none">Save</button>
+      <span id="adminStatusSpinner" style="color:#64748b;font-size:12px;display:none"><i class="fas fa-spinner fa-spin"></i></span>
+    </div>
+    <div style="display:flex;gap:8px;margin-left:auto;flex-shrink:0">
+      <a href="/admin/property-detail.html?id=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-pen"></i> Edit Full
+      </a>
+      <a href="/admin/applications.html?property=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-file-alt"></i> Applications
+      </a>
+      <a href="/admin/audit-log.html?target=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-history"></i> Audit Log
+      </a>
+    </div>`;
+
+  const gallery = document.querySelector('.gallery-mosaic');
+  if (gallery) gallery.parentNode.insertBefore(banner, gallery);
+  else document.body.prepend(banner);
+
+  // Status change logic
+  const sel = document.getElementById('adminStatusSelect');
+  const saveBtn = document.getElementById('adminStatusSaveBtn');
+  const spinner = document.getElementById('adminStatusSpinner');
+  let originalStatus = prop.status;
+
+  if (sel && saveBtn) {
+    sel.addEventListener('change', () => {
+      saveBtn.style.display = sel.value !== originalStatus ? '' : 'none';
+    });
+    saveBtn.addEventListener('click', async () => {
+      const newStatus = sel.value;
+      saveBtn.disabled = true;
+      if (spinner) spinner.style.display = '';
+      try {
+        const res = await window.CP.Properties.update(prop.id, { status: newStatus });
+        if (!res.ok) throw new Error(res.error || 'Update failed');
+        // Log to admin_actions
+        try {
+          const session = await window.CP.Auth.getSession();
+          if (session?.user?.id) {
+            await window.supabase.from('admin_actions').insert({
+              action: 'property.status_change',
+              target_type: 'property',
+              target_id: prop.id,
+              metadata: { from: originalStatus, to: newStatus },
+              user_id: session.user.id,
+            });
+          }
+        } catch(e) { /* non-fatal */ }
+        originalStatus = newStatus;
+        saveBtn.style.display = 'none';
+        // Update banner badge color
+        const col = STATUS_COLORS[newStatus] || '#6b7280';
+        sel.style.borderColor = col;
+        if (typeof showToast === 'function') showToast(`Status changed to ${newStatus}`, 'success');
+      } catch(e) {
+        if (typeof showToast === 'function') showToast('Failed: ' + e.message, 'error');
+        sel.value = originalStatus;
+        saveBtn.style.display = 'none';
+      } finally {
+        saveBtn.disabled = false;
+        if (spinner) spinner.style.display = 'none';
+      }
+    });
+  }
+
+  // ── Admin info section (metrics + admin notes) ──
+  const section = document.createElement('div');
+  section.id = 'adminPropSection';
+  section.style.cssText = 'background:#f8fafc;border:2px solid #e2e8f0;border-radius:12px;padding:20px;margin:24px 0;';
+  section.innerHTML = `
+    <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:16px">
+      <i class="fas fa-shield-halved" style="color:#006aff"></i> Admin Info
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.views_count ?? 0}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:2px">Views</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.applications_count ?? 0}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:2px">Applications</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.saves_count ?? 0}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:2px">Saves</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.inquiries_count ?? 0}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:2px">Inquiries</div>
+      </div>
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px">
+        <i class="fas fa-sticky-note"></i> Admin Notes (internal)
+      </label>
+      <textarea id="adminNotesField" rows="3" maxlength="2000"
+        style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;resize:vertical;box-sizing:border-box;font-family:inherit;color:#1e293b;background:#fff"
+        placeholder="Private admin notes — not visible to landlords or tenants…">${esc(prop.admin_notes||'')}</textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <span style="font-size:11px;color:#94a3b8">Not visible to landlords or tenants</span>
+        <button id="adminNotesSaveBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">
+          Save Notes
+        </button>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;gap:8px;flex-wrap:wrap">
+      <a href="/admin/applications.html?property=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:5px;font-weight:600">
+        <i class="fas fa-file-alt"></i> View Applications for this Property
+      </a>
+      <span style="color:#d1d5db">·</span>
+      <a href="/admin/audit-log.html?target=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:5px;font-weight:600">
+        <i class="fas fa-history"></i> Audit Log for this Property
+      </a>
+      <span style="color:#d1d5db">·</span>
+      <a href="/admin/property-detail.html?id=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:5px;font-weight:600">
+        <i class="fas fa-pen-to-square"></i> Full Admin Edit
+      </a>
+    </div>`;
+
+  // Insert admin section after the gallery strip
+  const galleryStrip = document.getElementById('galleryStrip');
+  const detailMain = document.getElementById('detailMain');
+  const breadcrumb = detailMain?.querySelector('.detail-breadcrumb');
+  if (breadcrumb) breadcrumb.parentNode.insertBefore(section, breadcrumb.nextSibling);
+  else if (detailMain) detailMain.prepend(section);
+
+  // Admin notes save
+  document.getElementById('adminNotesSaveBtn')?.addEventListener('click', async () => {
+    const notesField = document.getElementById('adminNotesField');
+    const btn = document.getElementById('adminNotesSaveBtn');
+    if (!notesField || !btn) return;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const res = await window.CP.Properties.update(prop.id, { admin_notes: notesField.value });
+      if (!res.ok) throw new Error(res.error || 'Save failed');
+      if (typeof showToast === 'function') showToast('Admin notes saved', 'success');
+    } catch(e) {
+      if (typeof showToast === 'function') showToast('Save failed: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Notes';
+    }
+  });
 }
 
 /* ── Helpers ── */

@@ -379,6 +379,58 @@ const Properties = {
     };
   },
 
+  // getListingsAdmin — same shape as getListings but no status='active' constraint.
+  // Uses the authenticated session so RLS properties_admin_all fires automatically.
+  async getListingsAdmin(filters = {}) {
+    const PAGE_SIZE = filters.per_page || 24;
+    const page = Math.max(1, filters.page || 1);
+    const from = (page - 1) * PAGE_SIZE;
+    const to   = from + PAGE_SIZE - 1;
+
+    let q = sb()
+      .from('properties')
+      .select(PROPERTIES_SELECT_FULL, { count: 'exact' });
+
+    if (filters.status && filters.status !== 'all') q = q.eq('status', filters.status);
+    if (filters.landlord) q = q.eq('landlord_id', filters.landlord);
+
+    if (filters.q) {
+      const term = filters.q.trim();
+      const safeForTs = /^[\w\s\-']+$/.test(term);
+      if (safeForTs) q = q.textSearch('search_tsv', term, { type: 'websearch', config: 'english' });
+      else           q = q.ilike('title', `%${term}%`);
+    }
+    if (filters.beds !== undefined && filters.beds !== '') {
+      const beds = parseInt(filters.beds);
+      if (beds === 4) q = q.gte('bedrooms', 4);
+      else            q = q.eq('bedrooms', beds);
+    }
+    if (filters.min_rent) q = q.gte('monthly_rent', parseInt(filters.min_rent));
+    if (filters.max_rent) q = q.lte('monthly_rent', parseInt(filters.max_rent));
+
+    switch (filters.sort) {
+      case 'price_asc':  q = q.order('monthly_rent', { ascending: true });  break;
+      case 'price_desc': q = q.order('monthly_rent', { ascending: false }); break;
+      case 'beds_desc':  q = q.order('bedrooms',     { ascending: false }); break;
+      default:           q = q.order('created_at',   { ascending: false }); break;
+    }
+    q = q.range(from, to);
+
+    const { data, error, count } = await q;
+    if (error) return { ok: false, data: null, error: error.message };
+    const total = count ?? 0;
+    return {
+      ok: true, error: null,
+      data: {
+        rows:        (data || []).map(_attachPhotoArrays),
+        total,
+        page,
+        per_page:    PAGE_SIZE,
+        total_pages: Math.ceil(total / PAGE_SIZE),
+      },
+    };
+  },
+
   async getAll(filters = {}) {
     let q = sb().from('properties').select(PROPERTIES_SELECT_FULL).order('created_at', { ascending: false });
     if (filters.status)    q = q.eq('status', filters.status);

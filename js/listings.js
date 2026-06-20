@@ -47,6 +47,12 @@ let savedIds       = loadSavedIds();
 let pageProperties = [];
 const PER_PAGE     = 24;
 
+// ── Admin mode state ───────────────────────────────────────────────────────
+let isAdminMode       = false;
+let adminStatusFilter = 'all';
+let adminLandlordId   = null;
+let adminLandlordName = null;
+
 function loadSavedIds() {
   try {
     return new Set(JSON.parse(localStorage.getItem('cp_saved') || '[]'));
@@ -126,10 +132,200 @@ function syncControls() {
   updateFilterBadge();
 }
 
+// ── Admin mode detection & toolbar ───────────────────────────────────────
+async function initAdminMode() {
+  if (!window.CP?.Auth) return;
+  try { isAdminMode = await window.CP.Auth.isAdmin(); } catch(e) { isAdminMode = false; }
+  if (!isAdminMode) return;
+
+  const usp = new URLSearchParams(window.location.search);
+  if (usp.get('status')) adminStatusFilter = usp.get('status');
+  if (usp.get('landlord')) adminLandlordId = usp.get('landlord');
+
+  // Resolve landlord name if filter is active
+  if (adminLandlordId) {
+    try {
+      const res = await window.CP.Landlords?.adminList?.({ id: adminLandlordId });
+      adminLandlordName = res?.data?.[0]?.contact_name || res?.data?.[0]?.business_name || null;
+    } catch(e) {}
+  }
+
+  injectAdminToolbar();
+}
+
+function injectAdminToolbar() {
+  if (document.getElementById('adminListingsToolbar')) return;
+
+  const statusOptions = [
+    { val:'all',         label:'All' },
+    { val:'active',      label:'Active' },
+    { val:'rented',      label:'Rented' },
+    { val:'inactive',    label:'Inactive' },
+    { val:'maintenance', label:'Maintenance' },
+    { val:'draft',       label:'Draft' },
+    { val:'paused',      label:'Paused' },
+    { val:'archived',    label:'Archived' },
+  ];
+
+  const chipsCls = s => ({
+    active:'#10b981', rented:'#3b82f6', inactive:'#6b7280',
+    maintenance:'#f59e0b', draft:'#8b5cf6', paused:'#f97316', archived:'#6b7280'
+  })[s] || '#374151';
+
+  const chips = statusOptions.map(o =>
+    `<button class="admin-status-chip${o.val===adminStatusFilter?' admin-chip-active':''}"
+       data-admin-status="${o.val}"
+       style="padding:5px 14px;border-radius:20px;border:2px solid ${o.val===adminStatusFilter?chipsCls(o.val):'#d1d5db'};
+              background:${o.val===adminStatusFilter?chipsCls(o.val)+'1a':'#fff'};
+              color:${o.val===adminStatusFilter?chipsCls(o.val):'#374151'};
+              font-size:13px;font-weight:600;cursor:pointer;transition:all 150ms ease;white-space:nowrap">
+      ${o.label}
+    </button>`
+  ).join('');
+
+  const landlordBanner = adminLandlordId
+    ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:8px 16px;font-size:13px;color:#92400e;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <i class="fas fa-filter"></i>
+        <span>Filtered by landlord${adminLandlordName?' — <strong>'+adminLandlordName+'</strong>':' (ID: '+adminLandlordId+')'}</span>
+        <a href="/listings.html" style="color:#92400e;font-weight:700;text-decoration:underline;margin-left:auto">Clear filter ×</a>
+       </div>`
+    : '';
+
+  const toolbar = document.createElement('div');
+  toolbar.id = 'adminListingsToolbar';
+  toolbar.style.cssText = 'background:#0a1628;padding:12px 0;border-bottom:3px solid #006aff;position:sticky;top:0;z-index:100;';
+  toolbar.innerHTML = `
+    <div style="max-width:1280px;margin:0 auto;padding:0 20px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="background:#006aff;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.05em">ADMIN</span>
+          <span style="color:#e2e8f0;font-size:13px;font-weight:500">All Properties</span>
+          <span style="color:#64748b;font-size:12px" id="adminPropCount">Loading…</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button id="adminCsvExportBtn"
+            style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
+            <i class="fas fa-download"></i> Export CSV
+          </button>
+          <a href="/admin/property-detail.html?new=1"
+            style="background:#006aff;color:#fff;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:6px">
+            <i class="fas fa-plus"></i> New Property
+          </a>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="adminStatusChips">
+        ${chips}
+      </div>
+      ${landlordBanner ? '<div>'+landlordBanner+'</div>' : ''}
+    </div>`;
+
+  // Insert before the listings page header
+  const pageHeader = document.querySelector('.listings-page-header');
+  if (pageHeader) pageHeader.parentNode.insertBefore(toolbar, pageHeader);
+  else document.body.prepend(toolbar);
+
+  // Wire chip clicks
+  toolbar.querySelectorAll('[data-admin-status]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      adminStatusFilter = btn.dataset.adminStatus;
+      toolbar.querySelectorAll('[data-admin-status]').forEach(b => {
+        const s = b.dataset.adminStatus;
+        const col = chipsCls(s);
+        const active = s === adminStatusFilter;
+        b.style.border = '2px solid ' + (active ? col : '#d1d5db');
+        b.style.background = active ? col + '1a' : '#fff';
+        b.style.color = active ? col : '#374151';
+        b.classList.toggle('admin-chip-active', active);
+      });
+      currentPage = 1;
+      fetchAndRender();
+    });
+  });
+
+  // Wire CSV export
+  document.getElementById('adminCsvExportBtn')?.addEventListener('click', adminCSVExport);
+}
+
+function applyAdminCardOverlays(grid, props) {
+  const STATUS_COLORS = {
+    active:'#10b981', rented:'#3b82f6', inactive:'#6b7280',
+    maintenance:'#f59e0b', draft:'#8b5cf6', paused:'#f97316', archived:'#ef4444'
+  };
+  grid.querySelectorAll('.property-card[data-id]').forEach(card => {
+    const id   = card.dataset.id;
+    const prop = props.find(p => p.id === id);
+    if (!prop) return;
+    const imgEl = card.querySelector('.property-card-img');
+    if (!imgEl) return;
+
+    // Status badge
+    const badge = document.createElement('div');
+    const col = STATUS_COLORS[prop.status] || '#6b7280';
+    badge.style.cssText = `position:absolute;top:10px;left:10px;background:${col};color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;text-transform:uppercase;letter-spacing:.05em;z-index:5;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.3)`;
+    badge.textContent = prop.status || 'unknown';
+    imgEl.style.position = 'relative';
+    imgEl.appendChild(badge);
+
+    // Admin edit button
+    const editBtn = document.createElement('a');
+    editBtn.href = `/admin/property-detail.html?id=${encodeURIComponent(id)}`;
+    editBtn.style.cssText = 'position:absolute;bottom:10px;right:10px;background:#0a1628;color:#fff;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;text-decoration:none;z-index:5;display:flex;align-items:center;gap:4px;box-shadow:0 1px 6px rgba(0,0,0,.4);opacity:.9';
+    editBtn.innerHTML = '<i class="fas fa-pen"></i> Edit';
+    editBtn.title = 'Edit this property (Admin)';
+    editBtn.addEventListener('click', e => e.stopPropagation());
+    imgEl.appendChild(editBtn);
+
+    // Featured badge
+    if (prop.featured) {
+      const fBadge = document.createElement('div');
+      fBadge.style.cssText = 'position:absolute;top:10px;right:10px;background:#f59e0b;color:#0a1628;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;text-transform:uppercase;z-index:5;letter-spacing:.06em';
+      fBadge.textContent = 'Featured';
+      imgEl.appendChild(fBadge);
+    }
+  });
+}
+
+async function adminCSVExport() {
+  const btn = document.getElementById('adminCsvExportBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting…'; }
+  try {
+    const result = await window.CP.Properties.getListingsAdmin({
+      status: adminStatusFilter,
+      landlord: adminLandlordId,
+      q: activeSearch,
+      sort: sortBy,
+      per_page: 1000,
+      page: 1,
+    });
+    if (!result.ok) throw new Error(result.error);
+    const rows = result.data.rows;
+    const headers = ['id','title','status','address','city','state','zip','monthly_rent','bedrooms','bathrooms','property_type','available_date','landlord_id','created_at','views_count','applications_count'];
+    const csvRows = [headers.join(',')];
+    rows.forEach(r => {
+      csvRows.push(headers.map(h => {
+        const v = r[h] == null ? '' : String(r[h]);
+        return v.includes(',') || v.includes('"') || v.includes('\n') ? '"' + v.replace(/"/g,'""') + '"' : v;
+      }).join(','));
+    });
+    const blob = new Blob([csvRows.join('\n')], { type:'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'properties-export.csv'; a.click();
+    URL.revokeObjectURL(url);
+    if (typeof showToast === 'function') showToast(`Exported ${rows.length} properties`, 'success');
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('Export failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Export CSV'; }
+  }
+}
+
 // ── Boot ─────────────────────────────────────────────────────────────────
 (async () => {
   try {
     await waitForCP();
+    // Admin mode detection (non-blocking — runs before first fetch)
+    await initAdminMode();
     // Refresh saved IDs from Supabase for authenticated users (non-blocking)
     window.CP.SavedProperties.getIds().then(ids => { savedIds = ids; }).catch(() => {});
     setupScrollTop();
@@ -205,23 +401,33 @@ async function fetchAndRender() {
     const fetchTimeout = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 10000)
     );
-    const result = await Promise.race([
-      CP.Properties.getListings({
-        q:            activeSearch,
-        type:         activeType,
-        beds:         activeBeds,
-        min_baths:    activeMinBaths,
-        min_rent:     activeMinRent,
-        max_rent:     activeMaxRent,
-        laundry_type: activeLaundry,
-        heating_type: activeHeating,
-        pet_type:     activePetType,
-        sort:         sortBy,
-        page:      currentPage,
-        per_page:  PER_PAGE,
-      }),
-      fetchTimeout,
-    ]);
+    const fetchPromise = isAdminMode
+      ? CP.Properties.getListingsAdmin({
+          q:       activeSearch,
+          status:  adminStatusFilter,
+          landlord: adminLandlordId,
+          beds:    activeBeds,
+          min_rent: activeMinRent,
+          max_rent: activeMaxRent,
+          sort:    sortBy,
+          page:    currentPage,
+          per_page: PER_PAGE,
+        })
+      : CP.Properties.getListings({
+          q:            activeSearch,
+          type:         activeType,
+          beds:         activeBeds,
+          min_baths:    activeMinBaths,
+          min_rent:     activeMinRent,
+          max_rent:     activeMaxRent,
+          laundry_type: activeLaundry,
+          heating_type: activeHeating,
+          pet_type:     activePetType,
+          sort:         sortBy,
+          page:      currentPage,
+          per_page:  PER_PAGE,
+        });
+    const result = await Promise.race([fetchPromise, fetchTimeout]);
 
     if (!result.ok) {
       console.error('Failed to load listings:', result.error);
@@ -240,6 +446,12 @@ async function fetchAndRender() {
     renderProperties(rows);
     renderPagination();
     if (currentView === 'map') initMap(rows);
+
+    // Update admin count display
+    if (isAdminMode) {
+      const countEl = document.getElementById('adminPropCount');
+      if (countEl) countEl.textContent = `${total.toLocaleString()} propert${total === 1 ? 'y' : 'ies'}`;
+    }
   } catch (err) {
     console.error('fetchAndRender error:', err);
     renderError(err?.message);
@@ -319,6 +531,9 @@ function renderProperties(props) {
   grid.querySelectorAll('.property-card-save').forEach(btn => {
     if (savedIds.has(btn.dataset.id)) { btn.classList.add('saved'); btn.innerHTML = '<i class="fas fa-heart"></i>'; }
   });
+
+  // Admin mode: overlay status badges and edit buttons on each card
+  if (isAdminMode) applyAdminCardOverlays(grid, props);
 
   lazyInitCarousels(grid); // P1-C: initialize carousels only as cards enter viewport
   animateCards();
@@ -425,11 +640,16 @@ function setupGridDelegation() {
   // Phase C: Navigate to the canonical slug URL using the property data
   // we already cached from the search response. Falls back to the legacy
   // ?id= URL only when the cached row is missing.
+  // Admin mode always uses ?id= so non-active listings can be loaded.
   grid.addEventListener('click', e => {
     if (e.target.closest('a, button')) return;
     const card = e.target.closest('.property-card');
     if (!card) return;
     const id = card.dataset.id;
+    if (isAdminMode) {
+      window.location.href = `/property.html?id=${encodeURIComponent(id)}`;
+      return;
+    }
     const cached = (pageProperties || []).find(p => p && p.id === id);
     const href = (window.CP && window.CP.UI && window.CP.UI.propertyUrl && cached)
       ? window.CP.UI.propertyUrl(cached)

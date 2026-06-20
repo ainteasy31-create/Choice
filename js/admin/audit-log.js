@@ -32,7 +32,7 @@
     const id = r.target_id;
     const type = r.target_type || '';
     if(type === 'property'){
-      return '<a href="property-detail.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id.slice(0,8))+'… ↗</a>';
+      return '<a href="/property.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id.slice(0,8))+'… ↗</a>';
     }
     // Default: assume application id
     return '<a href="applications.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id)+'</a>';

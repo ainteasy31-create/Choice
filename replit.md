@@ -17,14 +17,15 @@ Nationwide rental property marketplace and management platform. Static HTML/CSS/
 
 ## Key Files
 - `generate-config.js` — Build script that generates `config.js` from env vars (runs at Cloudflare build time)
-- `js/cp-api.js` — Central Supabase API client, exposes `window.CP`
+- `js/cp-api.js` — Central Supabase API client, exposes `window.CP`; includes `CP.Properties.getListingsAdmin()` for admin-mode fetches
 - `js/cp-shell.js` — Shared admin/landlord/tenant shell (toasts, bottom sheets, nav)
 - `js/cp-chrome.js` — Shared portal chrome (sidebar, appbar, tabbar, SVG sprite)
-- `js/admin/property-detail.js` — Full admin property detail + editing (1180+ lines)
-- `js/admin/properties.js` — Admin property list/cards (landlord filter banner, all 8 status chips)
+- `js/admin/property-detail.js` — Full admin property detail + editing (1180+ lines); accessed via "Edit Full" button in admin overlay, not in nav
 - `js/admin/landlords.js` — Admin landlord list + detail slide-out (admin_list_landlords RPC)
 - `js/admin/audit-log.js` — Audit log with property.* actions and smart target links
-- `js/admin/listings.js` — Listings index with View link and all 7 statuses
+- `js/admin/listings.js` — Admin listings management page
+- `js/listings.js` — Public listings page; has admin mode overlay (toolbar, status chips, CSV export, card badges)
+- `js/property.js` — Public property detail page; has admin panel overlay (status toggle, metrics, admin notes, quick links)
 - `supabase/migrations/` — Database schema history (source of truth)
 
 ## User Preferences
@@ -39,30 +40,29 @@ Nationwide rental property marketplace and management platform. Static HTML/CSS/
 - Property status values: `active`, `rented`, `inactive`, `maintenance`, `draft`, `paused`, `archived`.
 - `admin_actions` action keys for properties: `property.edit`, `property.status_change`, `property.hard_delete`, `property.photo_delete`, `property.photo_reorder`.
 
-## Admin Portal State (as of session ending May 2026)
-All admin pages reviewed and functional. Key improvements made:
+## Admin Portal State (as of session ending June 2026)
+Admin nav "Properties" tab now links to public `/listings.html` with admin-mode overlays.
+`admin/properties.html`, `js/admin/properties.js`, `js/admin/property-shared.js` have been deleted.
+`admin/property-detail.html` is kept (out of nav) — accessed via "Edit Full" button in admin overlays.
 
-### property-detail.js
-- Status select added to edit panel form (all 7 statuses; overrides inline toggle on save)
-- Saving via edit panel refreshes inline status toggle bar immediately without page reload
-- `pillCls()` extended with draft/paused/archived
-- Inline status toggle now logs `property.status_change` to `admin_actions` (with `from`/`to` metadata)
+### Admin mode on /listings.html
+- `CP.Auth.isAdmin()` checked at boot; if true, admin toolbar injected (sticky, dark)
+- Status chip strip: All / Active / Rented / Inactive / Maintenance / Draft / Paused / Archived
+- CSV export button (exports all matching rows up to 1000)
+- Landlord filter banner when `?landlord=` param active
+- Each card gets a status badge overlay + "Edit" button → `admin/property-detail.html?id=`
+- Card click → `/property.html?id=X` (always uses ID so non-active properties load)
+- `CP.Properties.getListingsAdmin()` added to cp-api.js (no status='active' filter; admin RLS fires automatically)
 
-### properties.js / properties.html
-- Landlord filter banner shown when `?landlord=` param is active; name resolved via `admin_list_landlords` RPC
-- All 8 status chips: all / active / rented / inactive / maintenance / draft / paused / archived
+### Admin mode on /property.html
+- Admin check at load time; non-active properties shown to admin without redirect
+- Sticky admin banner (dark): property title, status dropdown + Save, Edit Full / Applications / Audit Log links
+- Admin info section: metrics (views, applications, saves, inquiries) + editable admin_notes textarea
+- Status change saves via `CP.Properties.update()` and logs `property.status_change` to `admin_actions`
 
-### audit-log.js / audit-log.html
-- Property-related action labels and pill colours added
-- `targetLink()` routes property targets → `property-detail.html`, app targets → `applications.html`
-- Filter dropdown uses `<optgroup>` for Applications vs Properties, accepts 36-char UUIDs
-
-### listings.js
-- Each listing row has a "View ↗" link to `property-detail.html?id=`
-- Status quick-change form includes all 7 statuses (inactive + maintenance added)
-
-### applications.js
-- Already comprehensive: bulk actions, deep-link `?id=`, full detail panels, payment/lease/holding-fee flows
+### Cross-links updated
+- `audit-log.js` targetLink for `property` type → `/property.html?id=` (was relative `property-detail.html?id=`)
+- `landlords.js` property list links → `/property.html?id=` (was `/admin/property-detail.html?id=`)
 
 ### Other pages (all reviewed, already solid)
 - dashboard.js: `dashboard_pulse` RPC + legacy fallback, KPI strip, action queue
@@ -74,4 +74,5 @@ All admin pages reviewed and functional. Key improvements made:
 - deposit-accounting.js: Full deduction editor, dry-run recompute, letter PDF generation
 - watermark-review.js: Per-photo watermark scan + bulk apply
 - state-law.js: State law reference table (sortable, searchable)
-- landlords.js: admin_list_landlords RPC, verify/unverify, property list link
+- landlords.js: admin_list_landlords RPC, verify/unverify, property list link → /property.html
+- property-detail.js: Status select, photo reorder/delete, geocode, duplicate, full edit panel

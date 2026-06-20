@@ -212,7 +212,7 @@
             + '<div class="list-row" style="padding:10px 0">'
             +   '<div class="list-row-inner">'
             +     '<div class="row-body">'
-            +       '<div class="row-title" style="font-size:.88rem"><a href="/admin/property-detail.html?id='+esc(p.id)+'" style="color:inherit;text-decoration:none">'+esc(p.title||'Untitled')+'</a></div>'
+            +       '<div class="row-title" style="font-size:.88rem"><a href="/property.html?id='+esc(p.id)+'" style="color:inherit;text-decoration:none">'+esc(p.title||'Untitled')+'</a></div>'
             +       '<div class="row-sub">'+esc(p.address||'—')+'</div>'
             +     '</div>'
             +     '<div class="row-meta" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
