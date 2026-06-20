@@ -112,9 +112,9 @@
     if (toggle) { toggle.outerHTML = renderStatusBar(newStatus); bindStatusToggle(); }
     S.toast('Status updated to ' + newStatus, 'success');
     // Audit log (non-blocking)
-    CP.sb().auth.getUser().then(({ data: ud }) => {
+    CP.Auth.getSession().then(({ data }) => {
       CP.sb().from('admin_actions').insert([{
-        user_id:     ud?.user?.id || null,
+        user_id:     data?.session?.user?.id || null,
         action:      'property.status_change',
         target_type: 'property',
         target_id:   propId,
@@ -1235,9 +1235,9 @@
         form.elements.lng.value = lng.toFixed(6);
         S.toast('Coordinates updated!', 'success');
         // Audit log (non-blocking)
-        CP.sb().auth.getUser().then(({ data: ud }) => {
+        CP.Auth.getSession().then(({ data }) => {
           CP.sb().from('admin_actions').insert([{
-            user_id:     ud?.user?.id || null,
+            user_id:     data?.session?.user?.id || null,
             action:      'property.geocode',
             target_type: 'property',
             target_id:   String(propId),
@@ -1522,8 +1522,8 @@
     closePanel();
 
     // ── Real-diff audit log (non-blocking) ──
-    CP.sb().auth.getUser().then(({ data: ud }) => {
-      const uid = ud && ud.user ? ud.user.id : null;
+    CP.Auth.getSession().then(({ data }) => {
+      const uid = data?.session?.user?.id || null;
       const orig = _editOriginal || {};
       const changes = {};
       const skip = new Set(['updated_at']);
@@ -1805,9 +1805,9 @@
         }).catch(() => {});
       }
       // Audit log (non-blocking)
-      CP.sb().auth.getUser().then(({ data: ud }) => {
+      CP.Auth.getSession().then(({ data }) => {
         CP.sb().from('admin_actions').insert([{
-          user_id:     ud?.user?.id || null,
+          user_id:     data?.session?.user?.id || null,
           action:      'property.photo_delete',
           target_type: 'property',
           target_id:   String(propId),
@@ -1958,9 +1958,9 @@
       if (successCnt > 0) {
         S.toast(`${successCnt} photo${successCnt > 1 ? 's' : ''} uploaded!`, 'success');
         // Audit log (non-blocking)
-        CP.sb().auth.getUser().then(({ data: ud }) => {
+        CP.Auth.getSession().then(({ data }) => {
           CP.sb().from('admin_actions').insert([{
-            user_id:     ud?.user?.id || null,
+            user_id:     data?.session?.user?.id || null,
             action:      'property.photo_upload',
             target_type: 'property',
             target_id:   String(propId),
@@ -2102,9 +2102,9 @@
 
     S.toast('Photo order saved!', 'success');
     // Audit log (non-blocking)
-    CP.sb().auth.getUser().then(({ data: ud }) => {
+    CP.Auth.getSession().then(({ data }) => {
       CP.sb().from('admin_actions').insert([{
-        user_id:     ud?.user?.id || null,
+        user_id:     data?.session?.user?.id || null,
         action:      'property.photo_reorder',
         target_type: 'property',
         target_id:   String(propId),
