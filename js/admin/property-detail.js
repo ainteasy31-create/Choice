@@ -503,14 +503,20 @@
 
     // ── Watermark ──
     const wmPhotos = _photos.filter(ph => ph.watermark_status && ph.watermark_status !== 'applied');
+    const unwmPhotos = _photos.filter(ph => !ph.watermark_status || ph.watermark_status === 'applied' || ph.watermark_status === 'unscanned');
     let wmHtml = '';
-    if (wmPhotos.length) {
+    if (_photos.length) {
       const flagged = wmPhotos.filter(ph => ph.watermark_status === 'watermark' || ph.watermark_status === 'branding').length;
       wmHtml = `<div class="pd-section">
         <div class="pd-section-title">Watermark scan</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          ${flagged > 0 ? `<span class="pill pill-warning">${flagged} photo${flagged===1?'':'s'} flagged</span>` : '<span class="pill pill-success">All clear</span>'}
-          <a class="btn btn-ghost btn-sm" href="/admin/watermark-review.html?property_id=${esc(propId)}" style="font-size:.72rem">Open review</a>
+          ${wmPhotos.length > 0
+            ? (flagged > 0 ? `<span class="pill pill-warning">${flagged} photo${flagged===1?'':'s'} flagged</span>` : '<span class="pill pill-success">All clear</span>')
+            : '<span class="pill pill-muted">Not scanned yet</span>'}
+          <a class="btn btn-ghost btn-sm" href="/admin/watermark-review.html?property_id=${esc(propId)}" style="font-size:.72rem">Scan &amp; review</a>
+          <button class="btn btn-ghost btn-sm" id="pd-btn-apply-wm" style="font-size:.72rem" title="Apply watermark to all photos via ImageKit">
+            <i class="fas fa-droplet"></i> Apply watermark
+          </button>
         </div>
       </div>`;
     }
@@ -641,6 +647,33 @@
 
     // Manage photos button
     document.getElementById('pd-btn-photos')?.addEventListener('click', () => openPhotoManager());
+
+    // Apply watermark button — calls imagekit-watermark edge fn for every photo without a confirmed-clean status
+    document.getElementById('pd-btn-apply-wm')?.addEventListener('click', async () => {
+      const btn = document.getElementById('pd-btn-apply-wm');
+      if (!btn) return;
+      const photosToWm = _photos.filter(ph => ph.url);
+      if (!photosToWm.length) { S.toast('No photos to watermark.', 'info'); return; }
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying…';
+      let ok = 0, fail = 0;
+      const token = await CP.Auth.getAccessToken().catch(() => null);
+      if (!token) { S.toast('Session expired — please sign in again.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-droplet"></i> Apply watermark'; return; }
+      for (const ph of photosToWm) {
+        try {
+          const resp = await fetch((window.CONFIG?.SUPABASE_URL || '') + '/functions/v1/imagekit-watermark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': window.CONFIG?.SUPABASE_ANON_KEY || '', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ url: ph.url, file_id: ph.file_id || null, property_id: propId }),
+          });
+          if (resp.ok) ok++; else fail++;
+        } catch (_) { fail++; }
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-droplet"></i> Apply watermark';
+      if (ok)   S.toast(`Watermark applied to ${ok} photo${ok===1?'':'s'}.`, 'success');
+      if (fail) S.toast(`${fail} photo${fail===1?'':'s'} failed.`, 'error');
+    });
 
     // Upload photos shortcut — opens photo manager focused on the upload zone
     document.getElementById('pd-btn-upload')?.addEventListener('click', () => openPhotoManager(true));
@@ -787,6 +820,17 @@
               <label class="pd-edit-label">Unit number
                 <input class="pd-edit-input" name="unit_number" type="text" value="${esc(p.unit_number || '')}" placeholder="Apt 4B">
               </label>
+              <div class="pd-edit-row">
+                <label class="pd-edit-label">County
+                  <input class="pd-edit-input" name="county" type="text" value="${esc(p.county || '')}" placeholder="Los Angeles County">
+                </label>
+                <label class="pd-edit-label">Neighborhood
+                  <input class="pd-edit-input" name="neighborhood" type="text" value="${esc(p.neighborhood || '')}" placeholder="Silver Lake">
+                </label>
+              </div>
+              <label class="pd-edit-label">Location context
+                <input class="pd-edit-input" name="location_context" type="text" value="${esc(p.location_context || '')}" placeholder="Near downtown, 5 min walk to transit">
+              </label>
               <label class="pd-edit-label">Status
                 <span class="pd-edit-hint">Changes here override the inline status toggle</span>
                 <select class="pd-edit-input" name="status">
@@ -915,6 +959,22 @@
                 </label>
                 <label class="pd-edit-label">Cooling
                   ${_makeSelect('cooling_type', COOLING_OPTIONS, p.cooling_type || '')}
+                </label>
+              </div>
+              <div class="pd-edit-row">
+                <label class="pd-edit-label">Basement
+                  <select class="pd-edit-input" name="has_basement">
+                    <option value="" ${p.has_basement === null || p.has_basement === undefined ? 'selected' : ''}>—</option>
+                    <option value="true"  ${p.has_basement === true  ? 'selected' : ''}>Yes</option>
+                    <option value="false" ${p.has_basement === false ? 'selected' : ''}>No</option>
+                  </select>
+                </label>
+                <label class="pd-edit-label">Central air
+                  <select class="pd-edit-input" name="has_central_air">
+                    <option value="" ${p.has_central_air === null || p.has_central_air === undefined ? 'selected' : ''}>—</option>
+                    <option value="true"  ${p.has_central_air === true  ? 'selected' : ''}>Yes</option>
+                    <option value="false" ${p.has_central_air === false ? 'selected' : ''}>No</option>
+                  </select>
                 </label>
               </div>
               <label class="pd-edit-label">Lease terms <span class="pd-edit-hint">comma-separated</span>
@@ -1287,6 +1347,17 @@
       S.toast('Longitude must be between −180 and 180', 'error'); return;
     }
 
+    // ── Virtual tour URL validation ──
+    const vtUrl = get('virtual_tour_url');
+    if (vtUrl) {
+      try { new URL(vtUrl); } catch (_) {
+        S.toast('Virtual tour URL is not a valid URL (must start with https://)', 'error'); return;
+      }
+      if (!vtUrl.startsWith('http://') && !vtUrl.startsWith('https://')) {
+        S.toast('Virtual tour URL must start with http:// or https://', 'error'); return;
+      }
+    }
+
     const saveBtn = document.getElementById('pd-edit-save');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
 
@@ -1359,6 +1430,11 @@
       square_footage:     getNum('square_footage'),
       lot_size_sqft:      getNum('lot_size_sqft'),
       description:        get('description') || null,
+      county:             get('county') || null,
+      neighborhood:       get('neighborhood') || null,
+      location_context:   get('location_context') || null,
+      has_basement:       getBool('has_basement'),
+      has_central_air:    getBool('has_central_air'),
       virtual_tour_url:   get('virtual_tour_url') || null,
       monthly_rent:       getNum('monthly_rent'),
       security_deposit:   getNum('security_deposit'),
