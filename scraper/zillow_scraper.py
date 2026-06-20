@@ -165,6 +165,48 @@ def _make_session():
     return s
 
 
+def _warm_session(session, verbose=False):
+    """
+    Establish Zillow session cookies by visiting the homepage then the
+    for-rent search page before hitting any detail pages.
+
+    Without this warm-up, DataDome (Zillow's bot-protection) returns 403
+    on detail pages because no session cookie chain exists.
+
+    Steps:
+      1. GET https://www.zillow.com/           (sec-fetch-site: none)
+      2. Wait 3-5 s
+      3. GET https://www.zillow.com/homes/for_rent/   (sec-fetch-site: same-origin)
+      4. Wait 2-4 s
+    """
+    pages = [
+        ("https://www.zillow.com/", "none"),
+        ("https://www.zillow.com/homes/for_rent/", "same-origin"),
+    ]
+    for url, fetch_site in pages:
+        try:
+            hdrs = {
+                "User-Agent":      random.choice(_USER_AGENTS),
+                "Referer":         "https://www.google.com/" if fetch_site == "none" else "https://www.zillow.com/",
+                "sec-fetch-site":  fetch_site,
+                "sec-fetch-dest":  "document",
+                "sec-fetch-mode":  "navigate",
+                "sec-fetch-user":  "?1",
+                "Cache-Control":   "max-age=0",
+            }
+            resp = session.get(url, headers=hdrs, timeout=20, allow_redirects=True)
+            if verbose:
+                print("  [warmup] " + url + " -> " + str(resp.status_code)
+                      + "  cookies=" + str(len(session.cookies)))
+        except Exception as e:
+            if verbose:
+                print("  [warmup] " + url + " failed: " + str(e)[:60])
+        delay = random.uniform(3.0, 5.0)
+        if verbose:
+            print("  [warmup] Waiting " + str(round(delay, 1)) + "s ...")
+        time.sleep(delay)
+
+
 def _rotate_ua(session):
     """Swap the session's User-Agent to a new random value."""
     session.headers["User-Agent"] = random.choice(_USER_AGENTS)
@@ -1715,6 +1757,12 @@ def scrape_urls(urls, verbose=True):
 
     if verbose:
         print("  [Zillow] Direct URL scrape: " + str(total) + " listing(s)")
+        print("  [Zillow] Warming up session (homepage + search page) to establish cookies ...")
+
+    # CRITICAL: warm up session before hitting any detail pages.
+    # Without cookies from a prior Zillow page visit, DataDome returns 403
+    # on every detail page regardless of IP or User-Agent.
+    _warm_session(session, verbose=verbose)
 
     for i, raw_url in enumerate(urls):
         # Strip UTM params / query string -- they don't affect the page content
