@@ -259,6 +259,14 @@ select.pd-edit-input{cursor:pointer}
 
 /* ── Edit drawer swipe support ── */
 .pd-edit-drawer{touch-action:pan-y}
+
+/* ── Metrics strip (days listed / apps / inquiries / views) ── */
+.pd-metrics-strip{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;margin-bottom:18px}
+.pd-metric{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 6px;border-right:1px solid var(--border);gap:2px;min-width:0}
+.pd-metric:last-child{border-right:none}
+.pd-metric-val{font-size:1.15rem;font-weight:800;color:var(--text);line-height:1}
+.pd-metric-lbl{font-size:.6rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
+@media(max-width:480px){.pd-metric-val{font-size:.95rem}.pd-metric{padding:8px 4px}}
 </style>
 </head>
 <body data-page-title="Property Detail" data-page-sub="Loading…">
