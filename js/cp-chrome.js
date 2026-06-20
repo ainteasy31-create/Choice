@@ -21,7 +21,7 @@
    Auth pages (login/register/lease-sign) should NOT load this script —
    they use the .auth-shell layout from cp-design.css instead.
 
-   Exposes: window.CPChrome  (and window.AdminChrome alias).
+   Exposes: window.CPChrome
    ===================================================================== */
 (function (window, document) {
   'use strict';
@@ -289,11 +289,14 @@
     appEl.insertAdjacentHTML('beforeend', buildTabbar(cfg));
 
     body.dataset.cpChrome    = 'mounted';
-    body.dataset.adminChrome = 'mounted'; // backward-compat for any code that checks this
 
-    function wire() {
+    function wire(attempt) {
+      attempt = attempt || 0;
       const S = window.CPShell || window.AdminShell;
-      if (!S) return;
+      if (!S) {
+        if (attempt < 50) setTimeout(() => wire(attempt + 1), 50);
+        return;
+      }
       S.on('refresh', () => location.reload());
       S.on('open-more', (target, e) => {
         e.preventDefault();
@@ -301,8 +304,7 @@
         S.openSheet({ title: 'More', body: moreSheetBody(cfg) });
       });
     }
-    if (window.CPShell || window.AdminShell) wire();
-    else setTimeout(wire, 0);
+    setTimeout(wire, 0);
   }
 
   if (document.readyState === 'loading') {
@@ -312,5 +314,4 @@
   }
 
   window.CPChrome    = { mount: mount, PORTAL: PORTAL };
-  window.AdminChrome = window.CPChrome; // backward-compat (removed in Phase 8)
 })(window, document);
