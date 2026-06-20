@@ -2,15 +2,17 @@
   'use strict';
 
   let S;            // AdminShell
-  let _status = 'scraped';
-  let _page   = 0;
-  const PAGE  = 40;
+  let _status   = 'scraped';
+  let _source   = null;    // null = all, 'zillow', 'realtor'
+  let _page     = 0;
+  const PAGE    = 40;
   let _hasMore  = false;
   let _loading  = false;
-  let _pageData = [];  // current page of listings (for card→row lookup)
+  let _pageData = [];   // all fetched listings (unfiltered by source)
   let _current  = null; // listing open in panel
   let _dirty    = {};   // unsaved field changes
   let _landlords = [];  // cache for publish landlord picker
+  let _selected  = new Set(); // IDs of selected cards for bulk actions
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,33 @@
   function thumbUrl(l){
     const imgs = parseJSON(l.original_image_urls);
     return (imgs && imgs.length) ? imgs[0] : null;
+  }
+
+  // Returns _pageData filtered by the active source chip
+  function visibleListings(){
+    if(!_source) return _pageData;
+    return _pageData.filter(l => (l.source || '') === _source);
+  }
+
+  // Sync the bulk action bar visibility + count
+  function updateBulkBar(){
+    const bar   = document.getElementById('pl-bulk-bar');
+    const count = document.getElementById('pl-bulk-count');
+    const chkAll = document.getElementById('pl-select-all');
+    if(!bar) return;
+    const n = _selected.size;
+    if(n === 0){
+      bar.classList.remove('visible');
+    } else {
+      bar.classList.add('visible');
+      if(count) count.textContent = n + ' selected';
+    }
+    // Keep select-all checkbox in sync
+    if(chkAll){
+      const publishable = visibleListings().filter(l => l.status !== 'published' && l.status !== 'archived');
+      chkAll.indeterminate = n > 0 && n < publishable.length;
+      chkAll.checked = publishable.length > 0 && publishable.every(l => _selected.has(l.id));
+    }
   }
 
   // ── Data ────────────────────────────────────────────────────────────────────
@@ -74,13 +103,19 @@
     const missing = parseJSON(l.missing_fields) || [];
     const isPublished = l.status === 'published';
     const isArchived  = l.status === 'archived';
+    const isChecked   = _selected.has(l.id);
 
-    return `<div class="pl-card" data-pl-id="${S.esc(l.id)}" role="button" tabindex="0" aria-label="${S.esc((l.address||'Listing') + ', ' + (l.city||''))}">
-      ${thumb
-        ? `<img class="pl-thumb" src="${S.esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-        : ''}
-      <div class="pl-thumb-placeholder" style="${thumb ? 'display:none' : ''}">
-        <svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-listings"/></svg>
+    return `<div class="pl-card${isChecked ? ' pl-card-selected' : ''}" data-pl-id="${S.esc(l.id)}" role="button" tabindex="0" aria-label="${S.esc((l.address||'Listing') + ', ' + (l.city||''))}">
+      <div class="pl-thumb-wrap">
+        ${thumb
+          ? `<img class="pl-thumb" src="${S.esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : ''}
+        <div class="pl-thumb-placeholder" style="${thumb ? 'display:none' : ''}">
+          <svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-listings"/></svg>
+        </div>
+        <label class="pl-card-check" onclick="event.stopPropagation()" title="Select">
+          <input type="checkbox" class="pl-check" data-id="${S.esc(l.id)}" ${isChecked ? 'checked' : ''} aria-label="Select listing">
+        </label>
       </div>
       <div class="pl-body">
         <div class="pl-addr">${S.esc(l.address || '(no address)')}${l.unit_number ? ' #'+l.unit_number : ''}</div>
@@ -96,8 +131,7 @@
       <div class="pl-actions" onclick="event.stopPropagation()">
         ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-outline pl-pub-btn" data-id="${S.esc(l.id)}" title="Publish to site">Publish →</button>` : ''}
         ${!isArchived ? `<button class="btn btn-sm btn-ghost pl-arc-btn" data-id="${S.esc(l.id)}" title="Archive">Archive</button>` : ''}
-      </div>
-    </div>`;
+      </div></div>`;
   }
 
   function renderList(listings, append){
@@ -108,7 +142,7 @@
         : `<div class="pl-empty">
              <svg class="i"><use href="#i-check"/></svg>
              <h3>Nothing here</h3>
-             <p>No listings with status "${_status}" in the pipeline.</p>
+             <p>No listings with status "${_status}"${_source ? ' from ' + _source : ''} in the pipeline.</p>
            </div>`;
     } else {
       listings.forEach(l => wrap.insertAdjacentHTML('beforeend', renderCard(l)));
@@ -122,7 +156,7 @@
     const imgs = parseJSON(l.original_image_urls) || [];
     if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
     return `<div class="pl-photo-strip">${imgs.slice(0,12).map(u => `<img src="${S.esc(u)}" alt="" loading="lazy">`).join('')}</div>
-    <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source — upload to ImageKit after publishing via the property edit page.</div>`;
+    <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source — transferred to ImageKit automatically on publish.</div>`;
   }
 
   function missingTags(l){
@@ -277,15 +311,12 @@
       panel.querySelector('#pl-close-btn').addEventListener('click', closePanel);
     });
 
-    // Save
     const saveBtn = panel.querySelector('.pl-save-btn');
     if(saveBtn) saveBtn.addEventListener('click', () => doSave(l.id));
 
-    // Archive from panel
     const arcBtn = panel.querySelector('.pl-arc-btn-panel');
     if(arcBtn) arcBtn.addEventListener('click', () => doArchive(l.id));
 
-    // Publish from panel
     const pubBtn = panel.querySelector('.pl-pub-btn-panel');
     if(pubBtn) pubBtn.addEventListener('click', () => doPublish(l.id));
   }
@@ -354,7 +385,6 @@
     const res = typeof data === 'string' ? JSON.parse(data) : data;
     if(!res?.ok){ S.toast('Save failed: ' + (res?.error||'unknown'), 'error'); return; }
     S.toast('Saved', 'success');
-    // Update local listing record and refresh card
     Object.assign(_current, patch);
     if(_current.status === 'scraped') _current.status = 'edited';
     refreshCard(id);
@@ -374,11 +404,35 @@
     fetchCounts().catch(()=>{});
   }
 
+  // Transfer source photos to ImageKit in the background after publish
+  async function doTransferPhotos(pipelineId, propertyId){
+    const listing = _pageData.find(l => l.id === pipelineId);
+    const urls = listing ? (parseJSON(listing.original_image_urls) || []) : [];
+    if(!urls.length) return;
+
+    S.toast(`Transferring ${Math.min(urls.length, 20)} photo${urls.length !== 1 ? 's' : ''} to ImageKit…`, 'info');
+
+    try {
+      const { data, error } = await CP.sb().functions.invoke('import-pipeline-photos', {
+        body: { pipeline_id: pipelineId, property_id: propertyId }
+      });
+      if(error) throw error;
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+      if(res?.transferred > 0){
+        S.toast(`${res.transferred} photo${res.transferred !== 1 ? 's' : ''} added to ImageKit ✓`, 'success');
+      } else if(res?.skipped > 0){
+        S.toast('Photos could not be transferred — add manually in property edit', 'info');
+      }
+    } catch(e){
+      console.warn('[pipeline] photo transfer failed', e);
+      // Non-fatal — property is published, photos can be added manually
+    }
+  }
+
   async function doPublish(id){
-    // Check required fields first
     const panel = document.getElementById('pl-panel');
     const required = ['pf-title','pf-address','pf-city','pf-state','pf-zip'];
-    let missing = [];
+    const missing = [];
     required.forEach(fid => {
       const el = panel && panel.querySelector('#'+fid);
       if(el && !el.value.trim()) missing.push(fid.replace('pf-',''));
@@ -391,16 +445,15 @@
     // Save any unsaved changes first
     const patch = collectPatch();
     if(Object.keys(patch).length){
-      const { data: sd, error: se } = await CP.sb().rpc('pipeline_save', { p_id: id, p_patch: patch });
+      const { error: se } = await CP.sb().rpc('pipeline_save', { p_id: id, p_patch: patch });
       if(se){ S.toast('Could not save changes before publishing: ' + se.message, 'error'); return; }
     }
 
-    // Confirm
     const l = _current || {};
     const desc = [l.address, l.city, l.state].filter(Boolean).join(', ');
     const ok = await S.confirm(
       'Publish "' + desc + '" as a draft?',
-      'A draft property will be created in your listings. You can then add photos, set to Active, and assign a landlord from the property edit page.'
+      'A draft property will be created in your listings. Photos will be transferred to ImageKit automatically.'
     );
     if(!ok) return;
 
@@ -414,17 +467,73 @@
     if(!res?.ok){ S.toast('Publish failed: ' + (res?.error||'unknown'), 'error'); return; }
 
     const propId = res.choice_property_id;
-    S.toast('Published! Property ID: ' + propId, 'success');
+    S.toast('Published! Opening edit page…', 'success');
     removeCard(id);
     closePanel();
     fetchCounts().catch(()=>{});
 
-    // Offer to open edit page
+    // Transfer photos in background (non-blocking)
+    doTransferPhotos(id, propId);
+
+    // Open edit page
     setTimeout(() => {
-      if(confirm('Open the new listing to add photos and activate it?')){
-        window.open('/admin/property-detail.html?id=' + encodeURIComponent(propId), '_blank');
+      window.open('/admin/property-detail.html?id=' + encodeURIComponent(propId), '_blank');
+    }, 400);
+  }
+
+  async function doBulkPublish(){
+    const ids = [..._selected];
+    if(!ids.length) return;
+
+    // Only publish non-published, non-archived
+    const publishable = ids.filter(id => {
+      const l = _pageData.find(x => x.id === id);
+      return l && l.status !== 'published' && l.status !== 'archived';
+    });
+
+    if(!publishable.length){
+      S.toast('No publishable listings selected (already published or archived)', 'info');
+      return;
+    }
+
+    const ok = await S.confirm(
+      `Publish ${publishable.length} listing${publishable.length !== 1 ? 's' : ''} as drafts?`,
+      'Each will become a draft property. Photos are not auto-transferred for bulk publish — add them individually from each property\'s edit page.'
+    );
+    if(!ok) return;
+
+    const bar = document.getElementById('pl-bulk-pub');
+    if(bar){ bar.disabled = true; bar.textContent = 'Publishing…'; }
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for(const id of publishable){
+      try {
+        const { data, error } = await CP.sb().rpc('pipeline_publish', { p_id: id, p_landlord_id: null });
+        if(error) throw error;
+        const res = typeof data === 'string' ? JSON.parse(data) : data;
+        if(!res?.ok) throw new Error(res?.error || 'unknown');
+        succeeded++;
+        removeCard(id);
+        _selected.delete(id);
+      } catch(e){
+        console.error('[pipeline] bulk publish failed for', id, e);
+        failed++;
       }
-    }, 300);
+    }
+
+    if(bar){ bar.disabled = false; bar.textContent = 'Publish all →'; }
+    updateBulkBar();
+    fetchCounts().catch(()=>{});
+
+    if(succeeded > 0 && failed === 0){
+      S.toast(`${succeeded} listing${succeeded !== 1 ? 's' : ''} published as drafts ✓`, 'success');
+    } else if(succeeded > 0){
+      S.toast(`${succeeded} published, ${failed} failed`, 'info');
+    } else {
+      S.toast('Bulk publish failed — try again or publish individually', 'error');
+    }
   }
 
   // ── Card DOM helpers ─────────────────────────────────────────────────────────
@@ -432,6 +541,8 @@
   function removeCard(id){
     const el = document.querySelector(`.pl-card[data-pl-id="${CSS.escape(id)}"]`);
     if(el) el.remove();
+    // Remove from page data too
+    _pageData = _pageData.filter(l => l.id !== id);
     const list = document.getElementById('pl-list');
     if(list && !list.querySelector('.pl-card')){
       list.innerHTML = `<div class="pl-empty"><svg class="i"><use href="#i-check"/></svg><h3>All done</h3><p>No more listings with this status.</p></div>`;
@@ -457,13 +568,30 @@
       };
       card.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); card.click(); } };
     });
+
     // Publish buttons on cards
     document.querySelectorAll('.pl-pub-btn').forEach(btn => {
       btn.onclick = e => { e.stopPropagation(); doPublish(btn.dataset.id); };
     });
+
     // Archive buttons on cards
     document.querySelectorAll('.pl-arc-btn').forEach(btn => {
       btn.onclick = e => { e.stopPropagation(); doArchive(btn.dataset.id); };
+    });
+
+    // Selection checkboxes
+    document.querySelectorAll('.pl-check').forEach(chk => {
+      chk.onchange = e => {
+        const id = chk.dataset.id;
+        if(chk.checked){
+          _selected.add(id);
+        } else {
+          _selected.delete(id);
+        }
+        const card = chk.closest('.pl-card');
+        if(card) card.classList.toggle('pl-card-selected', chk.checked);
+        updateBulkBar();
+      };
     });
   }
 
@@ -477,8 +605,60 @@
       chip.classList.add('active');
       _status = chip.dataset.plStatus;
       _page   = 0;
+      _selected.clear();
+      updateBulkBar();
       load(false);
     });
+  }
+
+  function wireSourceChips(){
+    const row = document.getElementById('source-chips');
+    if(!row) return;
+    row.addEventListener('click', e => {
+      const chip = e.target.closest('.chip');
+      if(!chip || !('plSource' in chip.dataset)) return;
+      row.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      _source = chip.dataset.plSource || null;
+      _selected.clear();
+      updateBulkBar();
+      // Re-render from cached page data — no server round trip
+      renderList(visibleListings(), false);
+      wireCardEvents();
+    });
+  }
+
+  function wireBulkBar(){
+    const selectAll = document.getElementById('pl-select-all');
+    if(selectAll){
+      selectAll.addEventListener('change', () => {
+        const publishable = visibleListings().filter(l => l.status !== 'published' && l.status !== 'archived');
+        if(selectAll.checked){
+          publishable.forEach(l => _selected.add(l.id));
+        } else {
+          publishable.forEach(l => _selected.delete(l.id));
+        }
+        // Re-render to reflect checkbox states
+        renderList(visibleListings(), false);
+        wireCardEvents();
+        updateBulkBar();
+      });
+    }
+
+    const clearBtn = document.getElementById('pl-bulk-clear');
+    if(clearBtn){
+      clearBtn.addEventListener('click', () => {
+        _selected.clear();
+        renderList(visibleListings(), false);
+        wireCardEvents();
+        updateBulkBar();
+      });
+    }
+
+    const pubBtn = document.getElementById('pl-bulk-pub');
+    if(pubBtn){
+      pubBtn.addEventListener('click', () => doBulkPublish());
+    }
   }
 
   function wireBackdrop(){
@@ -493,8 +673,12 @@
       try {
         const more = await fetchListings(_status, _page);
         _pageData.push(...more);
-        renderList(more, true);
-        wireCardEvents();
+        // Only append the subset matching the active source filter
+        const visible = _source ? more.filter(l => (l.source || '') === _source) : more;
+        if(visible.length){
+          renderList(visible, true);
+          wireCardEvents();
+        }
       } catch(e){
         S.toast('Failed to load more', 'error');
         _page--;
@@ -518,7 +702,7 @@
         fetchCounts()
       ]);
       _pageData = listings;
-      renderList(listings, false);
+      renderList(visibleListings(), false);
       wireCardEvents();
     } catch(e){
       console.error('[pipeline] load failed', e);
@@ -536,8 +720,10 @@
       const ok = await S.requireAdmin();
       if(!ok) return;
       wireChips();
+      wireSourceChips();
       wireBackdrop();
       wireLoadMore();
+      wireBulkBar();
       load(false);
     })
     .catch(err => console.error('[pipeline] boot failed', err));

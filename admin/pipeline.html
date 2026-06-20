@@ -21,23 +21,43 @@
 <script defer src="/js/cp-chrome.js?v=__BUILD_VERSION__"></script>
 <script defer src="/js/cp-shell.js?v=__BUILD_VERSION__"></script>
 <style>
-  /* ── Filter bar ─────────────────────────────────────────────────────────── */
-  .pl-toolbar{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;margin-bottom:var(--sp-4)}
-  .pl-toolbar .chip-row{flex:1;min-width:0}
+  /* ── Filter toolbar ──────────────────────────────────────────────────────── */
+  .pl-toolbar{display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-2);margin-bottom:var(--sp-4)}
+  .pl-toolbar .chip-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   .chip-count{display:inline-flex;align-items:center;justify-content:center;
     background:rgba(255,255,255,.18);color:inherit;font-size:.65rem;font-weight:700;
     min-width:18px;height:18px;border-radius:9px;padding:0 5px;margin-left:5px;vertical-align:middle}
   .chip.active .chip-count{background:rgba(255,255,255,.28)}
 
+  /* ── Source chip row ─────────────────────────────────────────────────────── */
+  .source-chip-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .source-filter-label{font-size:.68rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.05em;color:var(--muted-2);white-space:nowrap}
+  .chip-sm{padding:3px 11px;font-size:.72rem;height:auto;line-height:1.5}
+
   /* ── Pipeline card ──────────────────────────────────────────────────────── */
   .pl-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
     display:grid;grid-template-columns:88px 1fr auto;gap:0;overflow:hidden;cursor:pointer;
-    transition:border-color .15s,box-shadow .15s}
+    position:relative;transition:border-color .15s,box-shadow .15s}
   .pl-card:hover{border-color:var(--brand);box-shadow:0 2px 12px rgba(0,0,0,.12)}
+  .pl-card.pl-card-selected{border-color:var(--brand);background:rgba(var(--brand-rgb,99,102,241),.04)}
   .pl-card + .pl-card{margin-top:var(--sp-2)}
+
+  /* ── Thumb wrapper + checkbox overlay ───────────────────────────────────── */
+  .pl-thumb-wrap{position:relative;width:88px;flex-shrink:0}
   .pl-thumb{width:88px;height:88px;object-fit:cover;display:block;background:var(--surface-2)}
   .pl-thumb-placeholder{width:88px;height:88px;display:flex;align-items:center;justify-content:center;
     background:var(--surface-2);color:var(--muted-2)}
+  .pl-card-check{position:absolute;top:6px;left:6px;z-index:2;
+    display:flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:5px;
+    background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+    cursor:pointer;transition:background .15s}
+  .pl-card-check:hover{background:rgba(0,0,0,.65)}
+  .pl-card-check input[type="checkbox"]{
+    width:14px;height:14px;cursor:pointer;
+    accent-color:var(--brand);margin:0}
+
   .pl-body{padding:10px 14px;display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
   .pl-addr{font-size:.88rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .pl-meta{font-size:.75rem;color:var(--muted-2)}
@@ -115,14 +135,37 @@
   .pl-source-link:hover{text-decoration:underline}
 
   /* ── Load more ──────────────────────────────────────────────────────────── */
-  #load-more-wrap{text-align:center;padding:20px 0}
+  #load-more-wrap{text-align:center;padding:20px 0 80px}
+
+  /* ── Bulk action bar (sticky bottom) ────────────────────────────────────── */
+  .pl-bulk-bar{
+    position:fixed;bottom:0;left:0;right:0;z-index:300;
+    display:flex;align-items:center;gap:12px;
+    padding:14px 20px;
+    background:var(--brand,#6366f1);color:#fff;
+    box-shadow:0 -4px 24px rgba(0,0,0,.2);
+    transform:translateY(100%);
+    transition:transform .25s cubic-bezier(.4,0,.2,1);
+  }
+  .pl-bulk-bar.visible{transform:translateY(0)}
+  .pl-bulk-bar .btn-bulk-clear{
+    color:#fff;border:1px solid rgba(255,255,255,.35);
+    background:transparent;padding:6px 14px;border-radius:var(--r-sm);
+    font-size:.8rem;font-weight:600;cursor:pointer;white-space:nowrap}
+  .pl-bulk-bar .btn-bulk-clear:hover{background:rgba(255,255,255,.12)}
+  .pl-bulk-bar .btn-bulk-pub{
+    background:#fff;color:var(--brand,#6366f1);border:none;
+    padding:7px 16px;border-radius:var(--r-sm);
+    font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap}
+  .pl-bulk-bar .btn-bulk-pub:hover{opacity:.92}
+  .pl-bulk-bar .btn-bulk-pub:disabled{opacity:.6;cursor:not-allowed}
 </style>
 </head>
 <body data-page-title="Pipeline" data-page-sub="Scraped listings for review">
 <div class="app">
   <main class="app-content">
 
-    <!-- Toolbar: filter chips + search -->
+    <!-- Toolbar: status filter chips + source filter chips -->
     <div class="pl-toolbar">
       <div class="chip-row" id="status-chips" role="tablist" aria-label="Filter by status">
         <button class="chip active" data-pl-status="scraped">New <span class="chip-count" id="cnt-scraped">…</span></button>
@@ -131,22 +174,28 @@
         <button class="chip" data-pl-status="published">Published <span class="chip-count" id="cnt-published">…</span></button>
         <button class="chip" data-pl-status="archived">Archived <span class="chip-count" id="cnt-archived">…</span></button>
       </div>
+      <div class="source-chip-row" id="source-chips" role="tablist" aria-label="Filter by source">
+        <span class="source-filter-label">Source:</span>
+        <button class="chip chip-sm active" data-pl-source="">All</button>
+        <button class="chip chip-sm" data-pl-source="zillow">Zillow</button>
+        <button class="chip chip-sm" data-pl-source="realtor">Realtor</button>
+      </div>
     </div>
 
     <!-- Listing cards -->
     <div id="pl-list">
       <div class="pl-card" style="pointer-events:none">
-        <div class="pl-thumb-placeholder"><svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-listings"/></svg></div>
+        <div class="pl-thumb-wrap"><div class="pl-thumb-placeholder"><svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-listings"/></svg></div></div>
         <div class="pl-body"><div class="skeleton sk-line" style="width:60%;height:14px"></div><div class="skeleton sk-line" style="width:40%;height:11px;margin-top:4px"></div></div>
         <div class="pl-actions"></div>
       </div>
       <div class="pl-card" style="pointer-events:none">
-        <div class="pl-thumb-placeholder"></div>
+        <div class="pl-thumb-wrap"><div class="pl-thumb-placeholder"></div></div>
         <div class="pl-body"><div class="skeleton sk-line" style="width:55%;height:14px"></div><div class="skeleton sk-line" style="width:35%;height:11px;margin-top:4px"></div></div>
         <div class="pl-actions"></div>
       </div>
       <div class="pl-card" style="pointer-events:none">
-        <div class="pl-thumb-placeholder"></div>
+        <div class="pl-thumb-wrap"><div class="pl-thumb-placeholder"></div></div>
         <div class="pl-body"><div class="skeleton sk-line" style="width:65%;height:14px"></div><div class="skeleton sk-line" style="width:45%;height:11px;margin-top:4px"></div></div>
         <div class="pl-actions"></div>
       </div>
@@ -162,6 +211,17 @@
 <!-- Right-side detail / edit panel -->
 <div class="pl-panel-backdrop" id="pl-backdrop"></div>
 <div class="pl-panel" id="pl-panel" role="dialog" aria-modal="true" aria-label="Listing detail"></div>
+
+<!-- Bulk action bar (slides up from bottom when cards are selected) -->
+<div class="pl-bulk-bar" id="pl-bulk-bar" role="toolbar" aria-label="Bulk actions">
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
+    <input type="checkbox" id="pl-select-all" style="width:16px;height:16px;accent-color:#fff;cursor:pointer">
+    <span id="pl-bulk-count" style="font-size:.85rem;font-weight:600;white-space:nowrap">0 selected</span>
+  </label>
+  <div style="flex:1"></div>
+  <button class="btn-bulk-clear" id="pl-bulk-clear">Clear</button>
+  <button class="btn-bulk-pub" id="pl-bulk-pub">Publish all →</button>
+</div>
 
 <script defer src="/js/admin/pipeline.js?v=__BUILD_VERSION__"></script>
 </body>
