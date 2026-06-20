@@ -938,7 +938,9 @@ async function updateNav() {
           'move_in_status,move_in_date_actual,move_in_notes,move_in_confirmed_by,' +
           'payment_amount_recorded,payment_method_recorded,payment_notes,' +
           'holding_fee_requested,holding_fee_requested_at,holding_fee_amount,' +
-          'holding_fee_due_date,holding_fee_paid,holding_fee_paid_at'
+          'holding_fee_due_date,holding_fee_paid,holding_fee_paid_at,' +
+          'management_signed,management_signer_name,management_signed_at,management_notes,' +
+          'management_cosigned,management_cosigned_by,management_cosigned_at'
         )
         .order('created_at', { ascending: false });
 
