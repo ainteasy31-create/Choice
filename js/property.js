@@ -417,15 +417,7 @@ function renderProperty(p) {
   const _addrUnit = p.unit_number ? ` ${esc(p.unit_number)}` : '';
   document.getElementById('detailAddress').innerHTML = `<i class="fas fa-map-marker-alt"></i> ${esc(p.address)}${_addrUnit}, ${esc(p.city)}, ${esc(p.state)} ${esc(p.zip || '')}`;
 
-  // Listed-by attribution
-  if (p.landlords) {
-    const ll = p.landlords;
-    const name = ll.business_name || ll.contact_name;
-    const attr = document.createElement('div');
-    attr.className = 'detail-listed-by';
-    attr.innerHTML = `<i class="fas fa-user"></i> Listed by <span>${esc(name)}</span>`;
-    document.getElementById('detailAddress').insertAdjacentElement('afterend', attr);
-  }
+  // Listed-by attribution is shown via #landlordCard below — no duplicate text needed
 
   // Neighborhood / location context — shown below the address/attribution
   if (p.neighborhood || p.location_context) {
@@ -625,11 +617,11 @@ function renderProperty(p) {
   }
   if (p.last_months_rent) {
     document.getElementById('sidebarLastMonthRow').style.display = '';
-    document.getElementById('sidebarLastMonth').textContent = `${Number(p.last_months_rent).toLocaleString()}`;
+    document.getElementById('sidebarLastMonth').textContent = `$${Number(p.last_months_rent).toLocaleString()}`;
   }
   if (p.admin_fee) {
     document.getElementById('sidebarAdminFeeRow').style.display = '';
-    document.getElementById('sidebarAdminFee').textContent = `${Number(p.admin_fee).toLocaleString()}`;
+    document.getElementById('sidebarAdminFee').textContent = `$${Number(p.admin_fee).toLocaleString()}`;
   }
   if (p.move_in_special) {
     document.getElementById('sidebarMoveInSpecialRow').style.display = '';
