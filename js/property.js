@@ -1281,45 +1281,101 @@ async function toggleSave(id, btn) {
 
 /* ── Admin property panel ─────────────────────────────────────────────────
    Injected immediately after renderProperty() when _isAdminViewer is true.
-   Shows a sticky top banner (status toggle + edit link) plus an admin section
-   below the gallery with metrics, admin notes, and quick action links.
+   Provides:
+   • Sticky admin banner: status inline toggle, "Edit" button → slide-in
+     quick-edit drawer, "Full Edit ↗" → admin/property-detail.html (new tab)
+   • Admin info section: metrics + admin notes
+   • Quick-edit drawer: all core fields, photo reorder/delete, save + audit log
    ──────────────────────────────────────────────────────────────────────── */
 function initAdminPropertyPanel(prop) {
-  const STATUS_COLORS = {
-    active:'#10b981', rented:'#3b82f6', inactive:'#6b7280',
-    maintenance:'#f59e0b', draft:'#8b5cf6', paused:'#f97316', archived:'#ef4444'
-  };
   const STATUSES = ['active','rented','inactive','maintenance','draft','paused','archived'];
   const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-  // ── Sticky admin banner at top of detail content ──
+  // ── Inject drawer CSS once ──
+  if (!document.getElementById('adminDrawerCSS')) {
+    const style = document.createElement('style');
+    style.id = 'adminDrawerCSS';
+    style.textContent = `
+      #adminEditOverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9990;display:none}
+      #adminEditOverlay.open{display:block}
+      #adminEditDrawer{position:fixed;right:0;top:0;bottom:0;width:min(580px,100%);background:#fff;z-index:9995;display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,.25);transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+      #adminEditDrawer.open{transform:translateX(0)}
+      .adw-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:2px solid #1e293b;background:#0a1628;flex-shrink:0}
+      .adw-header h3{margin:0;font-size:15px;font-weight:700;color:#e2e8f0;display:flex;align-items:center;gap:8px}
+      .adw-close{background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+      .adw-close:hover{background:rgba(255,255,255,.1);color:#fff}
+      .adw-body{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+      .adw-dirty-bar{background:#f59e0b;color:#0a1628;text-align:center;font-size:11px;font-weight:800;padding:5px 8px;letter-spacing:.04em;display:none;flex-shrink:0}
+      .adw-dirty-bar.show{display:block}
+      .adw-section{padding:18px 20px;border-bottom:1px solid #f1f5f9}
+      .adw-section-title{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+      .adw-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+      .adw-row.c1{grid-template-columns:1fr;margin-bottom:10px}
+      .adw-row.c3{grid-template-columns:1fr 1fr 1fr}
+      .adw-row:last-child{margin-bottom:0}
+      .adw-field{display:flex;flex-direction:column;gap:4px}
+      .adw-label{font-size:11px;font-weight:700;color:#374151;letter-spacing:.02em}
+      .adw-input{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:#1e293b;background:#fff;outline:none;transition:border-color 150ms;width:100%;box-sizing:border-box}
+      .adw-input:focus{border-color:#006aff;box-shadow:0 0 0 3px rgba(0,106,255,.1)}
+      textarea.adw-input{resize:vertical;min-height:80px;line-height:1.5}
+      select.adw-input{cursor:pointer}
+      .adw-photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:4px}
+      .adw-photo-item{position:relative;aspect-ratio:4/3;border-radius:8px;overflow:hidden;border:2px solid #e2e8f0;background:#f8fafc}
+      .adw-photo-item img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+      .adw-photo-order{position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,.7);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;pointer-events:none}
+      .adw-photo-cover{position:absolute;top:4px;left:4px;background:rgba(16,185,129,.9);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;pointer-events:none}
+      .adw-photo-del{position:absolute;top:4px;right:4px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;z-index:2}
+      .adw-photo-del:hover{background:#b91c1c}
+      .adw-photo-arrows{position:absolute;bottom:4px;right:4px;display:flex;gap:2px;z-index:2}
+      .adw-photo-arr{background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:3px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;padding:0}
+      .adw-photo-arr:hover{background:rgba(0,106,255,.85)}
+      .adw-footer{display:flex;gap:8px;padding:14px 20px;border-top:2px solid #e2e8f0;flex-shrink:0;background:#f8fafc;align-items:center}
+      .adw-save-btn{background:#006aff;color:#fff;border:none;border-radius:8px;padding:10px 0;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;flex:1}
+      .adw-save-btn:disabled{opacity:.6;cursor:not-allowed}
+      .adw-save-btn:hover:not(:disabled){background:#0054cc}
+      .adw-cancel-btn{background:#fff;color:#374151;border:1.5px solid #d1d5db;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+      .adw-cancel-btn:hover{border-color:#9ca3af}
+      .adw-full-link{background:#fff;color:#006aff;border:1.5px solid #006aff;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:5px;white-space:nowrap}
+      .adw-full-link:hover{background:#eff6ff}
+      .adw-toggle-wrap{display:flex;align-items:center;gap:10px;padding:6px 0}
+      .adw-toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+      .adw-toggle input{opacity:0;width:0;height:0;position:absolute}
+      .adw-slider{position:absolute;inset:0;background:#d1d5db;border-radius:22px;cursor:pointer;transition:background .2s}
+      .adw-slider::before{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+      .adw-toggle input:checked+.adw-slider{background:#006aff}
+      .adw-toggle input:checked+.adw-slider::before{transform:translateX(18px)}
+      @media(max-width:480px){#adminEditDrawer{width:100%}.adw-row.c3{grid-template-columns:1fr 1fr}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  // ── Admin banner ──
   const banner = document.createElement('div');
   banner.id = 'adminPropBanner';
-  banner.style.cssText = [
-    'background:#0a1628','color:#e2e8f0','padding:10px 20px',
-    'display:flex','align-items:center','gap:12px','flex-wrap:wrap',
-    'border-bottom:3px solid #006aff','z-index:90','position:relative'
-  ].join(';');
+  banner.style.cssText = 'background:#0a1628;color:#e2e8f0;padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:3px solid #006aff;z-index:90;position:relative';
   banner.innerHTML = `
     <span style="background:#006aff;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.05em;flex-shrink:0">ADMIN</span>
-    <span style="font-size:13px;font-weight:600;flex-shrink:0">${esc(prop.title||'Untitled')}</span>
-    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-      <span style="font-size:12px;color:#94a3b8">Status:</span>
-      <select id="adminStatusSelect" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:4px 8px;font-size:13px;font-weight:600;cursor:pointer">
-        ${STATUSES.map(s => `<option value="${s}" ${s===prop.status?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+    <span id="adminBannerTitle" style="font-size:13px;font-weight:600;flex-shrink:0;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(prop.title||'')}">${esc(prop.title||'Untitled')}</span>
+    <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+      <span style="font-size:11px;color:#64748b">Status:</span>
+      <select id="adminStatusSelect" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;cursor:pointer">
+        ${STATUSES.map(s => `<option value="${s}"${s===prop.status?' selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
       </select>
-      <button id="adminStatusSaveBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;display:none">Save</button>
+      <button id="adminStatusSaveBtn" style="background:#10b981;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;display:none">Save</button>
       <span id="adminStatusSpinner" style="color:#64748b;font-size:12px;display:none"><i class="fas fa-spinner fa-spin"></i></span>
     </div>
-    <div style="display:flex;gap:8px;margin-left:auto;flex-shrink:0">
-      <a href="/admin/property-detail.html?id=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
-        <i class="fas fa-pen"></i> Edit Full
+    <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0;flex-wrap:wrap">
+      <button id="adminQuickEditBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-pen"></i> Edit
+      </button>
+      <a href="/admin/property-detail.html?id=${esc(prop.id)}" target="_blank" rel="noopener" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-arrow-up-right-from-square"></i> Full Edit
       </a>
-      <a href="/admin/applications.html?property=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
-        <i class="fas fa-file-alt"></i> Applications
+      <a href="/admin/applications.html?property=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-file-alt"></i> Apps
       </a>
-      <a href="/admin/audit-log.html?target=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
-        <i class="fas fa-history"></i> Audit Log
+      <a href="/admin/audit-log.html?target=${esc(prop.id)}" style="background:#1e293b;color:#e2e8f0;border:1px solid #374151;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-history"></i> Log
       </a>
     </div>`;
 
@@ -1327,77 +1383,72 @@ function initAdminPropertyPanel(prop) {
   if (gallery) gallery.parentNode.insertBefore(banner, gallery);
   else document.body.prepend(banner);
 
-  // Status change logic
+  // ── Status inline save ──
   const sel = document.getElementById('adminStatusSelect');
   const saveBtn = document.getElementById('adminStatusSaveBtn');
   const spinner = document.getElementById('adminStatusSpinner');
   let originalStatus = prop.status;
 
-  if (sel && saveBtn) {
-    sel.addEventListener('change', () => {
-      saveBtn.style.display = sel.value !== originalStatus ? '' : 'none';
-    });
-    saveBtn.addEventListener('click', async () => {
-      const newStatus = sel.value;
-      saveBtn.disabled = true;
-      if (spinner) spinner.style.display = '';
+  sel?.addEventListener('change', () => {
+    if (saveBtn) saveBtn.style.display = sel.value !== originalStatus ? '' : 'none';
+  });
+  saveBtn?.addEventListener('click', async () => {
+    const newStatus = sel.value;
+    saveBtn.disabled = true;
+    if (spinner) spinner.style.display = '';
+    try {
+      const res = await window.CP.Properties.update(prop.id, { status: newStatus });
+      if (!res.ok) throw new Error(res.error || 'Update failed');
       try {
-        const res = await window.CP.Properties.update(prop.id, { status: newStatus });
-        if (!res.ok) throw new Error(res.error || 'Update failed');
-        // Log to admin_actions
-        try {
-          const session = await window.CP.Auth.getSession();
-          if (session?.user?.id) {
-            await window.supabase.from('admin_actions').insert({
-              action: 'property.status_change',
-              target_type: 'property',
-              target_id: prop.id,
-              metadata: { from: originalStatus, to: newStatus },
-              user_id: session.user.id,
-            });
-          }
-        } catch(e) { /* non-fatal */ }
-        originalStatus = newStatus;
-        saveBtn.style.display = 'none';
-        // Update banner badge color
-        const col = STATUS_COLORS[newStatus] || '#6b7280';
-        sel.style.borderColor = col;
-        if (typeof showToast === 'function') showToast(`Status changed to ${newStatus}`, 'success');
-      } catch(e) {
-        if (typeof showToast === 'function') showToast('Failed: ' + e.message, 'error');
-        sel.value = originalStatus;
-        saveBtn.style.display = 'none';
-      } finally {
-        saveBtn.disabled = false;
-        if (spinner) spinner.style.display = 'none';
-      }
-    });
-  }
+        const session = await window.CP.Auth.getSession();
+        if (session?.user?.id) {
+          await window.CP.sb().from('admin_actions').insert({
+            action:'property.status_change', target_type:'property', target_id:prop.id,
+            metadata:{from:originalStatus, to:newStatus}, user_id:session.user.id,
+          });
+        }
+      } catch(e) {}
+      originalStatus = newStatus;
+      prop.status = newStatus;
+      saveBtn.style.display = 'none';
+      if (typeof showToast === 'function') showToast(`Status → ${newStatus}`, 'success');
+    } catch(e) {
+      if (typeof showToast === 'function') showToast('Failed: ' + e.message, 'error');
+      sel.value = originalStatus;
+      saveBtn.style.display = 'none';
+    } finally {
+      saveBtn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+    }
+  });
 
-  // ── Admin info section (metrics + admin notes) ──
+  // ── Admin info section ──
   const section = document.createElement('div');
   section.id = 'adminPropSection';
-  section.style.cssText = 'background:#f8fafc;border:2px solid #e2e8f0;border-radius:12px;padding:20px;margin:24px 0;';
+  section.style.cssText = 'background:#f8fafc;border:2px solid #e2e8f0;border-radius:12px;padding:20px;margin:24px 0';
   section.innerHTML = `
-    <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:16px">
-      <i class="fas fa-shield-halved" style="color:#006aff"></i> Admin Info
+    <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span><i class="fas fa-shield-halved" style="color:#006aff"></i> Admin Info</span>
+      <button id="adminSectionEditBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="fas fa-pen"></i> Edit Property
+      </button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.views_count ?? 0}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:2px">Views</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:20px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${prop.views_count??0}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">Views</div>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.applications_count ?? 0}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:2px">Applications</div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${prop.applications_count??0}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">Applications</div>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.saves_count ?? 0}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:2px">Saves</div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${prop.saves_count??0}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">Saves</div>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:700;color:#1e293b">${prop.inquiries_count ?? 0}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:2px">Inquiries</div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#1e293b">${prop.inquiries_count??0}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">Inquiries</div>
       </div>
     </div>
     <div>
@@ -1405,54 +1456,434 @@ function initAdminPropertyPanel(prop) {
         <i class="fas fa-sticky-note"></i> Admin Notes (internal)
       </label>
       <textarea id="adminNotesField" rows="3" maxlength="2000"
-        style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;resize:vertical;box-sizing:border-box;font-family:inherit;color:#1e293b;background:#fff"
-        placeholder="Private admin notes — not visible to landlords or tenants…">${esc(prop.admin_notes||'')}</textarea>
+        style="width:100%;border:1.5px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;resize:vertical;box-sizing:border-box;font-family:inherit;color:#1e293b;background:#fff;outline:none;transition:border-color 150ms"
+        placeholder="Private admin notes — not visible to landlords or tenants…"
+        onfocus="this.style.borderColor='#006aff'" onblur="this.style.borderColor='#d1d5db'">${esc(prop.admin_notes||'')}</textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
         <span style="font-size:11px;color:#94a3b8">Not visible to landlords or tenants</span>
-        <button id="adminNotesSaveBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">
-          Save Notes
-        </button>
+        <button id="adminNotesSaveBtn" style="background:#006aff;color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">Save Notes</button>
       </div>
     </div>
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;gap:8px;flex-wrap:wrap">
-      <a href="/admin/applications.html?property=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:5px;font-weight:600">
-        <i class="fas fa-file-alt"></i> View Applications for this Property
-      </a>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <a href="/admin/applications.html?property=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:4px;font-weight:600"><i class="fas fa-file-alt"></i> Applications</a>
       <span style="color:#d1d5db">·</span>
-      <a href="/admin/audit-log.html?target=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:5px;font-weight:600">
-        <i class="fas fa-history"></i> Audit Log for this Property
-      </a>
+      <a href="/admin/audit-log.html?target=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:4px;font-weight:600"><i class="fas fa-history"></i> Audit Log</a>
       <span style="color:#d1d5db">·</span>
-      <a href="/admin/property-detail.html?id=${esc(prop.id)}" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:5px;font-weight:600">
-        <i class="fas fa-pen-to-square"></i> Full Admin Edit
-      </a>
+      <a href="/admin/property-detail.html?id=${esc(prop.id)}" target="_blank" rel="noopener" style="font-size:12px;color:#006aff;text-decoration:none;display:flex;align-items:center;gap:4px;font-weight:600"><i class="fas fa-arrow-up-right-from-square"></i> Full Edit</a>
     </div>`;
 
-  // Insert admin section after the gallery strip
-  const galleryStrip = document.getElementById('galleryStrip');
   const detailMain = document.getElementById('detailMain');
   const breadcrumb = detailMain?.querySelector('.detail-breadcrumb');
   if (breadcrumb) breadcrumb.parentNode.insertBefore(section, breadcrumb.nextSibling);
   else if (detailMain) detailMain.prepend(section);
 
-  // Admin notes save
+  // Admin notes standalone save
   document.getElementById('adminNotesSaveBtn')?.addEventListener('click', async () => {
-    const notesField = document.getElementById('adminNotesField');
-    const btn = document.getElementById('adminNotesSaveBtn');
-    if (!notesField || !btn) return;
-    btn.disabled = true;
-    btn.textContent = 'Saving…';
+    const f = document.getElementById('adminNotesField');
+    const b = document.getElementById('adminNotesSaveBtn');
+    if (!f || !b) return;
+    b.disabled = true; b.textContent = 'Saving…';
     try {
-      const res = await window.CP.Properties.update(prop.id, { admin_notes: notesField.value });
+      const res = await window.CP.Properties.update(prop.id, { admin_notes: f.value });
       if (!res.ok) throw new Error(res.error || 'Save failed');
+      prop.admin_notes = f.value;
       if (typeof showToast === 'function') showToast('Admin notes saved', 'success');
     } catch(e) {
       if (typeof showToast === 'function') showToast('Save failed: ' + e.message, 'error');
+    } finally { b.disabled = false; b.textContent = 'Save Notes'; }
+  });
+
+  // ── Wire quick-edit drawer ──
+  const { open: openDrawer } = buildAdminEditDrawer(prop);
+  document.getElementById('adminQuickEditBtn')?.addEventListener('click', openDrawer);
+  document.getElementById('adminSectionEditBtn')?.addEventListener('click', openDrawer);
+}
+
+/* ── Quick-edit drawer (slide-in from right, wired by initAdminPropertyPanel) ── */
+function buildAdminEditDrawer(prop) {
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
+  const PROP_TYPES = ['apartment','house','condo','townhouse','studio','room','duplex','triplex','loft','mobile_home','commercial','other'];
+  const STATUSES   = ['active','rented','inactive','maintenance','draft','paused','archived'];
+  const LAUNDRY    = ['','In-unit','Washer/Dryer Hookups','Shared (On-site)','Laundromat Nearby','None'];
+  const HEATING    = ['','Central','Forced Air','Baseboard','Radiant','Heat Pump','Wall Unit','None'];
+  const COOLING    = ['','Central AC','Window Units','Mini-Split','None'];
+
+  // Working photo array (sorted by display_order)
+  let _photos = Array.isArray(prop.property_photos)
+    ? prop.property_photos.slice().sort((a,b) => (a.display_order??0)-(b.display_order??0))
+    : [];
+  let _deletedIds = new Set();
+  let _dirty = false;
+
+  function imgThumb(url) {
+    if (!url) return '/assets/placeholder-property.jpg';
+    return window.CONFIG?.img ? window.CONFIG.img(url, 'strip') : url;
+  }
+
+  function renderPhotoGrid() {
+    if (!_photos.length) return '<p style="color:#94a3b8;font-size:13px;margin:0">No photos yet. Use Full Edit to upload photos.</p>';
+    return _photos.map((ph, i) => `
+      <div class="adw-photo-item">
+        <img src="${esc(imgThumb(ph.url))}" alt="Photo ${i+1}" loading="lazy">
+        ${i===0 ? '<div class="adw-photo-cover">Cover</div>' : ''}
+        <div class="adw-photo-order">${i+1}</div>
+        <button class="adw-photo-del" data-del="${i}" title="Delete photo" type="button">✕</button>
+        <div class="adw-photo-arrows">
+          ${i>0 ? `<button class="adw-photo-arr" data-mv="${i}" data-dir="-1" type="button" title="Move earlier">↑</button>` : ''}
+          ${i<_photos.length-1 ? `<button class="adw-photo-arr" data-mv="${i}" data-dir="1" type="button" title="Move later">↓</button>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  // ── Build DOM ──
+  const overlay = document.createElement('div');
+  overlay.id = 'adminEditOverlay';
+  const drawer = document.createElement('div');
+  drawer.id = 'adminEditDrawer';
+
+  const p = prop;
+  const stateOpts   = ['<option value="">— State —</option>',...US_STATES.map(s => `<option value="${s}"${p.state===s?' selected':''}>${s}</option>`)].join('');
+  const typeOpts    = PROP_TYPES.map(t => `<option value="${t}"${p.property_type===t?' selected':''}>${t.charAt(0).toUpperCase()+t.slice(1).replace(/_/g,' ')}</option>`).join('');
+  const statusOpts  = STATUSES.map(s => `<option value="${s}"${p.status===s?' selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('');
+  const laundryOpts = LAUNDRY.map(v => `<option value="${v}"${p.laundry_type===v?' selected':''}>${v||'— None —'}</option>`).join('');
+  const heatingOpts = HEATING.map(v => `<option value="${v}"${p.heating_type===v?' selected':''}>${v||'— None —'}</option>`).join('');
+  const coolingOpts = COOLING.map(v => `<option value="${v}"${p.cooling_type===v?' selected':''}>${v||'— None —'}</option>`).join('');
+  const availDate   = p.available_date ? p.available_date.split('T')[0] : '';
+
+  drawer.innerHTML = `
+    <div class="adw-header">
+      <h3><i class="fas fa-pen" style="color:#006aff"></i> Edit Property</h3>
+      <button class="adw-close" id="adwCloseBtn" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="adw-dirty-bar" id="adwDirtyBar">⚠ Unsaved changes</div>
+    <div class="adw-body">
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-tag"></i> Basic Info</div>
+        <div class="adw-row c1">
+          <div class="adw-field">
+            <label class="adw-label" for="adwTitle">Title</label>
+            <input class="adw-input" id="adwTitle" type="text" value="${esc(p.title||'')}" maxlength="200" placeholder="Property title">
+          </div>
+        </div>
+        <div class="adw-row">
+          <div class="adw-field">
+            <label class="adw-label" for="adwStatus">Status</label>
+            <select class="adw-input" id="adwStatus">${statusOpts}</select>
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwPropType">Property Type</label>
+            <select class="adw-input" id="adwPropType">${typeOpts}</select>
+          </div>
+        </div>
+      </div>
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-dollar-sign"></i> Pricing</div>
+        <div class="adw-row c3">
+          <div class="adw-field">
+            <label class="adw-label" for="adwRent">Monthly Rent ($)</label>
+            <input class="adw-input" id="adwRent" type="number" min="0" value="${p.monthly_rent??''}">
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwDeposit">Security Deposit ($)</label>
+            <input class="adw-input" id="adwDeposit" type="number" min="0" value="${p.security_deposit??''}">
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwAppFee">App Fee ($)</label>
+            <input class="adw-input" id="adwAppFee" type="number" min="0" value="${p.application_fee??''}">
+          </div>
+        </div>
+        <div class="adw-row">
+          <div class="adw-field">
+            <label class="adw-label" for="adwAvailDate">Available Date</label>
+            <input class="adw-input" id="adwAvailDate" type="date" value="${esc(availDate)}">
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwMinLease">Min Lease (months)</label>
+            <input class="adw-input" id="adwMinLease" type="number" min="1" value="${p.minimum_lease_months??''}">
+          </div>
+        </div>
+      </div>
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-bed"></i> Specs</div>
+        <div class="adw-row c3">
+          <div class="adw-field">
+            <label class="adw-label" for="adwBeds">Bedrooms</label>
+            <input class="adw-input" id="adwBeds" type="number" min="0" value="${p.bedrooms??''}">
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwBaths">Bathrooms</label>
+            <input class="adw-input" id="adwBaths" type="number" min="0" step="0.5" value="${p.bathrooms??''}">
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwHalfBaths">Half Baths</label>
+            <input class="adw-input" id="adwHalfBaths" type="number" min="0" value="${p.half_bathrooms??''}">
+          </div>
+        </div>
+        <div class="adw-row">
+          <div class="adw-field">
+            <label class="adw-label" for="adwSqft">Sq Footage</label>
+            <input class="adw-input" id="adwSqft" type="number" min="0" value="${p.square_footage??''}">
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwYearBuilt">Year Built</label>
+            <input class="adw-input" id="adwYearBuilt" type="number" min="1800" max="2030" value="${p.year_built??''}">
+          </div>
+        </div>
+        <div class="adw-row c3">
+          <div class="adw-field">
+            <label class="adw-label" for="adwLaundry">Laundry</label>
+            <select class="adw-input" id="adwLaundry">${laundryOpts}</select>
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwHeating">Heating</label>
+            <select class="adw-input" id="adwHeating">${heatingOpts}</select>
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwCooling">Cooling</label>
+            <select class="adw-input" id="adwCooling">${coolingOpts}</select>
+          </div>
+        </div>
+      </div>
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-location-dot"></i> Address</div>
+        <div class="adw-row c1">
+          <div class="adw-field">
+            <label class="adw-label" for="adwAddress">Street Address</label>
+            <input class="adw-input" id="adwAddress" type="text" value="${esc(p.address||'')}" placeholder="123 Main St">
+          </div>
+        </div>
+        <div class="adw-row c3">
+          <div class="adw-field">
+            <label class="adw-label" for="adwCity">City</label>
+            <input class="adw-input" id="adwCity" type="text" value="${esc(p.city||'')}">
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwState">State</label>
+            <select class="adw-input" id="adwState">${stateOpts}</select>
+          </div>
+          <div class="adw-field">
+            <label class="adw-label" for="adwZip">ZIP</label>
+            <input class="adw-input" id="adwZip" type="text" value="${esc(p.zip||'')}" maxlength="10">
+          </div>
+        </div>
+      </div>
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-align-left"></i> Description</div>
+        <div class="adw-field">
+          <textarea class="adw-input" id="adwDesc" rows="5" maxlength="5000" placeholder="Describe the property…">${esc(p.description||'')}</textarea>
+          <div style="text-align:right;font-size:11px;color:#94a3b8;margin-top:3px"><span id="adwDescCount">${(p.description||'').length}</span> / 5000</div>
+        </div>
+      </div>
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-sliders"></i> Options</div>
+        <div class="adw-toggle-wrap">
+          <label class="adw-toggle">
+            <input type="checkbox" id="adwFeatured"${p.featured?' checked':''}>
+            <span class="adw-slider"></span>
+          </label>
+          <span style="font-size:13px;color:#374151;font-weight:500">Featured listing</span>
+        </div>
+      </div>
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-images"></i> Photos (${_photos.length})</div>
+        <div class="adw-photo-grid" id="adwPhotoGrid">${renderPhotoGrid()}</div>
+        <p style="font-size:11px;color:#94a3b8;margin:10px 0 0">
+          Use arrows to reorder. To upload new photos, use
+          <a href="/admin/property-detail.html?id=${esc(prop.id)}" target="_blank" rel="noopener" style="color:#006aff">Full Edit ↗</a>
+        </p>
+      </div>
+
+      <div class="adw-section">
+        <div class="adw-section-title"><i class="fas fa-sticky-note"></i> Admin Notes (internal only)</div>
+        <div class="adw-field">
+          <textarea class="adw-input" id="adwAdminNotes" rows="3" maxlength="2000" placeholder="Private admin notes…">${esc(p.admin_notes||'')}</textarea>
+        </div>
+      </div>
+
+    </div>
+    <div class="adw-footer">
+      <button class="adw-cancel-btn" id="adwCancelBtn" type="button">Cancel</button>
+      <a href="/admin/property-detail.html?id=${esc(prop.id)}" target="_blank" rel="noopener" class="adw-full-link">
+        <i class="fas fa-arrow-up-right-from-square"></i> Full Edit
+      </a>
+      <button class="adw-save-btn" id="adwSaveBtn" type="button">
+        <i class="fas fa-floppy-disk"></i> Save Changes
+      </button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(drawer);
+
+  // ── Open / close ──
+  function openDrawer() {
+    overlay.classList.add('open');
+    drawer.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => document.getElementById('adwTitle')?.focus(), 320);
+  }
+  function closeDrawer() {
+    if (_dirty && !confirm('You have unsaved changes. Close without saving?')) return;
+    overlay.classList.remove('open');
+    drawer.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  overlay.addEventListener('click', closeDrawer);
+  document.getElementById('adwCloseBtn').addEventListener('click', closeDrawer);
+  document.getElementById('adwCancelBtn').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
+  });
+
+  // ── Dirty tracking ──
+  const dirtyBar = document.getElementById('adwDirtyBar');
+  const markDirty = () => { _dirty = true; dirtyBar?.classList.add('show'); };
+  drawer.querySelectorAll('.adw-input').forEach(el => {
+    el.addEventListener('input', markDirty);
+    el.addEventListener('change', markDirty);
+  });
+  document.getElementById('adwFeatured')?.addEventListener('change', markDirty);
+  document.getElementById('adwDesc')?.addEventListener('input', () => {
+    const c = document.getElementById('adwDescCount');
+    if (c) c.textContent = document.getElementById('adwDesc').value.length;
+    markDirty();
+  });
+
+  // ── Photo management ──
+  const photoGrid = document.getElementById('adwPhotoGrid');
+
+  function refreshPhotos() {
+    if (photoGrid) photoGrid.innerHTML = renderPhotoGrid();
+    bindPhotos();
+    markDirty();
+  }
+  function bindPhotos() {
+    photoGrid?.querySelectorAll('[data-del]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.del);
+        const ph  = _photos[idx];
+        if (!ph) return;
+        if (!confirm(`Delete photo ${idx+1}? This cannot be undone.`)) return;
+        if (ph.id) _deletedIds.add(ph.id);
+        _photos.splice(idx, 1);
+        refreshPhotos();
+      });
+    });
+    photoGrid?.querySelectorAll('[data-mv]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.mv);
+        const dir = parseInt(btn.dataset.dir);
+        const ni  = idx + dir;
+        if (ni < 0 || ni >= _photos.length) return;
+        [_photos[idx], _photos[ni]] = [_photos[ni], _photos[idx]];
+        refreshPhotos();
+      });
+    });
+  }
+  bindPhotos();
+
+  // ── Save ──
+  document.getElementById('adwSaveBtn').addEventListener('click', async () => {
+    const sb = document.getElementById('adwSaveBtn');
+    sb.disabled = true;
+    sb.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+    const num = (id) => {
+      const v = document.getElementById(id)?.value;
+      return v !== '' && v != null ? parseFloat(v) : null;
+    };
+    const int = (id) => {
+      const v = document.getElementById(id)?.value;
+      return v !== '' && v != null ? parseInt(v) : null;
+    };
+    const str = (id) => document.getElementById(id)?.value.trim() || null;
+
+    const payload = {
+      title:                str('adwTitle'),
+      status:               document.getElementById('adwStatus')?.value || prop.status,
+      property_type:        document.getElementById('adwPropType')?.value || null,
+      monthly_rent:         num('adwRent'),
+      security_deposit:     num('adwDeposit'),
+      application_fee:      num('adwAppFee'),
+      bedrooms:             int('adwBeds'),
+      bathrooms:            num('adwBaths'),
+      half_bathrooms:       int('adwHalfBaths'),
+      square_footage:       int('adwSqft'),
+      year_built:           int('adwYearBuilt'),
+      minimum_lease_months: int('adwMinLease'),
+      laundry_type:         document.getElementById('adwLaundry')?.value || null,
+      heating_type:         document.getElementById('adwHeating')?.value || null,
+      cooling_type:         document.getElementById('adwCooling')?.value || null,
+      address:              str('adwAddress'),
+      city:                 str('adwCity'),
+      state:                document.getElementById('adwState')?.value || null,
+      zip:                  str('adwZip'),
+      available_date:       document.getElementById('adwAvailDate')?.value || null,
+      description:          str('adwDesc'),
+      admin_notes:          str('adwAdminNotes'),
+      featured:             document.getElementById('adwFeatured')?.checked ?? false,
+      updated_at:           new Date().toISOString(),
+    };
+
+    try {
+      // Save core fields
+      const res = await window.CP.Properties.update(prop.id, payload);
+      if (!res.ok) throw new Error(res.error || 'Property update failed');
+
+      // Delete queued photos
+      for (const photoId of _deletedIds) {
+        await window.CP.sb().from('property_photos').delete().eq('id', photoId);
+      }
+      _deletedIds.clear();
+
+      // Persist photo order
+      await Promise.all(_photos.map((ph, i) =>
+        window.CP.sb().from('property_photos').update({ display_order: i }).eq('id', ph.id)
+      ));
+
+      // Audit log
+      try {
+        const session = await window.CP.Auth.getSession();
+        if (session?.user?.id) {
+          await window.CP.sb().from('admin_actions').insert({
+            action:'property.edit', target_type:'property', target_id:prop.id,
+            metadata:{ edited_fields: Object.keys(payload).filter(k => payload[k] !== null && k !== 'updated_at') },
+            user_id: session.user.id,
+          });
+        }
+      } catch(e) {}
+
+      // Sync in-memory prop + visible UI
+      Object.assign(prop, payload);
+      const bannerTitle = document.getElementById('adminBannerTitle');
+      if (bannerTitle && payload.title) { bannerTitle.textContent = payload.title; bannerTitle.title = payload.title; }
+      const bannerSel = document.getElementById('adminStatusSelect');
+      if (bannerSel && payload.status) bannerSel.value = payload.status;
+      const notesField = document.getElementById('adminNotesField');
+      if (notesField) notesField.value = payload.admin_notes || '';
+
+      _dirty = false;
+      dirtyBar?.classList.remove('show');
+      if (typeof showToast === 'function') showToast('Property saved!', 'success');
+      setTimeout(closeDrawer, 400);
+
+    } catch(e) {
+      if (typeof showToast === 'function') showToast('Save failed: ' + e.message, 'error');
     } finally {
-      btn.disabled = false;
-      btn.textContent = 'Save Notes';
+      sb.disabled = false;
+      sb.innerHTML = '<i class="fas fa-floppy-disk"></i> Save Changes';
     }
   });
+
+  return { open: openDrawer, close: closeDrawer };
 }
 
 /* ── Helpers ── */
