@@ -1,4 +1,4 @@
-# Choice Properties — HomeHarvest Scraper
+# Choice Properties — HomeHarvest Scraper v2
 
 Scrapes **for-rent** listings directly from **Realtor.com** using the [HomeHarvest](https://github.com/ZacharyHampton/HomeHarvest) library and stages them in `pipeline.pipeline_properties` for admin review and one-click publishing to the live site.
 
@@ -11,7 +11,7 @@ HomeHarvest (Realtor.com)
         │
         ▼
   scraper/scraper.py
-        │  writes to
+        │  batch-inserts to
         ▼
 pipeline.pipeline_properties  ←── admin reviews in Property Pipeline UI
         │  "Publish" button
@@ -23,23 +23,35 @@ Scraped listings always land with `status = "scraped"`. Nothing goes live until 
 
 ---
 
+## What's New in v2
+
+| Feature | Detail |
+|---|---|
+| **Batch inserts** | 50 records per POST instead of 1 — 10–50× fewer DB round-trips |
+| **Parallel workers** | Up to 4 concurrent batch-insert threads via `ThreadPoolExecutor` |
+| **Retry + back-off** | 3 retries with exponential back-off on transient network errors |
+| **Connection pool** | `requests.Session` with Keep-Alive; no per-request TCP overhead |
+| **`.env` auto-load** | Automatically loads `.env` in current or parent dir — no more `source .env` |
+| **Multi-location** | `--location` can be passed multiple times in one run |
+| **Locations file** | `--locations-file cities.txt` — bulk scrape a whole list of cities |
+| **Upsert mode** | `--upsert` refreshes existing scraped listings instead of always skipping |
+| **Quality filter** | `--min-score N` skips listings below a data quality threshold |
+| **Address validation** | Listings with neither address nor coordinates are silently dropped |
+
+---
+
 ## Setup
 
-### 1. Install Python dependency
+### 1. Install Python dependencies
 
 ```bash
-pip install homeharvest
+pip install homeharvest requests
 # Python >= 3.9 required
 ```
 
 ### 2. Set environment variables
 
-```bash
-export SUPABASE_URL="https://tlfmwetmhthpyrytrcfo.supabase.co"
-export SUPABASE_SERVICE_ROLE_KEY="<your service role key>"
-```
-
-Or create a `.env` file and `source` it:
+Create a `.env` file in the project root (auto-loaded on every run):
 
 ```bash
 # .env
@@ -47,8 +59,11 @@ SUPABASE_URL=https://tlfmwetmhthpyrytrcfo.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ```
 
+Or export them manually:
+
 ```bash
-source .env  # or: set -a && source .env && set +a
+export SUPABASE_URL="https://tlfmwetmhthpyrytrcfo.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="<your service role key>"
 ```
 
 ---
@@ -59,11 +74,12 @@ source .env  # or: set -a && source .env && set +a
 python scraper/scraper.py --location <location> [options]
 ```
 
-### Required
+### Required (at least one)
 
 | Flag | Description |
 |---|---|
-| `--location` | Where to search. Accepts: city, `"City, ST"`, ZIP code, full address, neighborhood, county |
+| `--location LOCATION` | Where to search — can be passed **multiple times** |
+| `--locations-file FILE` | Text file with one location per line (`#` comments supported) |
 
 ### Optional filters
 
@@ -75,7 +91,14 @@ python scraper/scraper.py --location <location> [options]
 | `--price-min $` | — | Minimum monthly rent |
 | `--price-max $` | — | Maximum monthly rent |
 | `--property-type TYPE` | — | Comma-separated types: `single_family`, `condos`, `townhomes`, `apartment`, `multi_family`, `duplex_triplex`, `mobile` |
-| `--limit N` | `200` | Max results to fetch (up to 10,000) |
+| `--limit N` | `200` | Max results per location (up to 10,000) |
+| `--min-score N` | `0` | Skip listings with data quality score below N |
+
+### Behaviour flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--upsert` | off | Update existing pipeline listings rather than skipping duplicates |
 | `--extra` | off | Fetch per-property extras (schools, tax history) — adds 1 HTTP request per listing |
 | `--dry-run` | off | Preview results without writing to the database |
 
@@ -86,6 +109,15 @@ python scraper/scraper.py --location <location> [options]
 ```bash
 # Basic — scrape Dallas rentals from the last 7 days
 python scraper/scraper.py --location "Dallas, TX"
+
+# Multiple cities in one run
+python scraper/scraper.py \
+  --location "Dallas, TX" \
+  --location "Houston, TX" \
+  --location "Austin, TX"
+
+# Bulk scrape from a file
+python scraper/scraper.py --locations-file cities.txt --min-score 40
 
 # With filters — Sacramento 2–4 BR under $3,500/mo
 python scraper/scraper.py \
@@ -100,11 +132,27 @@ python scraper/scraper.py \
   --past-days 30 \
   --limit 1000
 
-# Preview without saving
-python scraper/scraper.py --location "Miami, FL" --dry-run
+# Refresh existing scraped listings (upsert mode)
+python scraper/scraper.py --location "Miami, FL" --upsert --past-days 3
+
+# Preview without saving, quality filter
+python scraper/scraper.py --location "Miami, FL" --dry-run --min-score 50
 
 # ZIP code search
 python scraper/scraper.py --location "30301" --price-max 2500
+```
+
+### cities.txt format
+
+```
+# Texas
+Dallas, TX
+Houston, TX
+Austin, TX
+
+# Florida
+Miami, FL
+Tampa, FL
 ```
 
 ---
@@ -137,7 +185,7 @@ Every listing is mapped to a full `pipeline_properties` record including:
 
 ## After Scraping
 
-1. Open the **Property Pipeline** admin UI (`choice121/property-pipeline`)
+1. Open the **Property Pipeline** admin UI (`/admin/pipeline.html`)
 2. Review staged listings — edit titles, descriptions, photos as needed
 3. Click **Publish** to move approved listings to the live site
 
@@ -147,7 +195,7 @@ The scraper **never auto-publishes**. All listings start as `status = "scraped"`
 
 ## Deduplication
 
-The scraper checks `source_listing_id` against existing pipeline rows before inserting. A listing that's already been scraped (same Realtor.com property_id) will be skipped automatically.
+By default the scraper checks `source_listing_id` against existing pipeline rows and skips duplicates. Pass `--upsert` to refresh existing listings with the latest data from Realtor.com instead.
 
 ---
 
@@ -161,10 +209,18 @@ Every scrape run is recorded in `pipeline.pipeline_scrape_runs` with:
 
 ---
 
+## Performance Notes
+
+- **Batch size**: 50 records per Supabase POST (configurable via `BATCH_SIZE` constant)
+- **Workers**: 4 parallel batch-insert threads (configurable via `MAX_WORKERS`)
+- **Retries**: 3 attempts per batch with 1.5s→3s→6s back-off
+- **Rate limits**: For runs > 500 listings, consider spacing requests or splitting across multiple `--location` flags
+- **Proxy support**: If rate-limited by Realtor.com, set `HTTP_PROXY` / `HTTPS_PROXY` env vars — HomeHarvest respects them automatically
+- **Photo URLs**: Realtor.com CDN URLs stored as-is; publisher uploads them to ImageKit CDN when publishing
+
+---
+
 ## Notes
 
 - **Source**: Realtor.com only (HomeHarvest uses Realtor.com's GraphQL API; Zillow was removed in 2024)
-- **Rate limits**: For runs > 500 listings, consider spacing requests or using the `--limit` flag with multiple runs
-- **Photo URLs**: Realtor.com CDN URLs are stored as-is. The publisher uploads them to ImageKit CDN when publishing to the live site
-- **Proxy support**: If you get rate-limited, set `HTTP_PROXY` / `HTTPS_PROXY` env vars — HomeHarvest respects them automatically
 - **Python version**: 3.9+ required by HomeHarvest
