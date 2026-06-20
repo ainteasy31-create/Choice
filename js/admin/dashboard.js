@@ -114,10 +114,11 @@
 
     // ── Action queue ──
     const queue = [];
-    if((c.pending||0) > 0)        queue.push(actionCard({ icon:'i-clock',  tone:'warn',    count:c.pending,        label:'Applications pending review',     cta:'Review',  href:'applications.html?status=pending' }));
-    if((c.unpaid_approved||0) > 0)queue.push(actionCard({ icon:'i-alert',  tone:'urgent',  count:c.unpaid_approved,label:'Approved but fee unpaid',          cta:'Chase',   href:'applications.html?status=approved' }));
-    if((c.lease_pending||0) > 0)  queue.push(actionCard({ icon:'i-leases', tone:'info',    count:c.lease_pending,  label:'Leases awaiting send / countersign', cta:'Process', href:'leases.html' }));
-    if((c.movein_pending||0) > 0) queue.push(actionCard({ icon:'i-door',   tone:'info',    count:c.movein_pending, label:'Move-ins to confirm',              cta:'Confirm', href:'move-ins.html' }));
+    if((c.pending||0) > 0)        queue.push(actionCard({ icon:'i-clock',  tone:'warn',    count:c.pending,        label:'Applications pending review',          cta:'Review',      href:'applications.html?status=pending' }));
+    if((c.unpaid_approved||0) > 0)queue.push(actionCard({ icon:'i-alert',  tone:'urgent',  count:c.unpaid_approved,label:'Approved but fee unpaid',               cta:'Chase',       href:'applications.html?status=approved' }));
+    if((c.lease_pending||0) > 0)  queue.push(actionCard({ icon:'i-leases', tone:'info',    count:c.lease_pending,  label:'Leases not yet generated',              cta:'Generate',    href:'leases.html?lease_status=none' }));
+    if((c.lease_signed||0) > 0)   queue.push(actionCard({ icon:'i-check',  tone:'urgent',  count:c.lease_signed,   label:'Leases awaiting your countersignature', cta:'Countersign', href:'leases.html?lease_status=signed' }));
+    if((c.movein_pending||0) > 0) queue.push(actionCard({ icon:'i-door',   tone:'info',    count:c.movein_pending, label:'Move-ins to confirm',                   cta:'Confirm',     href:'move-ins.html' }));
     if(failedEmails > 0) queue.push(actionCard({ icon:'i-mail', tone:'urgent', count:failedEmails, label:'Failed emails (last 48h)', cta:'Investigate', href:'email-logs.html?status=failed' }));
 
     document.getElementById('action-queue').innerHTML = queue.length
