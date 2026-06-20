@@ -7,7 +7,8 @@
    bottom sheet, toast, skeletons, realtime live indicator, CSP-safe
    data-action delegation, and helpers.
 
-   Exposes `window.CPShell` (primary) and `window.AdminShell` (alias, same object).
+   Exposes BOTH `window.CPShell` and `window.AdminShell` (alias) so
+   pages migrated in Phase 1 keep working unchanged.
    No external deps. Loads after supabase + cp-api.
    ===================================================================== */
 (function(window, document){
@@ -738,5 +739,5 @@
   else boot();
 
   window.CPShell    = Shell;
-  window.AdminShell = Shell; // alias used by all admin pages — keep in sync with window.CPShell
+  window.AdminShell = Shell; // backward-compat alias (removed in Phase 8)
 })(window, document);
