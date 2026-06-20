@@ -622,9 +622,11 @@
       + appsHtml
       + inqsHtml;
 
-    // Update page subtitle
-    const sub = document.querySelector('[data-page-sub]');
-    if (sub) sub.textContent = p.title || 'Property detail';
+    // Update appbar title + sub with live property data
+    const _pgTitle = document.getElementById('page-title');
+    if (_pgTitle) _pgTitle.textContent = p.title || 'Property detail';
+    const _pgSub = document.getElementById('page-sub');
+    if (_pgSub) _pgSub.textContent = [p.city, p.state].filter(Boolean).join(', ');
 
     // ── Bind interactions ──
     bindGallery(urls);
