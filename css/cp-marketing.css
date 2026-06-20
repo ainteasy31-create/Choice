@@ -3173,7 +3173,10 @@ body[data-portal="public"][data-page="property"] .prop-split-content .detail-lis
     flex-direction: column;
   }
   body[data-portal="public"][data-page="property"] .prop-split-photos .gallery-mosaic {
+    flex: none !important;
     height: clamp(260px, 60vw, 420px) !important;
+    min-height: 0 !important;
+    width: 100% !important;
     border-radius: var(--m-r-xl) !important;
     margin: var(--m-s-3) var(--m-s-3) 0 !important;
   }
