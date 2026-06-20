@@ -21,18 +21,45 @@
 <script defer src="/js/cp-chrome.js?v=__BUILD_VERSION__"></script>
 <script defer src="/js/cp-shell.js?v=__BUILD_VERSION__"></script>
 <style>
+  /* ── Grid / List layouts ─────────────────────────────── */
   .prop-grid{display:grid;grid-template-columns:1fr;gap:var(--sp-3)}
-  @media (min-width:560px){.prop-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
-  .prop-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;display:flex;flex-direction:column}
+  @media(min-width:560px){.prop-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
+  .prop-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;display:flex;flex-direction:column;position:relative}
+  .prop-card.is-selected{border-color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 20%,transparent)}
   .prop-img{width:100%;height:140px;object-fit:cover;background:var(--surface-2)}
   .prop-img-ph{width:100%;height:140px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--muted-2)}
-  .prop-img-ph .i{width:36px;height:36px}
   .prop-body{padding:var(--sp-4);display:flex;flex-direction:column;gap:6px;flex:1}
   .prop-actions{display:flex;gap:8px;margin-top:auto;padding-top:8px;flex-wrap:wrap}
-  /* chip bar: single-row horizontal scroll on all screen sizes */
+
+  /* ── List (row) view ────────────────────────────────── */
+  .prop-list{display:flex;flex-direction:column;gap:6px}
+  .prop-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);display:flex;align-items:center;gap:10px;padding:10px 12px;position:relative}
+  .prop-row.is-selected{border-color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 20%,transparent)}
+  .prop-row-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .prop-row-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+  @media(max-width:600px){.prop-row-actions{display:none}}
+
+  /* ── Bulk checkbox ───────────────────────────────────── */
+  .prop-select-check{position:absolute;top:8px;left:8px;z-index:2;background:rgba(var(--surface-rgb,255,255,255),.92);border-radius:4px;padding:2px;line-height:0;cursor:pointer}
+  .prop-select-check input{width:16px;height:16px;cursor:pointer;accent-color:var(--brand)}
+
+  /* ── Bulk action toolbar ─────────────────────────────── */
+  #bulk-toolbar{align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;font-size:.82rem}
+  #bulk-toolbar.show{display:flex}
+
+  /* ── Controls row ────────────────────────────────────── */
+  .prop-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .prop-controls select{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 10px;font-size:.82rem;color:var(--text);cursor:pointer;max-width:160px}
+  .view-btn-group{display:flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;flex-shrink:0}
+  .view-btn{background:var(--surface-2);border:none;padding:6px 10px;cursor:pointer;color:var(--muted);font-size:.8rem;line-height:1;transition:background .15s,color .15s}
+  .view-btn.active{background:var(--brand);color:#fff}
+  .view-btn:hover:not(.active){background:var(--surface-3,var(--surface-2))}
+
+  /* ── Chip bar ────────────────────────────────────────── */
   .chip-row{overflow-x:auto;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;gap:6px}
   .chip-row::-webkit-scrollbar{display:none}
   .chip{flex-shrink:0}
+
   @media(max-width:480px){
     .prop-img,.prop-img-ph{height:120px}
     .prop-body{padding:var(--sp-3)}
@@ -43,10 +70,22 @@
 <div class="app">
   <main class="app-content">
 
+    <!-- Landlord filter banner -->
     <div id="landlord-banner" style="display:none;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:10px;font-size:.82rem;align-items:center;justify-content:space-between;gap:8px">
       <span><strong>Filtered:</strong> showing properties for <strong id="landlord-banner-name">selected landlord</strong></span>
       <a href="/admin/properties.html" style="color:var(--muted);text-decoration:none;font-size:.75rem">Clear ✕</a>
     </div>
+
+    <!-- Bulk action toolbar (hidden until items are selected) -->
+    <div id="bulk-toolbar" style="display:none">
+      <span id="bulk-count" style="font-weight:600;white-space:nowrap">0 selected</span>
+      <button id="bulk-select-all-btn" class="btn btn-ghost btn-sm">Select all</button>
+      <button id="bulk-clear-btn" class="btn btn-ghost btn-sm">Clear</button>
+      <button id="bulk-status-btn" class="btn btn-ghost btn-sm"><i class="fas fa-tag"></i> Change status</button>
+      <button id="bulk-delete-btn" class="btn btn-ghost btn-sm" style="color:#dc2626"><i class="fas fa-trash"></i> Delete</button>
+    </div>
+
+    <!-- Status chips -->
     <div class="chip-row" id="chips">
       <button class="chip active" data-status="all">All</button>
       <button class="chip" data-status="active">Active</button>
@@ -58,18 +97,45 @@
       <button class="chip" data-status="archived">Archived</button>
     </div>
 
+    <!-- Search -->
     <div class="search">
       <svg class="i"><use href="#i-search"/></svg>
-      <input id="search" type="text" placeholder="Search title or address…">
+      <input id="search" type="text" placeholder="Search title, address, city or landlord…">
     </div>
 
-    <div id="prop-grid" class="prop-grid"></div>
+    <!-- Controls row: sort + view toggle + CSV export -->
+    <div class="prop-controls">
+      <select id="sort-select" aria-label="Sort properties">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="rent_high">Rent: high → low</option>
+        <option value="rent_low">Rent: low → high</option>
+        <option value="beds">Most bedrooms</option>
+        <option value="status">By status</option>
+        <option value="title">A → Z</option>
+      </select>
+      <div class="view-btn-group" role="group" aria-label="View style">
+        <button class="view-btn" data-view-btn="card" aria-pressed="true" title="Card view">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+        </button>
+        <button class="view-btn" data-view-btn="list" aria-pressed="false" title="List view">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="1"/><rect x="1" y="7" width="14" height="2" rx="1"/><rect x="1" y="12" width="14" height="2" rx="1"/></svg>
+        </button>
+      </div>
+      <button id="export-csv-btn" class="btn btn-ghost btn-sm" style="margin-left:auto" title="Export visible properties as CSV">
+        <svg class="i" style="width:14px;height:14px"><use href="#i-download"/></svg> Export CSV
+      </button>
+    </div>
+
+    <!-- Property container (grid or list injected by JS) -->
+    <div id="prop-container"></div>
 
   </main>
 </div>
 
 <a href="#" class="fab" data-action="add-prop" aria-label="Add property"><svg class="i i-lg"><use href="#i-plus"/></svg></a>
 
+<script defer src="/js/admin/property-shared.js?v=__BUILD_VERSION__"></script>
 <script defer src="/js/admin/properties.js?v=__BUILD_VERSION__"></script>
 </body>
 </html>
