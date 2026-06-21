@@ -690,6 +690,12 @@ function renderProperty(p) {
   const saveBtn = document.getElementById('savePropBtn');
   if (savedIds.has(p.id)) saveBtn.innerHTML = '<i class="fas fa-heart" style="color:#dc2626"></i> Saved';
   saveBtn.addEventListener('click', () => toggleSave(p.id, saveBtn));
+
+  // ── Enrichment sections ──
+  renderRenterRequirements(p);
+  renderPropFacts(p);
+  renderScoresSection(p);
+  loadSimilarListings(p);
 }
 
 /* ── Leaflet mini-map (lazy-loaded via IntersectionObserver) ── */
@@ -1905,6 +1911,266 @@ function buildAdminEditDrawer(prop) {
   });
 
   return { open: openDrawer, close: closeDrawer };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENRICHMENT SECTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/* ── Renter Requirements Strip ───────────────────────────────────────────── */
+function renderRenterRequirements(p) {
+  const section = document.getElementById('renterReqsSection');
+  if (!section) return;
+
+  const reqs = [];
+
+  if (p.pets_allowed != null) {
+    let petVal = p.pets_allowed ? 'Allowed' : 'Not allowed';
+    if (p.pets_allowed && p.pet_types_allowed?.length) petVal += ' · ' + p.pet_types_allowed.join(', ');
+    if (p.pets_allowed && p.pet_weight_limit) petVal += ' · up to ' + p.pet_weight_limit + ' lbs';
+    reqs.push({ icon: 'fa-paw',        label: 'Pets',
+      value: petVal,
+      color: p.pets_allowed ? '#10b981' : '#ef4444',
+      bg:    p.pets_allowed ? '#ecfdf5' : '#fef2f2',
+      bdr:   p.pets_allowed ? '#a7f3d0' : '#fecaca' });
+  }
+
+  if (p.smoking_allowed != null) {
+    reqs.push({ icon: p.smoking_allowed ? 'fa-smoking' : 'fa-ban', label: 'Smoking',
+      value: p.smoking_allowed ? 'Permitted' : 'Not permitted',
+      color: p.smoking_allowed ? '#f59e0b' : '#6b7280',
+      bg:    p.smoking_allowed ? '#fffbeb' : '#f9fafb',
+      bdr:   p.smoking_allowed ? '#fde68a' : '#e5e7eb' });
+  }
+
+  if (p.minimum_credit_score) {
+    reqs.push({ icon: 'fa-chart-line', label: 'Min. credit score',
+      value: Number(p.minimum_credit_score).toLocaleString() + '+',
+      color: '#2563eb', bg: '#eff6ff', bdr: '#bfdbfe' });
+  }
+
+  if (p.minimum_income_multiplier) {
+    reqs.push({ icon: 'fa-coins', label: 'Min. income',
+      value: p.minimum_income_multiplier + '× monthly rent',
+      color: '#c9a55c', bg: '#fffbeb', bdr: '#fde68a' });
+  }
+
+  if (!reqs.length) return;
+
+  section.style.display = '';
+  section.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      ${reqs.map(r => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;
+          background:${r.bg};border:1px solid ${r.bdr};border-radius:10px;flex:1;min-width:170px">
+          <i class="fas ${r.icon}" style="color:${r.color};font-size:15px;width:18px;text-align:center;flex-shrink:0"></i>
+          <div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9ca3af;line-height:1">${esc(r.label)}</div>
+            <div style="font-size:13px;font-weight:600;color:#1f2937;margin-top:3px;line-height:1.3">${esc(r.value)}</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ── Expanded Property Facts (Zillow-style) ──────────────────────────────── */
+function renderPropFacts(p) {
+  const section = document.getElementById('propFactsSection');
+  const divider = document.getElementById('dividerAfterFacts');
+  if (!section) return;
+
+  const row = (label, value) => {
+    if (value == null || value === '' || value === false) return '';
+    return `<div style="display:flex;justify-content:space-between;align-items:baseline;
+        padding:8px 0;border-bottom:1px solid #f3f4f6;gap:8px">
+      <span style="font-size:13px;color:#6b7280;white-space:nowrap">${label}</span>
+      <span style="font-size:13px;font-weight:600;color:#1f2937;text-align:right">${esc(String(value))}</span>
+    </div>`;
+  };
+
+  const head = (label, icon) =>
+    `<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+      color:#9ca3af;margin:20px 0 2px;display:flex;align-items:center;gap:6px">
+      <i class="fas ${icon}" style="color:#c9a55c;font-size:11px"></i>${label}
+    </div>`;
+
+  const bathStr = p.bathrooms != null
+    ? (p.half_bathrooms ? `${p.bathrooms} full + 1 half` : String(p.bathrooms))
+    : null;
+
+  const interiorRows = [
+    row('Property type',    p.property_type ? capitalize(p.property_type) : null),
+    row('Bedrooms',         p.bedrooms === 0 ? 'Studio' : p.bedrooms),
+    row('Bathrooms',        bathStr),
+    row('Square footage',   p.square_footage   ? Number(p.square_footage).toLocaleString() + ' sqft' : null),
+    row('Year built',       p.year_built),
+    row('Stories',          p.floors > 1 ? p.floors : null),
+    row('Basement',         p.has_basement === true ? 'Yes' : p.has_basement === false ? 'No' : null),
+    row('Central A/C',      p.has_central_air === true ? 'Yes' : p.has_central_air === false ? 'No' : null),
+    row('Heating',          p.heating_type),
+    row('Cooling',          p.cooling_type),
+    row('Laundry',          p.laundry_type),
+    row('Flooring',         p.flooring?.length ? p.flooring.join(', ') : null),
+    row('County',           p.county),
+    row('Neighborhood',     p.neighborhood),
+  ].filter(Boolean);
+
+  const outdoorRows = [
+    row('Lot size',         p.lot_size_sqft ? Number(p.lot_size_sqft).toLocaleString() + ' sqft' : null),
+    row('Parking',          p.parking),
+    row('Garage spaces',    p.garage_spaces),
+    row('Parking fee',      p.parking_fee ? '$' + Number(p.parking_fee).toLocaleString() + '/mo' : null),
+  ].filter(Boolean);
+
+  const leaseRows = [
+    row('Available',        p.available_date ? formatDate(p.available_date) : 'Now'),
+    row('Lease terms',      p.lease_terms?.length ? p.lease_terms.join(', ') : null),
+    row('Min. lease',       p.minimum_lease_months ? p.minimum_lease_months + ' months' : null),
+  ].filter(Boolean);
+
+  if (!interiorRows.length && !outdoorRows.length && !leaseRows.length) return;
+
+  section.style.display = '';
+  if (divider) divider.style.display = '';
+
+  const col1 = [
+    interiorRows.length ? head('Interior', 'fa-house') + interiorRows.join('') : '',
+    leaseRows.length    ? head('Lease info', 'fa-file-contract') + leaseRows.join('') : '',
+  ].filter(Boolean).join('');
+
+  const col2 = [
+    outdoorRows.length ? head('Parking &amp; outdoor', 'fa-car') + outdoorRows.join('') : '',
+  ].filter(Boolean).join('');
+
+  section.innerHTML = `
+    <div class="prop-section">
+      <div class="prop-section-eyebrow">Property facts</div>
+      <div class="prop-section-head">Everything you <em>need to know</em>.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 32px">
+        <div>${col1}</div>
+        ${col2 ? `<div>${col2}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* ── Walk Score & Schools ─────────────────────────────────────────────────── */
+function renderScoresSection(p) {
+  const section = document.getElementById('scoresSection');
+  const divider = document.getElementById('dividerAfterScores');
+  if (!section) return;
+
+  const addrSlug = encodeURIComponent(`${p.address || ''} ${p.city || ''} ${p.state || ''}`);
+  const wsUrl = `https://www.walkscore.com/score/${addrSlug}`;
+  const gsUrl = p.zip
+    ? `https://www.greatschools.org/search/search.page?q=${encodeURIComponent(p.zip)}&sortBy=distance`
+    : `https://www.greatschools.org/search/search.page?q=${encodeURIComponent((p.city || '') + ' ' + (p.state || ''))}&sortBy=distance`;
+
+  const card = (href, emoji, bg, title, sub) =>
+    `<a href="${href}" target="_blank" rel="noopener noreferrer"
+      style="display:flex;align-items:center;gap:14px;padding:16px;border:1.5px solid #e5e7eb;
+        border-radius:12px;text-decoration:none;color:inherit;background:#fafafa;transition:border-color .15s"
+      onmouseover="this.style.borderColor='#006aff'" onmouseout="this.style.borderColor='#e5e7eb'">
+      <div style="width:44px;height:44px;border-radius:10px;background:${bg};display:flex;
+        align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${emoji}</div>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:#1f2937">${title}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">${sub}</div>
+        <div style="font-size:11.5px;color:#006aff;margin-top:5px;font-weight:600">View score →</div>
+      </div>
+    </a>`;
+
+  section.style.display = '';
+  if (divider) divider.style.display = '';
+  section.innerHTML = `
+    <div class="prop-section">
+      <div class="prop-section-eyebrow">Neighborhood</div>
+      <div class="prop-section-head">Life <em>around you</em>.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+        ${card(wsUrl, '🚶', '#e8f0fe',
+          'Walk &amp; Transit Scores',
+          'Walkability, transit &amp; bike friendliness')}
+        ${card(gsUrl, '🏫', '#ecfdf5',
+          'Nearby Schools',
+          'Ratings &amp; reviews via GreatSchools')}
+      </div>
+    </div>`;
+}
+
+/* ── Similar Listings (async) ────────────────────────────────────────────── */
+async function loadSimilarListings(p) {
+  const section = document.getElementById('similarSection');
+  const divider = document.getElementById('dividerAfterSimilar');
+  if (!section || !p.city) return;
+
+  try {
+    const { data } = await supabase
+      .from('properties')
+      .select('id, title, address, city, state, monthly_rent, bedrooms, bathrooms, property_type, property_photos(url, display_order)')
+      .eq('status', 'active')
+      .eq('city', p.city)
+      .neq('id', p.id)
+      .limit(8);
+
+    if (!data?.length) return;
+
+    const rent = p.monthly_rent || 0;
+    const similar = data
+      .slice()
+      .sort((a, b) => Math.abs((a.monthly_rent || 0) - rent) - Math.abs((b.monthly_rent || 0) - rent))
+      .slice(0, 4);
+
+    const cards = similar.map(s => {
+      const photos = Array.isArray(s.property_photos)
+        ? s.property_photos.slice().sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        : [];
+      const rawUrl   = photos[0]?.url || '';
+      const photoUrl = rawUrl
+        ? (window.CONFIG?.img ? CONFIG.img(rawUrl, 'card') : rawUrl)
+        : '/assets/placeholder-property.jpg';
+      const beds = s.bedrooms === 0 ? 'Studio' : s.bedrooms != null ? s.bedrooms + ' bed' : '';
+      const baths = s.bathrooms ? s.bathrooms + ' bath' : '';
+      const meta  = [beds, baths].filter(Boolean).join(' · ') || capitalize(s.property_type || 'Rental');
+      return `
+        <a href="/property.html?id=${esc(s.id)}"
+          style="display:flex;gap:0;border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden;
+            text-decoration:none;color:inherit;background:#fff;transition:border-color .15s"
+          onmouseover="this.style.borderColor='#006aff'" onmouseout="this.style.borderColor='#e5e7eb'">
+          <div style="width:96px;min-height:80px;flex-shrink:0;background:#f3f4f6;overflow:hidden">
+            <img src="${esc(photoUrl)}" alt="${esc(s.title || 'Listing')}" loading="lazy"
+              style="width:100%;height:100%;object-fit:cover;display:block"
+              onerror="this.onerror=null;this.src='/assets/placeholder-property.jpg'">
+          </div>
+          <div style="padding:11px 14px;flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:800;color:#0a1628;letter-spacing:-.02em;line-height:1.2">
+              ${s.monthly_rent != null
+                ? '$' + Number(s.monthly_rent).toLocaleString() + '<span style="font-size:11px;font-weight:500;color:#6b7280">/mo</span>'
+                : 'TBD'}
+            </div>
+            <div style="font-size:12.5px;font-weight:600;color:#1f2937;margin-top:3px;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title || 'Rental')}</div>
+            <div style="font-size:11.5px;color:#6b7280;margin-top:2px">${esc(meta)}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:1px;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${esc([s.address, s.city, s.state].filter(Boolean).join(', '))}
+            </div>
+          </div>
+        </a>`;
+    }).join('');
+
+    section.style.display = '';
+    if (divider) divider.style.display = '';
+    section.innerHTML = `
+      <div class="prop-section">
+        <div class="prop-section-eyebrow">Also available</div>
+        <div class="prop-section-head">More in <em>${esc(p.city)}</em>.</div>
+        <div style="display:flex;flex-direction:column;gap:10px">${cards}</div>
+        <a href="/listings.html" style="display:inline-flex;align-items:center;gap:6px;
+          margin-top:16px;font-size:13px;font-weight:600;color:#006aff;text-decoration:none">
+          See all rentals <i class="fas fa-arrow-right" style="font-size:11px"></i>
+        </a>
+      </div>`;
+  } catch(e) {
+    console.warn('[similar listings] failed:', e);
+  }
 }
 
 /* ── Helpers ── */

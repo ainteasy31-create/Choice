@@ -156,6 +156,9 @@
     <!-- Stats / meta grid -->
     <div class="prop-meta-grid" id="detailMeta"></div>
 
+    <!-- Renter requirements strip (pets, smoking, credit, income) -->
+    <div id="renterReqsSection" style="display:none;margin-top:16px"></div>
+
     <div class="prop-divider"></div>
 
     <!-- About -->
@@ -204,6 +207,10 @@
     <div id="leaseSection" style="display:none"></div>
 
     <div class="prop-divider" id="dividerAfterFeatures" style="display:none"></div>
+
+    <!-- Property facts — Zillow-style expanded facts grid (JS-populated) -->
+    <div id="propFactsSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterFacts" style="display:none"></div>
 
     <!-- Costs -->
     <div class="prop-section" id="costsSection">
@@ -269,6 +276,14 @@
     </div>
 
     <div class="prop-divider"></div>
+
+    <!-- Walk Score & nearby schools (JS-populated) -->
+    <div id="scoresSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterScores" style="display:none"></div>
+
+    <!-- Similar listings in same city (JS-populated, async) -->
+    <div id="similarSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterSimilar" style="display:none"></div>
 
     <!-- Contact / message landlord -->
     <div class="prop-section">
