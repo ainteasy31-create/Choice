@@ -668,10 +668,10 @@
           // Reload photos section
           const fresh = await CP.sb().from('property_photos').select('id,url,display_order,watermark_status,file_id').eq('property_id', propId).order('display_order');
           if (!fresh.error && fresh.data) {
-            _photos = fresh.data;
-            const galleryWrap = document.getElementById('pd-gallery-wrap');
-            if (galleryWrap) galleryWrap.outerHTML = renderGallery(_photos);
-            wireGallery(p);
+            _photos = fresh.data.slice().sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            refreshGalleryInPlace();
+            const freshUrls = _photos.map(ph => ph.url).filter(Boolean);
+            bindGallery(freshUrls);
             const photosBtn = document.getElementById('pd-btn-photos');
             if (photosBtn) photosBtn.textContent = _photos.length ? 'All photos (' + _photos.length + ')' : 'Manage photos';
           }

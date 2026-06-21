@@ -210,10 +210,10 @@ function injectAdminToolbar() {
             style="background:transparent;border:1px solid #374151;color:#94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
             <i class="fas fa-download"></i> Export CSV
           </button>
-          <a href="/landlord/new-listing.html"
-            style="background:#006aff;color:#fff;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:6px">
+          <button id="adminNewPropBtn"
+            style="background:#006aff;color:#fff;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;gap:6px">
             <i class="fas fa-plus"></i> New Property
-          </a>
+          </button>
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="adminStatusChips">
@@ -292,6 +292,162 @@ function injectAdminToolbar() {
 
   // Wire CSV export
   document.getElementById('adminCsvExportBtn')?.addEventListener('click', adminCSVExport);
+
+  // Wire new property button
+  document.getElementById('adminNewPropBtn')?.addEventListener('click', openAdminCreateModal);
+}
+
+function openAdminCreateModal() {
+  if (document.getElementById('adminCreateModal')) return;
+
+  const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
+  const stateOpts = US_STATES.map(s => `<option value="${s}">${s}</option>`).join('');
+
+  const inp = (id, name, type, ph, extra) =>
+    `<input id="${id}" name="${name}" type="${type}" placeholder="${ph}" ${extra||''}
+      style="padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;width:100%;box-sizing:border-box;outline:none;transition:border-color .15s"
+      onfocus="this.style.borderColor='#006aff'" onblur="this.style.borderColor='#d1d5db'">`;
+
+  const sel = (id, name, opts) =>
+    `<select id="${id}" name="${name}"
+      style="padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff;width:100%;box-sizing:border-box;outline:none">${opts}</select>`;
+
+  const lbl = (label, required, inner) =>
+    `<label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:#374151">
+      ${label}${required ? ' <span style="color:#ef4444">*</span>' : ''}
+      ${inner}
+    </label>`;
+
+  const modal = document.createElement('div');
+  modal.id = 'adminCreateModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65);backdrop-filter:blur(4px)';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+      <div style="padding:20px 24px 14px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:1;border-radius:14px 14px 0 0">
+        <div>
+          <div style="font-size:18px;font-weight:800;color:#0a1628">New Property</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">Creates a draft — you'll fill in everything else on the next screen</div>
+        </div>
+        <button id="acm-close" style="background:none;border:none;cursor:pointer;font-size:20px;color:#9ca3af;padding:2px;line-height:1;margin-top:2px">✕</button>
+      </div>
+      <form id="acm-form" style="padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+
+        ${lbl('Title', true, inp('acm-title','title','text','e.g. Spacious 2BR in Downtown Austin','required maxlength="120"'))}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${lbl('Property type', false, sel('acm-type','property_type',
+            '<option value="">— Select —</option>' +
+            ['apartment','house','condo','townhouse','studio','duplex','room'].map(v =>
+              `<option value="${v}">${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('')))}
+          ${lbl('Monthly rent ($)', false, inp('acm-rent','monthly_rent','number','e.g. 1500','min="0" step="1"'))}
+        </div>
+
+        ${lbl('Street address', false, inp('acm-address','address','text','e.g. 123 Main St',''))}
+
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px">
+          ${lbl('City', false, inp('acm-city','city','text','Austin',''))}
+          ${lbl('State', false, sel('acm-state','state','<option value="">—</option>'+stateOpts))}
+          ${lbl('ZIP', false, inp('acm-zip','zip','text','78701','maxlength="10"'))}
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${lbl('Bedrooms', false, sel('acm-beds','bedrooms',
+            '<option value="">—</option><option value="0">Studio</option>' +
+            [1,2,3,4,5].map(n=>`<option value="${n}">${n}${n===5?'+':''}</option>`).join('')))}
+          ${lbl('Bathrooms', false, sel('acm-baths','bathrooms',
+            '<option value="">—</option>' +
+            [1,1.5,2,2.5,3,3.5,4].map(n=>`<option value="${n}">${n}${n===4?'+':''}</option>`).join('')))}
+        </div>
+
+        <div id="acm-error" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:13px;color:#dc2626"></div>
+
+        <div style="display:flex;gap:10px;padding-top:4px">
+          <button type="button" id="acm-cancel"
+            style="flex:1;padding:11px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;font-size:14px;font-weight:600;color:#374151;cursor:pointer">
+            Cancel
+          </button>
+          <button type="submit" id="acm-submit"
+            style="flex:2;padding:11px;border:none;border-radius:8px;background:#006aff;color:#fff;font-size:14px;font-weight:700;cursor:pointer">
+            Create draft &amp; continue &rarr;
+          </button>
+        </div>
+      </form>
+    </div>`;
+
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('acm-title')?.focus(), 60);
+
+  const close = () => modal.remove();
+  document.getElementById('acm-close').addEventListener('click', close);
+  document.getElementById('acm-cancel').addEventListener('click', close);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+  document.getElementById('acm-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const errEl    = document.getElementById('acm-error');
+    const submitBtn = document.getElementById('acm-submit');
+
+    const title = document.getElementById('acm-title').value.trim();
+    if (!title) {
+      errEl.textContent = 'Title is required.';
+      errEl.style.display = '';
+      document.getElementById('acm-title').focus();
+      return;
+    }
+
+    const rawRent = document.getElementById('acm-rent').value;
+    const rawBeds = document.getElementById('acm-beds').value;
+    const rawBaths = document.getElementById('acm-baths').value;
+
+    const payload = {
+      title,
+      status:         'draft',
+      property_type:  document.getElementById('acm-type').value  || null,
+      monthly_rent:   rawRent  !== '' ? parseFloat(rawRent)  : null,
+      address:        document.getElementById('acm-address').value.trim() || null,
+      city:           document.getElementById('acm-city').value.trim()    || null,
+      state:          document.getElementById('acm-state').value          || null,
+      zip:            document.getElementById('acm-zip').value.trim()     || null,
+      bedrooms:       rawBeds  !== '' ? Number(rawBeds)  : null,
+      bathrooms:      rawBaths !== '' ? Number(rawBaths) : null,
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating…';
+    errEl.style.display = 'none';
+
+    try {
+      if (!window.CP?.sb) throw new Error('API not ready — please refresh the page');
+      const { data, error } = await window.CP.sb()
+        .from('properties')
+        .insert([payload])
+        .select('id')
+        .single();
+      if (error) throw new Error(error.message);
+
+      // Audit log (non-blocking)
+      try {
+        const { data: sessData } = await window.CP.Auth.getSession();
+        window.CP.sb().from('admin_actions').insert([{
+          user_id:     sessData?.session?.user?.id || null,
+          action:      'property.create',
+          target_type: 'property',
+          target_id:   String(data.id),
+          metadata:    { title, status: 'draft', source: 'admin_create' }
+        }]).catch(() => {});
+      } catch (_) {}
+
+      window.showToast?.('Draft created — opening editor…', 'success');
+      setTimeout(() => {
+        window.location.href = '/admin/property-detail.html?id=' + encodeURIComponent(data.id) + '&edit=1';
+      }, 600);
+    } catch (err) {
+      errEl.textContent = err.message || 'Failed to create property — please try again.';
+      errEl.style.display = '';
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = 'Create draft &amp; continue &rarr;';
+    }
+  });
 }
 
 function applyAdminCardOverlays(grid, props) {
