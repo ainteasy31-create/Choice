@@ -2114,12 +2114,11 @@ function renderPropFacts(p) {
     row('Neighborhood', p.neighborhood),
   ]);
 
-  // Parking & outdoor
+  // Parking & outdoor (lot_size_sqft excluded — already shown in meta strip)
   const parkingCard = card('Parking &amp; outdoor', 'fa-car', [
     row('Parking',       p.parking),
     row('Garage spaces', p.garage_spaces),
     row('Parking fee',   p.parking_fee ? '$' + Number(p.parking_fee).toLocaleString() + '/mo' : null),
-    row('Lot size',      p.lot_size_sqft ? Number(p.lot_size_sqft).toLocaleString() + ' sqft' : null),
   ]);
 
   const hasContent = moveInCard || interiorCard || locationCard || parkingCard;
@@ -2233,8 +2232,7 @@ async function loadSimilarListings(p) {
       return `
         <a href="/property.html?id=${esc(s.id)}" class="similar-card">
           <div class="similar-card-photo">
-            <img src="${esc(photoUrl)}" alt="${esc(s.title || 'Listing')}" loading="lazy"
-              onerror="this.onerror=null;this.src='/assets/placeholder-property.jpg'">
+            <img src="${esc(photoUrl)}" alt="${esc(s.title || 'Listing')}" loading="lazy">
           </div>
           <div class="similar-card-body">
             <div class="similar-card-price">
@@ -2261,6 +2259,10 @@ async function loadSimilarListings(p) {
           See all rentals in ${esc(p.city)} <i class="fas fa-arrow-right" style="font-size:11px"></i>
         </a>
       </div>`;
+    // Wire onerror via JS — inline onerror attributes are blocked by CSP nonce policy
+    section.querySelectorAll('.similar-card-photo img').forEach(img => {
+      img.onerror = function() { this.onerror = null; this.src = '/assets/placeholder-property.jpg'; };
+    });
   } catch(e) {
     console.warn('[similar listings] failed:', e);
   }
