@@ -1972,83 +1972,129 @@ function renderRenterRequirements(p) {
     </div>`;
 }
 
-/* ── Expanded Property Facts (Zillow-style) ──────────────────────────────── */
+/* ── Expanded Property Facts ─────────────────────────────────────────────── */
 function renderPropFacts(p) {
   const section = document.getElementById('propFactsSection');
   const divider = document.getElementById('dividerAfterFacts');
   if (!section) return;
 
-  const row = (label, value) => {
-    if (value == null || value === '' || value === false) return '';
-    return `<div style="display:flex;justify-content:space-between;align-items:baseline;
-        padding:8px 0;border-bottom:1px solid #f3f4f6;gap:8px">
-      <span style="font-size:13px;color:#6b7280;white-space:nowrap">${label}</span>
-      <span style="font-size:13px;font-weight:600;color:#1f2937;text-align:right">${esc(String(value))}</span>
-    </div>`;
-  };
-
-  const head = (label, icon) =>
-    `<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-      color:#9ca3af;margin:20px 0 2px;display:flex;align-items:center;gap:6px">
-      <i class="fas ${icon}" style="color:#c9a55c;font-size:11px"></i>${label}
-    </div>`;
-
+  // ── Chip grid — primary key facts ──────────────────────────────────────
   const bathStr = p.bathrooms != null
     ? (p.half_bathrooms ? `${p.bathrooms} full + 1 half` : String(p.bathrooms))
     : null;
 
-  const interiorRows = [
-    row('Property type',    p.property_type ? capitalize(p.property_type) : null),
-    row('Bedrooms',         p.bedrooms === 0 ? 'Studio' : p.bedrooms),
-    row('Bathrooms',        bathStr),
-    row('Square footage',   p.square_footage   ? Number(p.square_footage).toLocaleString() + ' sqft' : null),
-    row('Year built',       p.year_built),
-    row('Stories',          p.floors > 1 ? p.floors : null),
-    row('Basement',         p.has_basement === true ? 'Yes' : p.has_basement === false ? 'No' : null),
-    row('Central A/C',      p.has_central_air === true ? 'Yes' : p.has_central_air === false ? 'No' : null),
-    row('Heating',          p.heating_type),
-    row('Cooling',          p.cooling_type),
-    row('Laundry',          p.laundry_type),
-    row('Flooring',         p.flooring?.length ? p.flooring.join(', ') : null),
-    row('County',           p.county),
-    row('Neighborhood',     p.neighborhood),
-  ].filter(Boolean);
+  const availNow   = !p.available_date || new Date(p.available_date + 'T00:00:00') <= new Date();
+  const availLabel = p.available_date != null ? (availNow ? 'Now' : formatDate(p.available_date)) : null;
 
-  const outdoorRows = [
-    row('Lot size',         p.lot_size_sqft ? Number(p.lot_size_sqft).toLocaleString() + ' sqft' : null),
-    row('Parking',          p.parking),
-    row('Garage spaces',    p.garage_spaces),
-    row('Parking fee',      p.parking_fee ? '$' + Number(p.parking_fee).toLocaleString() + '/mo' : null),
-  ].filter(Boolean);
+  const chips = [
+    { icon: 'fa-home',            label: 'Type',        value: p.property_type ? capitalize(p.property_type) : null },
+    { icon: 'fa-bed',             label: 'Bedrooms',    value: p.bedrooms === 0 ? 'Studio' : (p.bedrooms ?? null) },
+    { icon: 'fa-bath',            label: 'Bathrooms',   value: bathStr },
+    { icon: 'fa-ruler-combined',  label: 'Square feet', value: p.square_footage ? Number(p.square_footage).toLocaleString() : null },
+    { icon: 'fa-calendar-alt',    label: 'Year built',  value: p.year_built ?? null },
+    { icon: 'fa-key',             label: 'Available',   value: availLabel },
+    { icon: 'fa-layer-group',     label: 'Stories',     value: p.floors > 1 ? p.floors : null },
+    { icon: 'fa-dungeon',         label: 'Basement',    value: p.has_basement === true ? 'Yes' : p.has_basement === false ? 'No' : null },
+    { icon: 'fa-snowflake',       label: 'Central A/C', value: p.has_central_air === true ? 'Yes' : p.has_central_air === false ? 'No' : null },
+    { icon: 'fa-file-contract',   label: 'Min. lease',  value: p.minimum_lease_months ? p.minimum_lease_months + ' months' : null },
+  ].filter(c => c.value != null && c.value !== '');
 
-  const leaseRows = [
-    row('Available',        p.available_date ? formatDate(p.available_date) : 'Now'),
-    row('Lease terms',      p.lease_terms?.length ? p.lease_terms.join(', ') : null),
-    row('Min. lease',       p.minimum_lease_months ? p.minimum_lease_months + ' months' : null),
-  ].filter(Boolean);
+  // ── Card helper — secondary detail rows ────────────────────────────────
+  const detailRow = (label, value) => {
+    if (value == null || value === '' || value === false) return '';
+    return `<div class="pf-row">
+      <span class="pf-row-label">${label}</span>
+      <span class="pf-row-value">${esc(String(value))}</span>
+    </div>`;
+  };
 
-  if (!interiorRows.length && !outdoorRows.length && !leaseRows.length) return;
+  const detailCard = (heading, icon, rawRows) => {
+    const rows = rawRows.filter(Boolean);
+    if (!rows.length) return '';
+    // Remove bottom border from last row
+    rows[rows.length - 1] = rows[rows.length - 1].replace('class="pf-row"', 'class="pf-row pf-row-last"');
+    return `
+      <div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:10px;background:#fff">
+        <div style="background:#f8f9fa;border-bottom:1px solid #e5e7eb;padding:9px 14px;
+          display:flex;align-items:center;gap:7px">
+          <i class="fas ${icon}" style="color:#c9a55c;font-size:10px"></i>
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280">${heading}</span>
+        </div>
+        <div style="padding:0 14px">
+          ${rows.join('')}
+        </div>
+      </div>`;
+  };
+
+  // Interior: heating/cooling/laundry/flooring
+  const interiorCard = detailCard('Interior details', 'fa-house', [
+    detailRow('Heating',  p.heating_type),
+    detailRow('Cooling',  p.cooling_type),
+    detailRow('Laundry',  p.laundry_type),
+    detailRow('Flooring', p.flooring?.length ? p.flooring.join(', ') : null),
+  ]);
+
+  // Location: county / neighborhood
+  const locationCard = detailCard('Location', 'fa-map-marker-alt', [
+    detailRow('County',       p.county),
+    detailRow('Neighborhood', p.neighborhood),
+  ]);
+
+  // Parking & outdoor
+  const parkingCard = detailCard('Parking &amp; outdoor', 'fa-car', [
+    detailRow('Parking',       p.parking),
+    detailRow('Garage spaces', p.garage_spaces),
+    detailRow('Parking fee',   p.parking_fee ? '$' + Number(p.parking_fee).toLocaleString() + '/mo' : null),
+    detailRow('Lot size',      p.lot_size_sqft ? Number(p.lot_size_sqft).toLocaleString() + ' sqft' : null),
+  ]);
+
+  const hasChips = chips.length > 0;
+  const hasCards = interiorCard || locationCard || parkingCard;
+  if (!hasChips && !hasCards) return;
+
+  // If available date is in chip grid, remove it from the Costs table to avoid duplication
+  if (availLabel && document.getElementById('sidebarMoveInRow')) {
+    document.getElementById('sidebarMoveInRow').style.display = 'none';
+  }
 
   section.style.display = '';
   if (divider) divider.style.display = '';
 
-  const col1 = [
-    interiorRows.length ? head('Interior', 'fa-house') + interiorRows.join('') : '',
-    leaseRows.length    ? head('Lease info', 'fa-file-contract') + leaseRows.join('') : '',
-  ].filter(Boolean).join('');
-
-  const col2 = [
-    outdoorRows.length ? head('Parking &amp; outdoor', 'fa-car') + outdoorRows.join('') : '',
-  ].filter(Boolean).join('');
+  // Inject pf-row styles once (scoped to this section, no global CSS file needed)
+  const styleTag = document.getElementById('pf-row-styles') || (() => {
+    const s = document.createElement('style');
+    s.id = 'pf-row-styles';
+    s.textContent = `
+      .pf-row { display:flex; justify-content:space-between; align-items:center;
+        padding:10px 0; border-bottom:1px solid #f0f1f3; gap:8px; }
+      .pf-row-last { border-bottom:none; }
+      .pf-row-label { font-size:13px; color:#6b7280; flex-shrink:0; }
+      .pf-row-value { font-size:13px; font-weight:600; color:#111827;
+        text-align:right; word-break:break-word; max-width:58%; }
+    `;
+    document.head.appendChild(s);
+    return s;
+  })();
 
   section.innerHTML = `
     <div class="prop-section">
-      <div class="prop-section-eyebrow">Property facts</div>
-      <div class="prop-section-head">Everything you <em>need to know</em>.</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 32px">
-        <div>${col1}</div>
-        ${col2 ? `<div>${col2}</div>` : ''}
-      </div>
+      <div class="prop-section-eyebrow">Property details</div>
+
+      ${hasChips ? `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:${hasCards ? '20px' : '0'}">
+        ${chips.map(c => `
+          <div style="background:#f8faff;border:1px solid #e8edf5;border-radius:10px;padding:12px 14px">
+            <div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+              color:#9ca3af;display:flex;align-items:center;gap:5px;margin-bottom:6px">
+              <i class="fas ${c.icon}" style="color:#c9a55c;font-size:9px"></i>${esc(c.label)}
+            </div>
+            <div style="font-size:14px;font-weight:700;color:#0a1628;line-height:1.25">${esc(String(c.value))}</div>
+          </div>`).join('')}
+      </div>` : ''}
+
+      ${interiorCard}
+      ${locationCard}
+      ${parkingCard}
     </div>`;
 }
 
