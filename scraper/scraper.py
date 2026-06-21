@@ -105,6 +105,54 @@ MAX_WORKERS = 4
 MAX_RETRIES = 3
 RETRY_DELAY = 1.5
 
+# ── Realtor.com Phase 2 — detail page enrichment ──────────────────────────────
+REALTOR_DETAIL_WORKERS   = 5
+REALTOR_DETAIL_DELAY     = (0.8, 2.0)
+REALTOR_DETAIL_TIMEOUT   = 20
+REALTOR_ENRICH_SKIP_SCORE = 80        # skip detail fetch if record already >= this score
+
+_REALTOR_UA_POOL = [
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.6367.202 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+    ),
+    (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/17.4 Safari/605.1.15"
+    ),
+]
+
+_REALTOR_BASE_HEADERS = {
+    "Accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language":           "en-US,en;q=0.9",
+    "Accept-Encoding":           "gzip, deflate, br",
+    "Connection":                "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Cache-Control":             "max-age=0",
+    "sec-fetch-dest":            "document",
+    "sec-fetch-mode":            "navigate",
+    "sec-fetch-site":            "none",
+    "sec-fetch-user":            "?1",
+    "DNT":                       "1",
+}
+
 # ── HTTP session (Supabase) ───────────────────────────────────────────────────
 _session_local = threading.local()
 
@@ -771,6 +819,387 @@ def _map_realtor_property(prop):
     return record
 
 
+# ── Realtor.com Phase 2 — detail page fetch & enrichment ──────────────────────
+
+def _fetch_realtor_detail_html(url, timeout=REALTOR_DETAIL_TIMEOUT):
+    """
+    Fetch a Realtor.com property detail page and return the raw HTML.
+    Uses a rotated User-Agent and realistic browser headers.
+    Realtor.com does NOT block datacenter IPs, so this runs fine from Replit.
+    Returns HTML string or None on any error.
+    """
+    headers = dict(_REALTOR_BASE_HEADERS)
+    headers["User-Agent"] = random.choice(_REALTOR_UA_POOL)
+    headers["Referer"] = "https://www.realtor.com/realestateandhomes-search/"
+    try:
+        r = _requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        if r.status_code == 200:
+            return r.text
+        return None
+    except Exception:
+        return None
+
+
+def _extract_realtor_detail_property(html):
+    """
+    Parse a Realtor.com listing detail page HTML and extract the property object
+    from the embedded Next.js __NEXT_DATA__ JSON.
+
+    Realtor.com uses multiple JSON structures across versions:
+      v1: props.pageProps.property
+      v2: props.pageProps.pdpStoreState.property (newer builds)
+      v3: props.pageProps.initialState.propertyDetails
+      v4: props.pageProps.data.property (API-backed builds)
+
+    Returns the property dict if found, None otherwise.
+    """
+    if not html:
+        return None
+    m = re.search(
+        r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>\s*(.*?)\s*</script>',
+        html, re.DOTALL,
+    )
+    if not m:
+        return None
+    try:
+        nd = json.loads(m.group(1))
+    except (ValueError, TypeError):
+        return None
+
+    pp = (nd.get("props") or {}).get("pageProps") or {}
+
+    # Try all known paths from newest to oldest Realtor.com build
+    candidate_paths = [
+        ["pdpStoreState", "property"],
+        ["property"],
+        ["initialState", "propertyDetails"],
+        ["data", "property"],
+        ["componentProps", "property"],
+        ["listing"],
+    ]
+    for path in candidate_paths:
+        obj = pp
+        for key in path:
+            if not isinstance(obj, dict):
+                obj = None
+                break
+            obj = obj.get(key)
+        if (isinstance(obj, dict) and
+                (obj.get("photos") or obj.get("description") or
+                 obj.get("details") or obj.get("virtual_tours"))):
+            return obj
+
+    return None
+
+
+def _collect_realtor_detail_photos(prop):
+    """
+    Collect up to 50 high-resolution photo URLs from a Realtor.com detail-page
+    property object. Realtor.com stores photos in several locations:
+      - prop.photos: list of {href, tags}  (primary — full CDN URL)
+      - prop.description.primary_photo / alt_photos (fallback)
+    Upgrades each URL to the highest available resolution by stripping size
+    parameters (e.g. _q-80_w-1024_h-768_r-1) from the CDN path.
+    """
+    urls, seen = [], set()
+
+    def _add(u):
+        if not u:
+            return
+        s = str(u).strip()
+        if s and s.startswith("http") and s not in seen:
+            # Strip Realtor CDN resize params to get original-resolution image
+            hd = re.sub(r"_[qwhr]-\d+", "", s)
+            # Prefer the stripped URL; fall back to original if they differ
+            target = hd if hd != s else s
+            if target not in seen:
+                urls.append(target)
+                seen.add(target)
+            # Also mark original as seen to prevent duplicates
+            seen.add(s)
+
+    # Primary source: prop.photos (present on detail page, absent on search)
+    for p in (prop.get("photos") or []):
+        if isinstance(p, dict):
+            _add(p.get("href"))
+        elif isinstance(p, str):
+            _add(p)
+
+    # Fallback: description sub-object photos
+    desc = prop.get("description") or {}
+    primary_photo = desc.get("primary_photo") or {}
+    if isinstance(primary_photo, dict):
+        _add(primary_photo.get("href"))
+    for ap in (desc.get("alt_photos") or []):
+        if isinstance(ap, dict):
+            _add(ap.get("href"))
+        elif isinstance(ap, str):
+            _add(ap)
+
+    return urls[:50]
+
+
+def _enrich_realtor_from_detail(record, prop):
+    """
+    Overlay data from a Realtor.com detail-page property object onto an existing
+    search-phase record (produced by _map_realtor_property).
+
+    Strategy:
+      - Photos    : always replace (detail always has more, higher resolution)
+      - Description: replace if detail is longer
+      - All other : fill in only if currently None/empty
+      - Always    : re-compute quality score after enrichment
+    """
+    if not prop or not isinstance(prop, dict):
+        return record
+
+    desc     = prop.get("description") or {}
+    location = prop.get("location") or {}
+    terms    = prop.get("terms") or []
+    details  = prop.get("details") or []
+
+    # ── Photos (always replace — detail page has the full gallery) ─────────────
+    detail_photos = _collect_realtor_detail_photos(prop)
+    if detail_photos:
+        # Always use detail photos if we have any — richer than search thumbnails
+        record["original_image_urls"] = _jdumps(detail_photos)
+
+    # ── Description (prefer longer text) ──────────────────────────────────────
+    detail_text = desc.get("text") or prop.get("description_text") or ""
+    if len(str(detail_text)) > len(str(record.get("description") or "")):
+        record["description"] = detail_text
+
+    # ── Virtual tour ──────────────────────────────────────────────────────────
+    if not record.get("virtual_tour_url"):
+        tours = prop.get("virtual_tours") or []
+        for t in tours:
+            if isinstance(t, dict):
+                href = t.get("href") or t.get("url")
+                if href:
+                    record["virtual_tour_url"] = href
+                    break
+
+    # ── County from location object ────────────────────────────────────────────
+    if not record.get("county"):
+        county_obj = location.get("county") or {}
+        if isinstance(county_obj, dict):
+            record["county"] = county_obj.get("name")
+        elif isinstance(county_obj, str) and county_obj:
+            record["county"] = county_obj
+
+    # ── Neighborhood from location.neighborhoods ───────────────────────────────
+    if not record.get("neighborhood"):
+        hoods = location.get("neighborhoods") or []
+        if hoods:
+            h0 = hoods[0]
+            if isinstance(h0, dict):
+                record["neighborhood"] = h0.get("name")
+            elif isinstance(h0, str):
+                record["neighborhood"] = h0
+
+    # ── Location context: neighborhood + county + schools ─────────────────────
+    if not record.get("location_context"):
+        ctx_parts = []
+        for h in (location.get("neighborhoods") or []):
+            n = h.get("name") if isinstance(h, dict) else str(h)
+            if n:
+                ctx_parts.append(n)
+        county_obj = location.get("county") or {}
+        c_name = county_obj.get("name") if isinstance(county_obj, dict) else None
+        if c_name and c_name not in ctx_parts:
+            ctx_parts.append(c_name + " County")
+        if ctx_parts:
+            record["location_context"] = ", ".join(ctx_parts)
+
+    # ── Showing instructions ───────────────────────────────────────────────────
+    if not record.get("showing_instructions"):
+        showing = prop.get("showing_details") or {}
+        instr = (showing.get("instructions") or showing.get("showing_instructions") or
+                 prop.get("showing_instructions"))
+        if instr:
+            record["showing_instructions"] = str(instr).strip()[:500]
+
+    # ── Move-in special from terms ─────────────────────────────────────────────
+    if not record.get("move_in_special"):
+        for term in terms:
+            cat = (_get_attr(term, "category") or "").lower()
+            if any(w in cat for w in ("concession", "move-in", "move_in", "special offer",
+                                      "incentive", "discount")):
+                texts = _get_attr(term, "text") or []
+                if isinstance(texts, str):
+                    texts = [texts]
+                if texts:
+                    record["move_in_special"] = str(texts[0]).strip()[:200]
+                    break
+
+    # ── Available date (fill gap from details/terms if not already set) ────────
+    if not record.get("available_date"):
+        avail_items = _details_texts(terms, "available", "date available",
+                                     "move-in date", "occupancy")
+        for raw in avail_items:
+            raw = raw.strip()
+            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%B %d, %Y", "%b %d, %Y"):
+                try:
+                    record["available_date"] = datetime.strptime(
+                        raw[:10], fmt[:len(raw[:10])]
+                    ).strftime("%Y-%m-%d")
+                    break
+                except Exception:
+                    pass
+            if record.get("available_date"):
+                break
+            if any(w in raw.lower() for w in ("immediate", "now", "ready", "available")):
+                record["available_date"] = raw[:40]
+                break
+
+    # ── Coordinates (fill gap) ─────────────────────────────────────────────────
+    if record.get("lat") is None:
+        loc_addr = location.get("address") or {}
+        record["lat"] = _safe_float(loc_addr.get("lat") or prop.get("lat"))
+    if record.get("lng") is None:
+        loc_addr = location.get("address") or {}
+        record["lng"] = _safe_float(loc_addr.get("lon") or prop.get("lon"))
+
+    # ── Property specs from description (fill gaps) ────────────────────────────
+    if not record.get("square_footage"):
+        record["square_footage"] = _safe_int(desc.get("sqft"))
+    if not record.get("year_built"):
+        record["year_built"] = _safe_int(desc.get("year_built"))
+    if not record.get("bedrooms"):
+        record["bedrooms"] = _safe_int(desc.get("beds"))
+
+    # ── Nearby schools — stored in original_data for admin reference ───────────
+    schools_data = prop.get("schools") or {}
+    if schools_data:
+        try:
+            od = json.loads(record.get("original_data") or "{}")
+            od["nearby_schools"] = schools_data
+            od["_phase"] = "detail_enriched"
+            record["original_data"] = json.dumps(od, default=str)
+        except Exception:
+            pass
+
+    # ── Walk / bike / transit scores → location_context ───────────────────────
+    ws = prop.get("walkScore")
+    ts = prop.get("transitScore")
+    bs = prop.get("bikeScore")
+    score_parts = []
+    if ws is not None:
+        score_parts.append("Walk score: " + str(ws))
+    if ts is not None:
+        score_parts.append("Transit score: " + str(ts))
+    if bs is not None:
+        score_parts.append("Bike score: " + str(bs))
+    if score_parts:
+        existing_ctx = record.get("location_context") or ""
+        score_str = "; ".join(score_parts)
+        record["location_context"] = (
+            (existing_ctx + "; " + score_str) if existing_ctx else score_str
+        )
+
+    # ── Amenities from detail page tags (merge, deduplicate) ──────────────────
+    detail_tags = list(prop.get("tags") or [])
+    for d in (details or []):
+        cat = (_get_attr(d, "category") or "").lower()
+        if any(w in cat for w in ("amenities", "community features", "interior features",
+                                  "exterior features", "pool", "recreation")):
+            for t in (_get_attr(d, "text") or []):
+                if t and str(t).strip():
+                    detail_tags.append(str(t).strip())
+    if detail_tags:
+        try:
+            existing = set(json.loads(record.get("amenities") or "[]"))
+        except (ValueError, TypeError):
+            existing = set()
+        merged = list(existing) + [t for t in detail_tags if t not in existing]
+        if merged:
+            record["amenities"] = json.dumps(merged)
+
+    # ── Auto-rebuild title if we now have richer data ─────────────────────────
+    if record.get("bedrooms") and record.get("city") and record.get("property_type"):
+        bed_pfx  = str(record["bedrooms"]) + "BR "
+        type_lbl = record["property_type"].replace("_", " ").title()
+        record["title"] = bed_pfx + type_lbl + " in " + record["city"]
+
+    # ── Re-score ───────────────────────────────────────────────────────────────
+    record["data_quality_score"] = _quality_score(record)
+    record["missing_fields"]     = _jdumps(_missing_fields(record))
+
+    return record
+
+
+def _enrich_realtor_batch(records, verbose=False):
+    """
+    Phase 2 for Realtor.com: concurrently fetch each listing's detail page
+    and call _enrich_realtor_from_detail() to fill in virtual tour, full
+    photo gallery, showing instructions, move-in specials, schools, walk
+    scores, location context, and more.
+
+    Skips records that already have a quality score >= REALTOR_ENRICH_SKIP_SCORE
+    (they are already data-complete from HomeHarvest's extra_property_data mode).
+
+    Works fine from Replit — Realtor.com does NOT block datacenter IPs.
+    """
+    to_fetch = []
+    for i, rec in enumerate(records):
+        url   = rec.get("source_url") or ""
+        score = rec.get("data_quality_score", 0)
+        if url and "realtor.com" in url and score < REALTOR_ENRICH_SKIP_SCORE:
+            to_fetch.append((i, url))
+
+    if not to_fetch:
+        if verbose:
+            print("   [Realtor Phase 2] All records already high-quality — skipping detail fetch.")
+        return records
+
+    if verbose:
+        print(
+            "\n   [Realtor Phase 2] Fetching detail pages for "
+            + str(len(to_fetch)) + "/" + str(len(records)) + " listing(s)..."
+        )
+
+    lock          = threading.Lock()
+    enriched_count = [0]
+    done_count    = [0]
+
+    def _fetch_one(idx_url):
+        idx, url = idx_url
+        time.sleep(random.uniform(*REALTOR_DETAIL_DELAY))
+        html = _fetch_realtor_detail_html(url)
+        prop = _extract_realtor_detail_property(html) if html else None
+        if prop:
+            with lock:
+                _enrich_realtor_from_detail(records[idx], prop)
+                enriched_count[0] += 1
+        with lock:
+            done_count[0] += 1
+            if verbose and done_count[0] % 10 == 0:
+                print(
+                    "   [Realtor Phase 2] "
+                    + str(done_count[0]) + "/" + str(len(to_fetch))
+                    + " pages fetched, "
+                    + str(enriched_count[0]) + " enriched..."
+                )
+        return idx, bool(prop)
+
+    workers = min(REALTOR_DETAIL_WORKERS, len(to_fetch))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_fetch_one, item): item for item in to_fetch}
+        for f in as_completed(futures):
+            f.result()
+
+    if verbose:
+        skipped = len(records) - len(to_fetch)
+        print(
+            "   [Realtor Phase 2] Done — "
+            + str(enriched_count[0]) + " enriched, "
+            + str(len(to_fetch) - enriched_count[0]) + " no detail data, "
+            + str(skipped) + " skipped (already high-quality)"
+        )
+
+    return records
+
+
 # ── Deduplication ─────────────────────────────────────────────────────────────
 
 def _get_existing_ids(source_ids):
@@ -963,6 +1392,18 @@ def _run_realtor(location, args, started_at):
     dropped = len(props) - len(records)
     if dropped:
         print(f"   {dropped} listing(s) dropped (below min-score or no address/coords)")
+
+    # ── Phase 2: enrich from Realtor.com detail pages ─────────────────────────
+    if records and not getattr(args, "no_realtor_details", False):
+        t1 = time.time()
+        records = _enrich_realtor_batch(records, verbose=True)
+        elapsed2 = round(time.time() - t1, 1)
+        avg_after = round(
+            sum(r["data_quality_score"] for r in records) / len(records), 1
+        ) if records else 0
+        print(f"   [Realtor Phase 2] Completed in {elapsed2}s — avg quality score: {avg_after}")
+    elif getattr(args, "no_realtor_details", False):
+        print("   [Realtor Phase 2] Skipped (--no-realtor-details flag set)")
 
     return _stage_records(records, location, "realtor", args, started_at)
 
@@ -1469,7 +1910,8 @@ def run(args):
     print(f"   Limit/loc    : {args.limit}")
     print(f"   Min score    : {args.min_score}")
     print(f"   Extra data   : {args.extra}")
-    print(f"   Zillow detail: {'DISABLED (--no-details)' if getattr(args, 'no_details', False) else 'ENABLED (Phase 2)'}")
+    print(f"   Realtor detail: {'DISABLED (--no-realtor-details)' if getattr(args, 'no_realtor_details', False) else 'ENABLED (Phase 2)'}")
+    print(f"   Zillow detail : {'DISABLED (--no-details)' if getattr(args, 'no_details', False) else 'ENABLED (Phase 2)'}")
 
     locations = list(args.location) if args.location else []
     if args.locations_file:
@@ -1614,6 +2056,16 @@ Search mode (Realtor.com is safe from Replit; Zillow needs residential IP):
     p.add_argument(
         "--extra", action="store_true",
         help="Realtor.com only: fetch extra data per property (schools, tax history). Slower.",
+    )
+    p.add_argument(
+        "--no-realtor-details", action="store_true", dest="no_realtor_details",
+        help=(
+            "Realtor.com search mode only: skip Phase 2 detail-page enrichment. "
+            "By default, scraper visits each Realtor.com listing page to extract "
+            "virtual tours, full photo galleries (up to 50), showing instructions, "
+            "move-in specials, schools, walk scores, and location context. "
+            "Use this flag for a faster but shallower scrape."
+        ),
     )
     p.add_argument(
         "--no-details", action="store_true",
