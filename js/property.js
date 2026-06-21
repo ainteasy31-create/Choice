@@ -441,7 +441,7 @@ function renderProperty(p) {
     metas.push({ label:'Bathrooms', value: bathVal, icon:'fa-bath' });
   }
   if (p.square_footage)   metas.push({ label:'Sq. Ft.', value: p.square_footage.toLocaleString(), icon:'fa-ruler-combined' });
-  if (p.property_type)    metas.push({ label:'Type', value: capitalize(p.property_type), icon:'fa-home' });
+  if (p.property_type)    metas.push({ label:'Type', value: fmtPropType(p.property_type), icon:'fa-home' });
   if (p.pets_allowed != null) metas.push({ label:'Pets', value: p.pets_allowed ? 'Allowed' : 'No Pets', icon:'fa-paw' });
   if (p.year_built)     metas.push({ label:'Year Built', value: p.year_built, icon:'fa-calendar-days' });
   if (p.floors > 1)    metas.push({ label:'Floors', value: p.floors, icon:'fa-layer-group' });
@@ -887,6 +887,20 @@ function renderGallery(photos) {
             </div>` : ''}
         </div>`;
     }).join('');
+    // Adjust grid so there are never empty black cells
+    if (sidePanels.length === 1) {
+      mosaicSide.style.gridTemplateColumns = '1fr';
+      mosaicSide.style.gridTemplateRows = '1fr';
+    } else if (sidePanels.length === 2) {
+      mosaicSide.style.gridTemplateColumns = '1fr';
+      mosaicSide.style.gridTemplateRows = '1fr 1fr';
+    } else if (sidePanels.length === 3) {
+      mosaicSide.style.gridTemplateColumns = 'repeat(2, 1fr)';
+      mosaicSide.style.gridTemplateRows = '1fr 1fr';
+      const cells = mosaicSide.querySelectorAll('.mosaic-cell');
+      if (cells[2]) cells[2].style.gridColumn = '1 / -1';
+    }
+    // 4 panels: default 2×2 layout from CSS
     // Fade out each cell's LQIP placeholder once its image loads;
     // wire CSP-safe onerror via JS (not HTML attribute — blocked by nonce CSP)
     mosaicSide.querySelectorAll('.mosaic-cell').forEach(cell => {
@@ -2260,6 +2274,16 @@ function formatDate(str) {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function fmtPropType(t) {
+  if (!t) return '';
+  const map = {
+    single_family: 'Single Family', apartment: 'Apartment', townhome: 'Townhome',
+    townhouse: 'Townhouse', condo: 'Condo', duplex: 'Duplex', studio: 'Studio',
+    mobile_home: 'Mobile Home', multi_family: 'Multi-Family', land: 'Land',
+    commercial: 'Commercial', other: 'Other',
+  };
+  return map[t.toLowerCase()] || t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
 
 /* ── LQIP helper — delegates to CP.UI.lqipUrl (defined in cp-api.js) ── */
 function lqipUrl(url) { return CP.UI.lqipUrl(url); }
