@@ -342,6 +342,7 @@
         <div class="pl-form-grid full">
           ${fi('description','Description', l.description,'textarea',false,true)}
           ${fi('showing_instructions','Showing instructions', l.showing_instructions,'textarea',false,true)}
+          ${fi('move_in_special','Move-in special / concession', l.move_in_special,'text',false,true)}
           ${fi('location_context','Location context', l.location_context,'text',false,true)}
           ${fi('virtual_tour_url','Virtual tour URL', l.virtual_tour_url,'url',false,true)}
         </div>
@@ -426,7 +427,7 @@
     // Plain text fields
     const textFields = [
       'title','address','city','state','zip','county','neighborhood',
-      'description','showing_instructions','location_context','virtual_tour_url',
+      'description','showing_instructions','move_in_special','location_context','virtual_tour_url',
       'property_type','available_date',
       'heating_type','cooling_type','laundry_type','parking',
     ];
