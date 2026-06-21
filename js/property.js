@@ -83,8 +83,9 @@ if (isPreview) {
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#f59e0b;color:#0a1628;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:0 2px 12px rgba(0,0,0,0.2);font-family:"Inter",sans-serif;font-size:14px;font-weight:600';
     banner.innerHTML = `
       <span><i class="fas fa-eye" style="margin-right:6px"></i>Preview Mode — This listing has not been published yet.</span>
-      <button onclick="history.back()" style="background:#0a1628;color:#f59e0b;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer">← Back to Editor</button>`;
+      <button id="previewBannerBack" style="background:#0a1628;color:#f59e0b;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer">← Back to Editor</button>`;
     document.body.prepend(banner);
+    banner.querySelector('#previewBannerBack').addEventListener('click', () => history.back());
     document.body.style.paddingTop = '48px';
     currentProperty = previewProp;
     renderProperty(previewProp);
@@ -1280,6 +1281,7 @@ window.shareProp = () => {
   if (navigator.share) navigator.share({ title: currentProperty?.title, url: window.location.href });
   else { navigator.clipboard.writeText(window.location.href); showToast('Link copied!', 'success'); }
 };
+document.getElementById('shareBtn')?.addEventListener('click', window.shareProp);
 
 async function toggleSave(id, btn) {
   btn.disabled = true;
