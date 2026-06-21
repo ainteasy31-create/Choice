@@ -2229,7 +2229,7 @@ async function loadSimilarListings(p) {
         : '/assets/placeholder-property.jpg';
       const beds = s.bedrooms === 0 ? 'Studio' : s.bedrooms != null ? s.bedrooms + ' bed' : '';
       const baths = s.bathrooms ? s.bathrooms + ' bath' : '';
-      const meta  = [beds, baths].filter(Boolean).join(' · ') || capitalize(s.property_type || 'Rental');
+      const meta  = [beds, baths].filter(Boolean).join(' · ') || fmtPropType(s.property_type) || 'Rental';
       return `
         <a href="/property.html?id=${esc(s.id)}" class="similar-card">
           <div class="similar-card-photo">
