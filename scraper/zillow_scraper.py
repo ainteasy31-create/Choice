@@ -629,7 +629,7 @@ def _collect_photos_detail(prop):
     # ── Source 6: thumbnail from search phase (absolute fallback)
     _add(prop.get("imgSrc"))
 
-    return urls  # No cap — collect every photo
+    return urls[:50]  # Cap at 50 photos to keep row sizes sane
 
 
 # -- Quality scoring -----------------------------------------------------------
@@ -874,8 +874,13 @@ def _enrich_from_detail(record, prop):
     if not record.get("bedrooms"):
         record["bedrooms"] = _safe_int(prop.get("bedrooms") or rf.get("bedrooms"))
     if not record.get("bathrooms"):
-        baths = _safe_float(prop.get("bathrooms") or rf.get("bathroomsFull"))
-        record["bathrooms"] = _safe_int(baths)
+        # Prefer bathroomsFull (integer count of full baths) over the combined
+        # Zillow "bathrooms" figure (e.g. 2.5), which would be truncated by
+        # _safe_int and silently drop half-bath data already in total_bathrooms.
+        baths_full = _safe_int(rf.get("bathroomsFull") or prop.get("bathroomsOnMainLevel"))
+        if baths_full is None and prop.get("bathrooms") is not None:
+            baths_full = _safe_int(prop.get("bathrooms"))  # truncate combined count as last resort
+        record["bathrooms"] = baths_full
     if not record.get("half_bathrooms"):
         record["half_bathrooms"] = _safe_int(prop.get("bathroomsHalf") or rf.get("bathroomsHalf"))
     if not record.get("total_bathrooms"):
@@ -917,13 +922,11 @@ def _enrich_from_detail(record, prop):
     if detail_rent and not record.get("monthly_rent"):
         record["monthly_rent"] = detail_rent
 
-    # Actual security deposit (NOT just copying rent)
+    # Actual security deposit — never fabricate from rent; leave None if unknown.
+    # The pipeline review UI lets admin fill it in before publishing.
     deposit = _safe_int(rf.get("securityDeposit") or prop.get("securityDeposit"))
     if deposit and deposit > 0:
         record["security_deposit"] = deposit
-    elif not record.get("security_deposit") and record.get("monthly_rent"):
-        # Fall back to rent only if no real deposit found
-        record["security_deposit"] = record["monthly_rent"]
 
     # Fees
     if not record.get("application_fee"):
@@ -1424,16 +1427,22 @@ def _enrich_records_with_details(session, records, verbose=True):
         if already_good:
             print("     Skipping " + str(len(already_good)) + " already high-quality records.")
 
-    enriched = []
-    failed   = 0
+    enriched      = []
+    fetch_failed  = 0   # prop=None (bot block / timeout / 404)
+    worker_errors = 0   # unexpected exception in worker
 
     def _worker(rec):
         url  = rec.get("source_url")
         zpid = rec.get("source_listing_id") or "?"
         prop = _fetch_detail_property(session, url, zpid, verbose=False)
         if prop:
-            return _enrich_from_detail(rec, prop)
-        return rec  # return original if detail fetch failed
+            result = _enrich_from_detail(rec, prop)
+            result["_detail_ok"] = True
+            return result
+        # Detail fetch returned None — bot block, timeout, or 404.
+        stub = dict(rec)
+        stub["_detail_ok"] = False
+        return stub
 
     workers = min(DETAIL_WORKERS, len(to_enrich))
     with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -1443,22 +1452,32 @@ def _enrich_records_with_details(session, records, verbose=True):
             done += 1
             try:
                 result = fut.result()
+                if not result.pop("_detail_ok", True):
+                    fetch_failed += 1
                 enriched.append(result)
-            except Exception:
+            except Exception as _exc:
                 enriched.append(futures[fut])
-                failed += 1
+                worker_errors += 1
             if verbose and done % 5 == 0:
                 print("     [detail] " + str(done) + "/" + str(len(to_enrich)) + " done...")
 
     if verbose:
         scores = [r.get("data_quality_score", 0) for r in enriched]
         avg_after = round(sum(scores) / len(scores), 1) if scores else 0
+        total_failed = fetch_failed + worker_errors
+        ok_count = len(enriched) - total_failed
         print(
             "  ✅  Detail phase complete. "
-            + str(len(enriched) - failed) + " enriched, "
-            + str(failed) + " failed. "
-            + "Avg score after: " + str(avg_after)
+            + str(ok_count) + " enriched, "
+            + str(total_failed) + " failed"
+            + (" (" + str(fetch_failed) + " bot/timeout, " + str(worker_errors) + " errors)" if total_failed else "")
+            + ". Avg score after: " + str(avg_after)
         )
+        if fetch_failed:
+            print(
+                "     ⚠  " + str(fetch_failed) + " listing(s) staged as search-phase stubs "
+                "(detail page blocked — lower quality score, fewer fields)."
+            )
 
     return already_good + enriched
 

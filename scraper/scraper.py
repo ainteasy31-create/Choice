@@ -774,18 +774,28 @@ def _map_realtor_property(prop):
 # ── Deduplication ─────────────────────────────────────────────────────────────
 
 def _get_existing_ids(source_ids):
+    """Return the set of source_listing_ids already in the pipeline table.
+
+    Splits into chunks of 100 to avoid GET URL length limits (414 Too Long)
+    that can occur when a large batch of IDs is joined into a single query string.
+    """
     if not source_ids:
         return set()
     import urllib.parse
-    encoded = urllib.parse.quote(",".join(source_ids))
-    rows, err = _sb_get(
-        "pipeline_properties",
-        f"source_listing_id=in.({encoded})&select=source_listing_id&limit=10000",
-    )
-    if err:
-        print(f"  ⚠  Dedup check error (continuing without dedup): {err[:120]}")
-        return set()
-    return {r["source_listing_id"] for r in rows}
+    existing = set()
+    chunk_size = 100
+    chunks = [source_ids[i:i + chunk_size] for i in range(0, len(source_ids), chunk_size)]
+    for chunk in chunks:
+        encoded = urllib.parse.quote(",".join(chunk))
+        rows, err = _sb_get(
+            "pipeline_properties",
+            f"source_listing_id=in.({encoded})&select=source_listing_id&limit=10000",
+        )
+        if err:
+            print(f"  ⚠  Dedup check error (continuing without dedup): {err[:120]}")
+            return set()  # fail open — DB UNIQUE constraint is the final safety net
+        existing.update(r["source_listing_id"] for r in rows)
+    return existing
 
 
 # ── Scrape-run logger ─────────────────────────────────────────────────────────
