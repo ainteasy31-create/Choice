@@ -262,6 +262,12 @@
     });
     if(!data) return;
 
+    // Validate lease date range
+    if(data.lease_start_date && data.lease_end_date && data.lease_end_date <= data.lease_start_date){
+      S.toast('Lease end date must be after start date.', 'error');
+      return;
+    }
+
     // The utility matrix selects/inputs aren't in formSheet's standard
     // FormData pass-through (they live inside the type:'html' block), so
     // we read them directly off the still-mounted form just before submit.

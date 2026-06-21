@@ -145,11 +145,15 @@ def _sb_get(table, qs=""):
         return [], str(e)
 
 
-def _sb_post_batch(table, records, upsert=False):
+def _sb_post_batch(table, records, upsert=False, ignore_duplicates=False, on_conflict=None):
     prefer = "return=representation"
     if upsert:
         prefer += ",resolution=merge-duplicates"
-    url  = f"{SUPABASE_URL}/rest/v1/{table}"
+    elif ignore_duplicates:
+        prefer += ",resolution=ignore-duplicates"
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    if (upsert or ignore_duplicates) and on_conflict:
+        url += f"?on_conflict={on_conflict}"
     body = json.dumps(records, default=str).encode()
     delay = RETRY_DELAY
     last_err = None
@@ -809,7 +813,12 @@ def _log_run(location, source, count_total, count_new, avg_score,
 # ── Batch insert worker ───────────────────────────────────────────────────────
 
 def _insert_batch(batch, upsert, batch_num, total_batches, source_label):
-    inserted, err = _sb_post_batch("pipeline_properties", batch, upsert=upsert)
+    # When not upserting, use ignore-duplicates so the DB UNIQUE constraint
+    # is the final safety net (silently skips conflicting rows instead of erroring).
+    inserted, err = _sb_post_batch(
+        "pipeline_properties", batch, upsert=upsert,
+        ignore_duplicates=(not upsert), on_conflict="source_listing_id",
+    )
     if err:
         print(f"  ❌  [{source_label}] Batch {batch_num}/{total_batches} failed: {err[:160]}")
         return 0, len(batch)

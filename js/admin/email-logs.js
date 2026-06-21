@@ -1,7 +1,10 @@
 (function(){
   'use strict';
   let _all = [];
+  let _page = 1;
+  let _hasMore = false;
   let _debounce = null;
+  const PER_PAGE = 150;
 
   function pillFor(status){
     const s = (status||'').toLowerCase();
@@ -41,26 +44,53 @@
       if(app && !(l.app_id||'').toLowerCase().includes(app)) return false;
       return true;
     });
-    document.getElementById('count-label').textContent = f.length + ' / ' + _all.length;
+    const countLabel = _hasMore
+      ? f.length + ' / ' + _all.length + '+'
+      : f.length + ' / ' + _all.length;
+    document.getElementById('count-label').textContent = countLabel;
     AdminShell.renderList('#log-list', f, {
       render: row,
       emptyIcon: 'i-mail',
       emptyTitle: 'No matching emails',
       emptySub: 'Try a different filter.'
     });
+    if(_hasMore){
+      const list = document.getElementById('log-list');
+      if(list){
+        const footer = document.createElement('div');
+        footer.style.cssText = 'padding:16px;text-align:center';
+        footer.innerHTML = '<button class="btn btn-secondary" data-action="load-more-logs">Load more</button>';
+        list.appendChild(footer);
+      }
+    }
   }
 
   async function load(){
+    _page = 1;
+    _all  = [];
+    _hasMore = false;
     AdminShell.renderList('#log-list', 'loading', { skeleton: 6 });
     document.getElementById('page-sub').textContent = 'Loading…';
-    const res = await CP.EmailLogs.getAll({ perPage: 500 });
+    const res = await CP.EmailLogs.getAll({ page: 1, perPage: PER_PAGE });
     if(!res.ok){
       AdminShell.renderList('#log-list', { error: res.error || 'Failed to load email logs.' });
       document.getElementById('page-sub').textContent = 'Error';
       return;
     }
     _all = res.data || [];
-    document.getElementById('page-sub').textContent = _all.length + ' total';
+    _hasMore = _all.length >= PER_PAGE;
+    document.getElementById('page-sub').textContent = _all.length + (_hasMore ? '+' : '') + ' total';
+    applyFilter();
+  }
+
+  async function loadMore(){
+    _page++;
+    const res = await CP.EmailLogs.getAll({ page: _page, perPage: PER_PAGE });
+    if(!res.ok){ AdminShell.toast('Failed to load more logs', 'error'); _page--; return; }
+    const batch = res.data || [];
+    _all = _all.concat(batch);
+    _hasMore = batch.length >= PER_PAGE;
+    document.getElementById('page-sub').textContent = _all.length + (_hasMore ? '+' : '') + ' total';
     applyFilter();
   }
 
@@ -99,6 +129,7 @@
     document.getElementById('f-status').addEventListener('change', applyFilter);
 
     AdminShell.on('refresh', () => load());
+    AdminShell.on('load-more-logs', () => loadMore().catch(err => { console.error(err); AdminShell.toast('Failed to load more','error'); }));
     load().catch(err => { console.error(err); AdminShell.toast('Failed to load logs','error'); });
   });
 })();

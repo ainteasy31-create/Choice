@@ -18,6 +18,7 @@
   let selectedIds   = new Set();
   let currentFilter = 'all';
   let scanning      = false;
+  let _displayLimit = 50;
 
   // ─── Proxy URL builder ────────────────────────────────────────────────────
   async function proxyUrl(imageUrl){
@@ -123,14 +124,23 @@
 
   // ─── Render ───────────────────────────────────────────────────────────────
   function renderCards(){
-    const visible = getVisibleProperties();
+    const allVisible = getVisibleProperties();
+    const visible = allVisible.slice(0, _displayLimit);
     const list = document.getElementById('props-list');
     if(!visible.length){
       list.innerHTML = '<div class="empty"><svg class="i"><use href="#i-image"/></svg><h3>No properties</h3><p>Nothing matches this filter.</p></div>';
       updateSummary();
       return;
     }
-    list.innerHTML = '<div class="wm-grid">' + visible.map(cardHtml).join('') + '</div>';
+    let html = '<div class="wm-grid">' + visible.map(cardHtml).join('') + '</div>';
+    if(allVisible.length > _displayLimit){
+      const remaining = allVisible.length - _displayLimit;
+      html += '<div style="padding:20px;text-align:center">'
+        + '<button class="btn btn-secondary" data-action="wm-load-more">'
+        + 'Load more (' + remaining + ' remaining)'
+        + '</button></div>';
+    }
+    list.innerHTML = html;
     updateSummary();
   }
 
@@ -543,12 +553,18 @@
     document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
     document.getElementById('lightbox').addEventListener('click', e => { if(e.target.id==='lightbox') closeLightbox(); });
     document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); });
+    S.on('wm-load-more', () => {
+      _displayLimit += 50;
+      renderCards();
+    });
+
     document.getElementById('filter-tabs').addEventListener('click', e => {
       const btn = e.target.closest('.chip');
       if(!btn) return;
       document.querySelectorAll('#filter-tabs .chip').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentFilter = btn.dataset.filter;
+      _displayLimit = 50;
       renderCards();
     });
 

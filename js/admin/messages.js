@@ -40,8 +40,11 @@
         +   '<div class="th-body">'
         +     msgs
         +     '<div class="reply">'
-        +       '<textarea class="form-input" data-reply="'+S.esc(appId)+'" placeholder="Type a reply…"></textarea>'
-        +       '<button class="btn btn-primary btn-sm" data-action="send-reply" data-app="'+S.esc(appId)+'" style="align-self:flex-end">Send</button>'
+        +       '<textarea class="form-input" data-reply="'+S.esc(appId)+'" placeholder="Type a reply…" maxlength="2000" rows="3"></textarea>'
+        +       '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
+        +         '<small class="muted text-xs" data-reply-count="'+S.esc(appId)+'">0 / 2000</small>'
+        +         '<button class="btn btn-primary btn-sm" data-action="send-reply" data-app="'+S.esc(appId)+'">Send</button>'
+        +       '</div>'
         +     '</div>'
         +   '</div>'
         + '</div>';
@@ -85,6 +88,13 @@
       const t = target.closest('.thread');
       if(t) t.classList.toggle('open');
     });
+
+    document.getElementById('threads').addEventListener('input', e => {
+      const ta = e.target.closest('textarea[data-reply]');
+      if(!ta) return;
+      const counter = document.querySelector('[data-reply-count="'+ta.getAttribute('data-reply')+'"]');
+      if(counter) counter.textContent = ta.value.length + ' / 2000';
+    });
     AdminShell.on('send-reply', async (target) => {
       const appId = target.getAttribute('data-app');
       const ta = document.querySelector('textarea[data-reply="'+appId+'"]');
@@ -96,6 +106,8 @@
       target.disabled = false;
       if(res.ok){
         ta.value = '';
+        const counter = document.querySelector('[data-reply-count="'+appId+'"]');
+        if(counter) counter.textContent = '0 / 2000';
         AdminShell.toast('Message sent','success');
         load();
       } else {
