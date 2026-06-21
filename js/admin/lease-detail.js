@@ -206,7 +206,9 @@
       return;
     }
 
-    const [appRes, eventsRes, pdfsRes, amendmentsRes, ver, tokensRes, leasesRes] = await Promise.all([
+    // Use allSettled so a failure in secondary queries (tokens, leases, admin_actions)
+    // does not block the whole page from rendering when the application was found.
+    const results = await Promise.allSettled([
       sb.from('applications').select('*').eq('app_id', _appId).single(),
       sb.from('sign_events').select('*').eq('app_id', _appId).order('signed_at', { ascending: false }),
       sb.from('lease_pdf_versions').select('*').eq('app_id', _appId).order('version_number', { ascending: false }),
@@ -217,6 +219,9 @@
       // Phase 10 - all leases attached to this application (chronological)
       sb.from('leases').select('id, lease_status, lease_start_date, lease_end_date, monthly_rent, created_at').eq('app_id', _appId).order('created_at', { ascending: false }),
     ]);
+
+    const unwrap = (r) => r.status === 'fulfilled' ? r.value : { data: null, error: r.reason };
+    const [appRes, eventsRes, pdfsRes, amendmentsRes, ver, tokensRes, leasesRes] = results.map(unwrap);
 
     if (appRes.error || !appRes.data) {
       document.getElementById('lease-detail-root').innerHTML =

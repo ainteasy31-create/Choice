@@ -124,7 +124,7 @@
     const items = _warnings.map(w => {
       const tName = ((w.first_name||'') + ' ' + (w.last_name||'')).trim() || 'Unknown tenant';
       const stateName = REQUIRED_STATE_NAMES[w.lease_state_code] || w.lease_state_code;
-      const inspectLink = '/landlord/inspection-review.html?app=' + encodeURIComponent(w.id) + '&type=move_in';
+      const inspectLink = '/landlord/inspection-review.html?app=' + encodeURIComponent(w.app_id) + '&type=move_in';
       const appLink = '/admin/applications.html?id=' + encodeURIComponent(w.app_id);
       return ''
         + '<li class="warn-item">'

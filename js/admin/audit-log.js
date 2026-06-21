@@ -25,7 +25,7 @@
     'property.status_change':'pill-info', 'property.geocode':'pill-muted'
   };
 
-  // Route target links based on target_type
+  // Route target links based on target_type and ID format
   function targetLink(r){
     const S = AdminShell;
     if(!r.target_id) return '<span class="muted">'+S.esc(r.target_type||'—')+'</span>';
@@ -34,8 +34,12 @@
     if(type === 'property'){
       return '<a href="/property.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id.slice(0,8))+'… ↗</a>';
     }
-    // Default: assume application id
-    return '<a href="applications.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id)+'</a>';
+    // APP-XXXX format → link to applications page (works as deep-link anchor)
+    if(type === 'application' || /^APP-/i.test(id)){
+      return '<a href="applications.html?id='+S.esc(id)+'" style="font-family:monospace">'+S.esc(id)+'</a>';
+    }
+    // Raw UUID for other target types — show truncated, no broken link
+    return '<span class="muted text-xs" style="font-family:monospace" title="'+S.esc(type)+': '+S.esc(id)+'">'+S.esc(id.slice(0,8))+'…</span>';
   }
 
   function row(r){

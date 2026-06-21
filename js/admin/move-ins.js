@@ -71,15 +71,11 @@
     }
 
     async function sendEmail(appId, type){
-      const session = await CP.Auth.getSession();
-      const token = session?.access_token || CONFIG.SUPABASE_ANON_KEY;
-      const res = await fetch(CONFIG.SUPABASE_URL+'/functions/v1/send-email', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','apikey':CONFIG.SUPABASE_ANON_KEY,'Authorization':'Bearer '+token},
-        body:JSON.stringify({ app_id: appId, type: type })
-      });
-      const json = await res.json().catch(()=>({}));
-      if(!res.ok || json.success === false) throw new Error(json.error || res.statusText);
+      const res = await AdminShell.callFn('/send-email', { app_id: appId, type });
+      if(!res || !res.ok){
+        const msg = (res && res.json && res.json.error) || 'Email request failed';
+        throw new Error(msg);
+      }
     }
 
     function readyDeps(){ return window.AdminShell && window.CP && CP.Applications && CP.Auth; }

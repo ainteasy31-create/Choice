@@ -129,7 +129,7 @@
           count: reviewable,
           label: reviewable === 1 ? 'Scraped listing awaiting pipeline review' : 'Scraped listings awaiting pipeline review',
           cta:   'Open pipeline',
-          href:  'https://github.com/choice121/property-pipeline',
+          href:  'pipeline.html',
         }));
       }
 

@@ -169,7 +169,8 @@
       const action = target.getAttribute('data-action');
       // Built-in actions
       if(action === 'sign-out'){
-        if(window.CP && CP.sb) CP.sb().auth.signOut().then(() => location.href = 'login.html');
+        if(window.CP && CP.Auth && CP.Auth.signOut) CP.Auth.signOut();
+        else if(window.CP && CP.sb) CP.sb().auth.signOut().then(() => location.href = 'login.html');
         else location.href = 'login.html';
         return;
       }

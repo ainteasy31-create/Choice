@@ -151,7 +151,7 @@
     if (_search) {
       const q = _search.toLowerCase();
       const a = r.app;
-      const hay = [a.first_name, a.last_name, a.property_address, a.city, a.state, a.app_id, a.email]
+      const hay = [a.first_name, a.last_name, a.property_address, a.lease_state_code, a.app_id, a.email]
         .filter(Boolean).map(x => String(x).toLowerCase()).join(' ');
       if (!hay.includes(q)) return false;
     }

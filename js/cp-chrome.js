@@ -132,8 +132,9 @@
           { href: 'new-listing.html',  icon: 'i-plus',    label: 'New Listing' }
         ]},
         { sect: 'Pipeline',   items: [
-          { href: 'inquiries.html',    icon: 'i-message', label: 'Inquiries' },
-          { href: 'applications.html', icon: 'i-apps',    label: 'Applications' }
+          { href: 'inquiries.html',         icon: 'i-message', label: 'Inquiries' },
+          { href: 'applications.html',      icon: 'i-apps',    label: 'Applications' },
+          { href: 'inspection-review.html', icon: 'i-check',   label: 'Inspection Review' }
         ]},
         { sect: 'Account',    items: [
           { href: 'profile.html',      icon: 'i-user',    label: 'Profile' },
@@ -147,9 +148,10 @@
         { href: 'applications.html', icon: 'i-apps',    label: 'Apps' }
       ],
       more: [
-        { href: 'new-listing.html', icon: 'i-plus', label: 'New Listing' },
-        { href: 'profile.html',     icon: 'i-user', label: 'Profile' },
-        { href: 'settings.html',    icon: 'i-cog',  label: 'Settings' }
+        { href: 'new-listing.html',         icon: 'i-plus',  label: 'New Listing' },
+        { href: 'inspection-review.html',   icon: 'i-check', label: 'Inspection Review' },
+        { href: 'profile.html',             icon: 'i-user',  label: 'Profile' },
+        { href: 'settings.html',            icon: 'i-cog',   label: 'Settings' }
       ]
     },
 

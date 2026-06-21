@@ -65,8 +65,13 @@
     const hfRequested = !!app.holding_fee_requested;
     const hfPaid = !!app.holding_fee_paid;
 
-    const paymentInfo = (app.payment_amount_recorded||app.payment_method_recorded)
-      ? `<span class="text-xs muted">${app.payment_amount_recorded?fmtMoney(app.payment_amount_recorded):''} ${app.payment_method_recorded?'via '+S.esc(app.payment_method_recorded):''} ${app.payment_date?'· '+fmtDate(app.payment_date):''}</span>` : '';
+    // Show confirmed/collected fields when present (authoritative); fall back to recorded fields.
+    const hasConfirmed = app.payment_amount_collected || app.payment_method_confirmed || app.payment_confirmed_at;
+    const paymentInfo = hasConfirmed
+      ? `<span class="text-xs muted">${app.payment_amount_collected?fmtMoney(app.payment_amount_collected):''} ${app.payment_method_confirmed?'via '+S.esc(app.payment_method_confirmed):''} ${app.payment_confirmed_at?'· confirmed '+fmtDate(app.payment_confirmed_at):''}</span>`
+      : (app.payment_amount_recorded||app.payment_method_recorded)
+        ? `<span class="text-xs muted">${app.payment_amount_recorded?fmtMoney(app.payment_amount_recorded):''} ${app.payment_method_recorded?'via '+S.esc(app.payment_method_recorded):''} ${app.payment_date?'· '+fmtDate(app.payment_date):''}</span>`
+        : '';
 
     // Payment method coordination chip — shown on unpaid apps so team sees preferred method at a glance
     const prefMethod = app.primary_payment_method || '';

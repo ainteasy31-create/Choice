@@ -134,7 +134,7 @@
 
   async function loadLandlords(){
     if(_landlords.length) return _landlords;
-    const { data } = await CP.sb().rpc('admin_list_landlords', { lim: 200 }).catch(() => ({ data: null }));
+    const { data } = await CP.sb().rpc('admin_list_landlords', { p_page: 0, p_per_page: 200 }).catch(() => ({ data: null }));
     const rows = Array.isArray(data) ? data : [];
     _landlords = rows.map(r => ({ id: r.id, name: r.contact_name || r.business_name || r.id }));
     return _landlords;

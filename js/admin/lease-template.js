@@ -235,6 +235,13 @@
       const session = await CP.Auth.getSession();
       if (!session?.access_token) { S.toast('Session expired. Please sign in again.', 'error'); return; }
 
+      // Pre-set state_code on the existing template BEFORE calling the RPC so the
+      // unique-active-per-state index always sees the correct value from the moment
+      // is_active is flipped to true — closing the race window.
+      if (_activeId) {
+        await sb.from('lease_templates').update({ state_code: stateCode }).eq('id', _activeId);
+      }
+
       const { data, error } = await sb.rpc('publish_lease_template', {
         p_template_id:   _activeId,
         p_name:          name,
@@ -246,14 +253,19 @@
       if (error) { S.toast('Publish failed: ' + error.message, 'error'); return; }
       if (!data?.success) { S.toast('Publish failed: ' + (data?.error || 'unknown'), 'error'); return; }
 
-      // Ensure the row's state_code is set (publish_lease_template predates
-      // Phase 03 — we patch state_code explicitly so the unique-active-per-state
-      // index has the right value).
+      // After publish, ensure the new template row and version both have state_code.
+      // For existing templates the template row was already updated above; here we
+      // handle newly-created templates and always stamp the version row.
+      const tmplUpdateNeeded = data.template_id && !_activeId;
       if (data.template_id) {
-        await sb.from('lease_templates').update({ state_code: stateCode })
-          .eq('id', data.template_id);
-        await sb.from('lease_template_versions').update({ state_code: stateCode })
-          .eq('id', data.version_id);
+        const updates = [];
+        if (tmplUpdateNeeded) {
+          updates.push(sb.from('lease_templates').update({ state_code: stateCode }).eq('id', data.template_id));
+        }
+        if (data.version_id) {
+          updates.push(sb.from('lease_template_versions').update({ state_code: stateCode }).eq('id', data.version_id));
+        }
+        if (updates.length) await Promise.all(updates);
       }
 
       _activeId = data.template_id;
