@@ -1917,24 +1917,100 @@ function buildAdminEditDrawer(prop) {
 // ENRICHMENT SECTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
+/* ── Shared enrichment stylesheet (injected once) ───────────────────────── */
+function injectEnrichmentStyles() {
+  if (document.getElementById('cp-enrichment-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'cp-enrichment-styles';
+  s.textContent = `
+    /* Renter requirement chips */
+    .req-chip { display:flex; align-items:center; gap:10px; padding:10px 14px;
+      border-radius:10px; flex:1; min-width:160px; border:1px solid; }
+    .req-chip-label { font-size:10px; font-weight:700; letter-spacing:.07em;
+      text-transform:uppercase; color:#9ca3af; line-height:1; }
+    .req-chip-value { font-size:13px; font-weight:600; color:#1f2937; margin-top:3px; line-height:1.3; }
+    html[data-theme="dark"] .req-chip { filter:brightness(.65) saturate(.8); }
+    html[data-theme="dark"] .req-chip-value { color:#f3f4f6; filter:brightness(2); }
+
+    /* Property detail cards */
+    .pf-card { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;
+      margin-bottom:10px; background:#fff; }
+    .pf-card-head { background:#f8f9fa; border-bottom:1px solid #e5e7eb;
+      padding:9px 14px; display:flex; align-items:center; gap:7px; }
+    .pf-card-head-text { font-size:10.5px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:#6b7280; }
+    .pf-card-body { padding:0 14px; }
+    .pf-row { display:flex; justify-content:space-between; align-items:center;
+      padding:10px 0; border-bottom:1px solid #f0f1f3; gap:8px; }
+    .pf-row-last { border-bottom:none; }
+    .pf-row-label { font-size:13px; color:#6b7280; flex-shrink:0; }
+    .pf-row-value { font-size:13px; font-weight:600; color:#111827;
+      text-align:right; word-break:break-word; max-width:58%; }
+    html[data-theme="dark"] .pf-card { background:#1e293b; border-color:#334155; }
+    html[data-theme="dark"] .pf-card-head { background:#0f172a; border-bottom-color:#334155; }
+    html[data-theme="dark"] .pf-card-head-text { color:#94a3b8; }
+    html[data-theme="dark"] .pf-row { border-bottom-color:#2d3748; }
+    html[data-theme="dark"] .pf-row-label { color:#9ca3af; }
+    html[data-theme="dark"] .pf-row-value { color:#f3f4f6; }
+
+    /* Walk Score / Schools cards */
+    .score-card { display:flex; align-items:center; gap:14px; padding:16px;
+      border:1.5px solid #e5e7eb; border-radius:12px; text-decoration:none;
+      color:inherit; background:#fafafa; transition:border-color .15s; }
+    .score-card:hover { border-color:#006aff; }
+    .score-card-title { font-weight:700; font-size:14px; color:#1f2937; }
+    .score-card-sub { font-size:12px; color:#6b7280; margin-top:2px; }
+    .score-card-cta { font-size:11.5px; color:#006aff; margin-top:5px; font-weight:600; }
+    html[data-theme="dark"] .score-card { background:#1e293b; border-color:#334155; }
+    html[data-theme="dark"] .score-card:hover { border-color:#3b82f6; }
+    html[data-theme="dark"] .score-card-title { color:#f1f5f9; }
+    html[data-theme="dark"] .score-card-sub { color:#94a3b8; }
+
+    /* Similar listing cards */
+    .similar-card { display:flex; border:1.5px solid #e5e7eb; border-radius:12px;
+      overflow:hidden; text-decoration:none; color:inherit; background:#fff;
+      transition:border-color .15s; }
+    .similar-card:hover { border-color:#006aff; }
+    .similar-card-photo { width:96px; height:90px; flex-shrink:0;
+      background:#f3f4f6; overflow:hidden; }
+    .similar-card-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+    .similar-card-body { padding:11px 14px; flex:1; min-width:0; }
+    .similar-card-price { font-size:15px; font-weight:800; color:#0a1628;
+      letter-spacing:-.02em; line-height:1.2; }
+    .similar-card-title { font-size:12.5px; font-weight:600; color:#1f2937; margin-top:3px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .similar-card-meta { font-size:11.5px; color:#6b7280; margin-top:2px; }
+    .similar-card-addr { font-size:11px; color:#9ca3af; margin-top:1px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    html[data-theme="dark"] .similar-card { background:#1e293b; border-color:#334155; }
+    html[data-theme="dark"] .similar-card:hover { border-color:#3b82f6; }
+    html[data-theme="dark"] .similar-card-photo { background:#0f172a; }
+    html[data-theme="dark"] .similar-card-price { color:#f1f5f9; }
+    html[data-theme="dark"] .similar-card-title { color:#e2e8f0; }
+    html[data-theme="dark"] .similar-card-meta { color:#94a3b8; }
+    html[data-theme="dark"] .similar-card-addr { color:#64748b; }
+  `;
+  document.head.appendChild(s);
+}
+
 /* ── Renter Requirements Strip ───────────────────────────────────────────── */
 function renderRenterRequirements(p) {
   const section = document.getElementById('renterReqsSection');
   if (!section) return;
+  injectEnrichmentStyles();
 
   const reqs = [];
 
   if (p.pets_allowed != null) {
     let petVal = p.pets_allowed ? 'Allowed' : 'Not allowed';
     if (p.pets_allowed && p.pet_types_allowed?.length) petVal += ' · ' + p.pet_types_allowed.join(', ');
-    if (p.pets_allowed && p.pet_weight_limit) petVal += ' · up to ' + p.pet_weight_limit + ' lbs';
+    if (p.pets_allowed && p.pet_weight_limit)          petVal += ' · up to ' + p.pet_weight_limit + ' lbs';
     reqs.push({ icon: 'fa-paw',        label: 'Pets',
       value: petVal,
       color: p.pets_allowed ? '#10b981' : '#ef4444',
       bg:    p.pets_allowed ? '#ecfdf5' : '#fef2f2',
       bdr:   p.pets_allowed ? '#a7f3d0' : '#fecaca' });
   }
-
   if (p.smoking_allowed != null) {
     reqs.push({ icon: p.smoking_allowed ? 'fa-smoking' : 'fa-ban', label: 'Smoking',
       value: p.smoking_allowed ? 'Permitted' : 'Not permitted',
@@ -1942,13 +2018,11 @@ function renderRenterRequirements(p) {
       bg:    p.smoking_allowed ? '#fffbeb' : '#f9fafb',
       bdr:   p.smoking_allowed ? '#fde68a' : '#e5e7eb' });
   }
-
   if (p.minimum_credit_score) {
     reqs.push({ icon: 'fa-chart-line', label: 'Min. credit score',
       value: Number(p.minimum_credit_score).toLocaleString() + '+',
       color: '#2563eb', bg: '#eff6ff', bdr: '#bfdbfe' });
   }
-
   if (p.minimum_income_multiplier) {
     reqs.push({ icon: 'fa-coins', label: 'Min. income',
       value: p.minimum_income_multiplier + '× monthly rent',
@@ -1961,12 +2035,11 @@ function renderRenterRequirements(p) {
   section.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:10px">
       ${reqs.map(r => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;
-          background:${r.bg};border:1px solid ${r.bdr};border-radius:10px;flex:1;min-width:170px">
+        <div class="req-chip" style="background:${r.bg};border-color:${r.bdr}">
           <i class="fas ${r.icon}" style="color:${r.color};font-size:15px;width:18px;text-align:center;flex-shrink:0"></i>
           <div>
-            <div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9ca3af;line-height:1">${esc(r.label)}</div>
-            <div style="font-size:13px;font-weight:600;color:#1f2937;margin-top:3px;line-height:1.3">${esc(r.value)}</div>
+            <div class="req-chip-label">${esc(r.label)}</div>
+            <div class="req-chip-value">${esc(r.value)}</div>
           </div>
         </div>`).join('')}
     </div>`;
@@ -1977,30 +2050,10 @@ function renderPropFacts(p) {
   const section = document.getElementById('propFactsSection');
   const divider = document.getElementById('dividerAfterFacts');
   if (!section) return;
+  injectEnrichmentStyles();
 
-  // ── Chip grid — primary key facts ──────────────────────────────────────
-  const bathStr = p.bathrooms != null
-    ? (p.half_bathrooms ? `${p.bathrooms} full + 1 half` : String(p.bathrooms))
-    : null;
-
-  const availNow   = !p.available_date || new Date(p.available_date + 'T00:00:00') <= new Date();
-  const availLabel = p.available_date != null ? (availNow ? 'Now' : formatDate(p.available_date)) : null;
-
-  const chips = [
-    { icon: 'fa-home',            label: 'Type',        value: p.property_type ? capitalize(p.property_type) : null },
-    { icon: 'fa-bed',             label: 'Bedrooms',    value: p.bedrooms === 0 ? 'Studio' : (p.bedrooms ?? null) },
-    { icon: 'fa-bath',            label: 'Bathrooms',   value: bathStr },
-    { icon: 'fa-ruler-combined',  label: 'Square feet', value: p.square_footage ? Number(p.square_footage).toLocaleString() : null },
-    { icon: 'fa-calendar-alt',    label: 'Year built',  value: p.year_built ?? null },
-    { icon: 'fa-key',             label: 'Available',   value: availLabel },
-    { icon: 'fa-layer-group',     label: 'Stories',     value: p.floors > 1 ? p.floors : null },
-    { icon: 'fa-dungeon',         label: 'Basement',    value: p.has_basement === true ? 'Yes' : p.has_basement === false ? 'No' : null },
-    { icon: 'fa-snowflake',       label: 'Central A/C', value: p.has_central_air === true ? 'Yes' : p.has_central_air === false ? 'No' : null },
-    { icon: 'fa-file-contract',   label: 'Min. lease',  value: p.minimum_lease_months ? p.minimum_lease_months + ' months' : null },
-  ].filter(c => c.value != null && c.value !== '');
-
-  // ── Card helper — secondary detail rows ────────────────────────────────
-  const detailRow = (label, value) => {
+  // ── Row / card helpers using shared CSS classes ────────────────────────
+  const row = (label, value) => {
     if (value == null || value === '' || value === false) return '';
     return `<div class="pf-row">
       <span class="pf-row-label">${label}</span>
@@ -2008,90 +2061,77 @@ function renderPropFacts(p) {
     </div>`;
   };
 
-  const detailCard = (heading, icon, rawRows) => {
+  const card = (heading, icon, rawRows) => {
     const rows = rawRows.filter(Boolean);
     if (!rows.length) return '';
-    // Remove bottom border from last row
     rows[rows.length - 1] = rows[rows.length - 1].replace('class="pf-row"', 'class="pf-row pf-row-last"');
     return `
-      <div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:10px;background:#fff">
-        <div style="background:#f8f9fa;border-bottom:1px solid #e5e7eb;padding:9px 14px;
-          display:flex;align-items:center;gap:7px">
+      <div class="pf-card">
+        <div class="pf-card-head">
           <i class="fas ${icon}" style="color:#c9a55c;font-size:10px"></i>
-          <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280">${heading}</span>
+          <span class="pf-card-head-text">${heading}</span>
         </div>
-        <div style="padding:0 14px">
-          ${rows.join('')}
-        </div>
+        <div class="pf-card-body">${rows.join('')}</div>
       </div>`;
   };
 
-  // Interior: heating/cooling/laundry/flooring
-  const interiorCard = detailCard('Interior details', 'fa-house', [
-    detailRow('Heating',  p.heating_type),
-    detailRow('Cooling',  p.cooling_type),
-    detailRow('Laundry',  p.laundry_type),
-    detailRow('Flooring', p.flooring?.length ? p.flooring.join(', ') : null),
+  // ── Cards — only fields NOT already in meta strip or tabs ──────────────
+
+  // Move-in: available (future date only — if now, header chip already says so),
+  // lease terms, min lease (also in Lease tab but worth surfacing here)
+  const availNow = !p.available_date || new Date(p.available_date + 'T00:00:00') <= new Date();
+  const moveInCard = card('Move-in', 'fa-key', [
+    row('Available',   !availNow && p.available_date ? formatDate(p.available_date) : null),
+    row('Lease terms', p.lease_terms?.length ? p.lease_terms.join(', ') : null),
+    row('Min. lease',  p.minimum_lease_months ? p.minimum_lease_months + ' months' : null),
   ]);
 
-  // Location: county / neighborhood
-  const locationCard = detailCard('Location', 'fa-map-marker-alt', [
-    detailRow('County',       p.county),
-    detailRow('Neighborhood', p.neighborhood),
+  // Interior: heating / cooling / laundry
+  // (flooring excluded — already in Amenities tab; beds/baths/sqft excluded — in meta strip)
+  const interiorCard = card('Interior', 'fa-house', [
+    row('Heating', p.heating_type),
+    row('Cooling', p.cooling_type),
+    row('Laundry', p.laundry_type),
+  ]);
+
+  // Location: county + neighborhood (not shown elsewhere in detail)
+  const locationCard = card('Location', 'fa-map-marker-alt', [
+    row('County',       p.county),
+    row('Neighborhood', p.neighborhood),
   ]);
 
   // Parking & outdoor
-  const parkingCard = detailCard('Parking &amp; outdoor', 'fa-car', [
-    detailRow('Parking',       p.parking),
-    detailRow('Garage spaces', p.garage_spaces),
-    detailRow('Parking fee',   p.parking_fee ? '$' + Number(p.parking_fee).toLocaleString() + '/mo' : null),
-    detailRow('Lot size',      p.lot_size_sqft ? Number(p.lot_size_sqft).toLocaleString() + ' sqft' : null),
+  const parkingCard = card('Parking &amp; outdoor', 'fa-car', [
+    row('Parking',       p.parking),
+    row('Garage spaces', p.garage_spaces),
+    row('Parking fee',   p.parking_fee ? '$' + Number(p.parking_fee).toLocaleString() + '/mo' : null),
+    row('Lot size',      p.lot_size_sqft ? Number(p.lot_size_sqft).toLocaleString() + ' sqft' : null),
   ]);
 
-  const hasChips = chips.length > 0;
-  const hasCards = interiorCard || locationCard || parkingCard;
-  if (!hasChips && !hasCards) return;
+  const hasContent = moveInCard || interiorCard || locationCard || parkingCard;
+  if (!hasContent) return;
 
-  // If available date is in chip grid, remove it from the Costs table to avoid duplication
-  if (availLabel && document.getElementById('sidebarMoveInRow')) {
-    document.getElementById('sidebarMoveInRow').style.display = 'none';
+  // Show divider between Features tabs and this section when both are visible
+  const tabsSec = document.getElementById('detailTabsSection');
+  if (tabsSec && tabsSec.style.display !== 'none') {
+    const fd = document.getElementById('dividerAfterFeatures');
+    if (fd) fd.style.display = '';
+  }
+
+  // Suppress "Available From" in Costs table — shown in move-in card instead
+  if (!availNow && p.available_date) {
+    const moveInRow = document.getElementById('sidebarMoveInRow');
+    if (moveInRow) moveInRow.style.display = 'none';
   }
 
   section.style.display = '';
   if (divider) divider.style.display = '';
 
-  // Inject pf-row styles once (scoped to this section, no global CSS file needed)
-  const styleTag = document.getElementById('pf-row-styles') || (() => {
-    const s = document.createElement('style');
-    s.id = 'pf-row-styles';
-    s.textContent = `
-      .pf-row { display:flex; justify-content:space-between; align-items:center;
-        padding:10px 0; border-bottom:1px solid #f0f1f3; gap:8px; }
-      .pf-row-last { border-bottom:none; }
-      .pf-row-label { font-size:13px; color:#6b7280; flex-shrink:0; }
-      .pf-row-value { font-size:13px; font-weight:600; color:#111827;
-        text-align:right; word-break:break-word; max-width:58%; }
-    `;
-    document.head.appendChild(s);
-    return s;
-  })();
-
   section.innerHTML = `
     <div class="prop-section">
       <div class="prop-section-eyebrow">Property details</div>
-
-      ${hasChips ? `
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:${hasCards ? '20px' : '0'}">
-        ${chips.map(c => `
-          <div style="background:#f8faff;border:1px solid #e8edf5;border-radius:10px;padding:12px 14px">
-            <div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
-              color:#9ca3af;display:flex;align-items:center;gap:5px;margin-bottom:6px">
-              <i class="fas ${c.icon}" style="color:#c9a55c;font-size:9px"></i>${esc(c.label)}
-            </div>
-            <div style="font-size:14px;font-weight:700;color:#0a1628;line-height:1.25">${esc(String(c.value))}</div>
-          </div>`).join('')}
-      </div>` : ''}
-
+      <div class="prop-section-head">More about <em>this home</em>.</div>
+      ${moveInCard}
       ${interiorCard}
       ${locationCard}
       ${parkingCard}
@@ -2103,6 +2143,7 @@ function renderScoresSection(p) {
   const section = document.getElementById('scoresSection');
   const divider = document.getElementById('dividerAfterScores');
   if (!section) return;
+  injectEnrichmentStyles();
 
   const addrSlug = encodeURIComponent(`${p.address || ''} ${p.city || ''} ${p.state || ''}`);
   const wsUrl = `https://www.walkscore.com/score/${addrSlug}`;
@@ -2110,17 +2151,14 @@ function renderScoresSection(p) {
     ? `https://www.greatschools.org/search/search.page?q=${encodeURIComponent(p.zip)}&sortBy=distance`
     : `https://www.greatschools.org/search/search.page?q=${encodeURIComponent((p.city || '') + ' ' + (p.state || ''))}&sortBy=distance`;
 
-  const card = (href, emoji, bg, title, sub) =>
-    `<a href="${href}" target="_blank" rel="noopener noreferrer"
-      style="display:flex;align-items:center;gap:14px;padding:16px;border:1.5px solid #e5e7eb;
-        border-radius:12px;text-decoration:none;color:inherit;background:#fafafa;transition:border-color .15s"
-      onmouseover="this.style.borderColor='#006aff'" onmouseout="this.style.borderColor='#e5e7eb'">
+  const scoreCard = (href, emoji, bg, title, sub, cta) =>
+    `<a href="${href}" target="_blank" rel="noopener noreferrer" class="score-card">
       <div style="width:44px;height:44px;border-radius:10px;background:${bg};display:flex;
         align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${emoji}</div>
       <div>
-        <div style="font-weight:700;font-size:14px;color:#1f2937">${title}</div>
-        <div style="font-size:12px;color:#6b7280;margin-top:2px">${sub}</div>
-        <div style="font-size:11.5px;color:#006aff;margin-top:5px;font-weight:600">View score →</div>
+        <div class="score-card-title">${title}</div>
+        <div class="score-card-sub">${sub}</div>
+        <div class="score-card-cta">${cta}</div>
       </div>
     </a>`;
 
@@ -2131,12 +2169,14 @@ function renderScoresSection(p) {
       <div class="prop-section-eyebrow">Neighborhood</div>
       <div class="prop-section-head">Life <em>around you</em>.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-        ${card(wsUrl, '🚶', '#e8f0fe',
+        ${scoreCard(wsUrl, '🚶', '#e8f0fe',
           'Walk &amp; Transit Scores',
-          'Walkability, transit &amp; bike friendliness')}
-        ${card(gsUrl, '🏫', '#ecfdf5',
+          'Walkability, transit &amp; bike friendliness',
+          'View score →')}
+        ${scoreCard(gsUrl, '🏫', '#ecfdf5',
           'Nearby Schools',
-          'Ratings &amp; reviews via GreatSchools')}
+          'Ratings &amp; reviews via GreatSchools',
+          'View schools →')}
       </div>
     </div>`;
 }
@@ -2146,6 +2186,7 @@ async function loadSimilarListings(p) {
   const section = document.getElementById('similarSection');
   const divider = document.getElementById('dividerAfterSimilar');
   if (!section || !p.city) return;
+  injectEnrichmentStyles();
 
   try {
     const { data } = await supabase
@@ -2176,28 +2217,20 @@ async function loadSimilarListings(p) {
       const baths = s.bathrooms ? s.bathrooms + ' bath' : '';
       const meta  = [beds, baths].filter(Boolean).join(' · ') || capitalize(s.property_type || 'Rental');
       return `
-        <a href="/property.html?id=${esc(s.id)}"
-          style="display:flex;gap:0;border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden;
-            text-decoration:none;color:inherit;background:#fff;transition:border-color .15s"
-          onmouseover="this.style.borderColor='#006aff'" onmouseout="this.style.borderColor='#e5e7eb'">
-          <div style="width:96px;min-height:80px;flex-shrink:0;background:#f3f4f6;overflow:hidden">
+        <a href="/property.html?id=${esc(s.id)}" class="similar-card">
+          <div class="similar-card-photo">
             <img src="${esc(photoUrl)}" alt="${esc(s.title || 'Listing')}" loading="lazy"
-              style="width:100%;height:100%;object-fit:cover;display:block"
               onerror="this.onerror=null;this.src='/assets/placeholder-property.jpg'">
           </div>
-          <div style="padding:11px 14px;flex:1;min-width:0">
-            <div style="font-size:15px;font-weight:800;color:#0a1628;letter-spacing:-.02em;line-height:1.2">
+          <div class="similar-card-body">
+            <div class="similar-card-price">
               ${s.monthly_rent != null
                 ? '$' + Number(s.monthly_rent).toLocaleString() + '<span style="font-size:11px;font-weight:500;color:#6b7280">/mo</span>'
                 : 'TBD'}
             </div>
-            <div style="font-size:12.5px;font-weight:600;color:#1f2937;margin-top:3px;
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title || 'Rental')}</div>
-            <div style="font-size:11.5px;color:#6b7280;margin-top:2px">${esc(meta)}</div>
-            <div style="font-size:11px;color:#9ca3af;margin-top:1px;
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-              ${esc([s.address, s.city, s.state].filter(Boolean).join(', '))}
-            </div>
+            <div class="similar-card-title">${esc(s.title || 'Rental')}</div>
+            <div class="similar-card-meta">${esc(meta)}</div>
+            <div class="similar-card-addr">${esc([s.address, s.city, s.state].filter(Boolean).join(', '))}</div>
           </div>
         </a>`;
     }).join('');
@@ -2211,7 +2244,7 @@ async function loadSimilarListings(p) {
         <div style="display:flex;flex-direction:column;gap:10px">${cards}</div>
         <a href="/listings.html" style="display:inline-flex;align-items:center;gap:6px;
           margin-top:16px;font-size:13px;font-weight:600;color:#006aff;text-decoration:none">
-          See all rentals <i class="fas fa-arrow-right" style="font-size:11px"></i>
+          See all rentals in ${esc(p.city)} <i class="fas fa-arrow-right" style="font-size:11px"></i>
         </a>
       </div>`;
   } catch(e) {
