@@ -153,7 +153,7 @@
     return `<div class="pl-card${isChecked ? ' pl-card-selected' : ''}" data-pl-id="${S.esc(l.id)}" role="button" tabindex="0" aria-label="${S.esc((l.address||'Listing') + ', ' + (l.city||''))}">
       <div class="pl-thumb-wrap">
         ${thumb
-          ? `<img class="pl-thumb" src="${S.esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          ? `<img class="pl-thumb" src="${S.esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           : ''}
         <div class="pl-thumb-placeholder" style="${thumb ? 'display:none' : ''}">
           <svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-listings"/></svg>
@@ -206,7 +206,7 @@
   function panelPhotos(l){
     const imgs = parseJSON(l.original_image_urls) || [];
     if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
-    return `<div class="pl-photo-strip">${imgs.slice(0,12).map(u => `<img src="${S.esc(u)}" alt="" loading="lazy">`).join('')}</div>
+    return `<div class="pl-photo-strip">${imgs.slice(0,12).map(u => `<img src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>
     <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source — transferred to ImageKit automatically on publish.</div>`;
   }
 
