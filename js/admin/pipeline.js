@@ -421,6 +421,56 @@
 
   // ── Panel open / close ──────────────────────────────────────────────────────
 
+  // Auto-fill county (and neighborhood if missing) via Geoapify reverse geocode.
+  // Only fires when lat+lng are known and county is empty.
+  async function autoFillLocation(l){
+    const apiKey = window.CONFIG && CONFIG.GEOAPIFY_API_KEY;
+    if(!apiKey || !l.lat || !l.lng) return;
+    if(l.county) return; // already set — don't overwrite
+
+    const panel = document.getElementById('pl-panel');
+    if(!panel) return;
+
+    const countyEl = panel.querySelector('#pf-county');
+    const neighEl  = panel.querySelector('#pf-neighborhood');
+    if(!countyEl) return;
+
+    // Show subtle loading hint
+    countyEl.placeholder = 'Looking up…';
+
+    try {
+      const res  = await fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${encodeURIComponent(l.lat)}&lon=${encodeURIComponent(l.lng)}&apiKey=${encodeURIComponent(apiKey)}`);
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      const props = json?.features?.[0]?.properties;
+      if(!props) throw new Error('No result');
+
+      // county field — Geoapify calls it "county"
+      const county = props.county || '';
+      if(county && countyEl && !countyEl.value.trim()){
+        countyEl.value = county;
+        countyEl.style.borderColor = 'var(--brand)';
+        setTimeout(() => { if(countyEl) countyEl.style.borderColor = ''; }, 2000);
+      }
+
+      // neighborhood — prefer suburb, then district, then city_district
+      const neighborhood = props.suburb || props.district || props.city_district || '';
+      if(neighborhood && neighEl && !neighEl.value.trim() && !l.neighborhood){
+        neighEl.value = neighborhood;
+        neighEl.style.borderColor = 'var(--brand)';
+        setTimeout(() => { if(neighEl) neighEl.style.borderColor = ''; }, 2000);
+      }
+
+      if(county || neighborhood){
+        S.toast('County' + (neighborhood ? ' & neighborhood' : '') + ' auto-filled from coordinates', 'info');
+      }
+    } catch(e){
+      // silently ignore — user can fill county manually
+    } finally {
+      if(countyEl) countyEl.placeholder = '';
+    }
+  }
+
   function openPanel(l){
     _current = l;
     _dirty   = {};
@@ -435,6 +485,8 @@
       // Focus first focusable input for accessibility
       const firstInput = panel.querySelector('input,select,textarea,button');
       if(firstInput) setTimeout(() => firstInput.focus(), 100);
+      // Auto-fill county/neighborhood from lat+lng if missing
+      autoFillLocation(l);
     });
 
     const saveBtn = panel.querySelector('.pl-save-btn');
