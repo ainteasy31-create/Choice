@@ -7,7 +7,7 @@
 //   Flow: Apply -> Payment -> Review -> Approval -> Reservation -> Lease -> Move-In
 var COPY = {
   en: {
-    feeStatement: 'A $50 application fee is required after submission. Our team will contact you to securely complete payment before your application is reviewed.',
+    feeStatement: 'An application fee is required after submission. Our team will contact you to securely complete payment before your application is reviewed.',
     feeReinforcement: 'Applications are only activated after payment is completed.',
     reviewTime: 'Applications are typically processed within 24 to 72 hours after payment is completed.',
     reviewBehavior: 'Faster decisions are often made for applicants who complete all steps promptly, provide accurate information, and remain responsive.',
@@ -24,7 +24,7 @@ var COPY = {
     leaseWindow: 'Please complete your lease within 48 hours to maintain your reservation.'
   },
   es: {
-    feeStatement: 'Se requiere un cargo de solicitud de $50 después de enviar su solicitud. Nuestro equipo lo contactará para completar el pago de forma segura antes de revisar su solicitud.',
+    feeStatement: 'Se requiere un cargo de solicitud después de enviar su solicitud. Nuestro equipo lo contactará para completar el pago de forma segura antes de revisar su solicitud.',
     feeReinforcement: 'Las solicitudes solo se activan después de completar el pago.',
     reviewTime: 'Las solicitudes generalmente se procesan dentro de 24 a 72 horas después de completar el pago.',
     reviewBehavior: 'Las decisiones más rápidas suelen tomarse para quienes completan todos los pasos con prontitud, brindan información precisa y responden a tiempo.',

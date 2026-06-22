@@ -173,15 +173,34 @@ export function applicationConfirmationHtml(
   appId: string,
   fields?: ApplicationFields,
   dashboardLink?: string,
+  enforcedFee?: number | null,
 ): string {
   const portal = dashboardLink || getTenantLoginUrl(appId, String(fields?.['Email'] || ''));
-  const fee = fields?.['Application Fee'];
-  const feeDisplay = fee != null && Number(fee) > 0 ? `$${Number(fee).toFixed(0)}` : 'Per property terms';
+  const feeRaw = fields?.['Application Fee'];
+  const feeNum = enforcedFee != null ? enforcedFee : (feeRaw != null ? Number(feeRaw) : -1);
+  const hasFee = feeNum > 0;
+  const freeApp = feeNum === 0;
+  const feeDisplay = hasFee ? `$${feeNum.toFixed(0)}` : (freeApp ? 'Free' : 'Per property terms');
   const payMethods = [
     fields?.['Primary Payment Method'],
     fields?.['Alternative Payment Method'],
     fields?.['Third Choice Payment Method'],
   ].filter(Boolean) as string[];
+  const phoneRef = fields?.['Phone'] ? ` at <strong>${fields['Phone']}</strong>` : '';
+  const payPills = payMethods.length ? `<div>${payMethods.map(m => `<span class="pay-pill">${m}</span>`).join('')}</div>` : '';
+  const paymentSection = hasFee
+    ? `<div class="section"><div class="section-label">Application Fee &amp; Payment</div><div class="callout amber"><h4>Application Fee \u2014 ${feeDisplay}</h4><p style="margin-bottom:12px;">A member of our leasing team will contact you within 24 hours via text${phoneRef} to coordinate your application fee. Your application will not be reviewed until payment is received and confirmed.</p>${payPills}</div></div>`
+    : freeApp
+      ? `<div class="section"><div class="section-label">Application Fee &amp; Payment</div><div class="callout green"><h4>No Application Fee Required</h4><p>This property has no application fee. Your application will proceed directly to the screening queue \u2014 no payment step is required.</p></div></div>`
+      : `<div class="section"><div class="section-label">Application Fee &amp; Payment</div><div class="callout amber"><h4>Application Fee \u2014 ${feeDisplay}</h4><p style="margin-bottom:12px;">A member of our leasing team will contact you to confirm any applicable application fee before your application proceeds to review.</p></div></div>`;
+  const nextSteps = hasFee
+    ? `<ul class="steps-list"><li><span class="step-num">1</span><span><strong>Payment Arrangement</strong> \u2014 Our leasing team will contact you within 24 hours to coordinate your application fee via your preferred payment method.</span></li><li><span class="step-num">2</span><span><strong>Payment Confirmation</strong> \u2014 Once your fee is received and confirmed, you will receive an email notification and your application will advance to the review stage.</span></li><li><span class="step-num">3</span><span><strong>Application Review</strong> \u2014 Our team will conduct a thorough review within 24\u201372 hours of payment confirmation. Applicants who complete steps promptly are often prioritized in the review queue.</span></li><li><span class="step-num">4</span><span><strong>Decision Notification</strong> \u2014 You will be notified of our decision via email. If approved, our leasing team will prepare your lease agreement for signature.</span></li></ul>`
+    : `<ul class="steps-list"><li><span class="step-num">1</span><span><strong>Application Review</strong> \u2014 Our team will conduct a thorough review of your application. No fee is required for this property.</span></li><li><span class="step-num">2</span><span><strong>Screening</strong> \u2014 A background and credit check will be completed. This typically takes 24\u201372 hours from submission.</span></li><li><span class="step-num">3</span><span><strong>Decision Notification</strong> \u2014 You will be notified of our decision via email. If approved, our leasing team will reach out to arrange next steps.</span></li></ul>`;
+  const agreementFeeLine = hasFee
+    ? `The <strong>${feeDisplay} application fee is non-refundable</strong> once payment is confirmed, except as described in the <a href="${POLICY_BASE_URL}/application-credit-policy.html" style="color:#1a5276;">Application Credit Policy</a>.`
+    : freeApp
+      ? 'There is no application fee for this property.'
+      : `Application fees, where applicable, are non-refundable once payment is confirmed, except as described in the <a href="${POLICY_BASE_URL}/application-credit-policy.html" style="color:#1a5276;">Application Credit Policy</a>.`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -194,7 +213,7 @@ export function applicationConfirmationHtml(
 <body>
 <div class="email-wrapper">
   ${buildEmailHeader('Application Successfully Received', appId)}
-  <div class="status-line status-pending">&#x23F3; &nbsp; Awaiting Application Fee &middot; Review Pending</div>
+  ${hasFee ? '<div class="status-line status-pending">&#x23F3; &nbsp; Awaiting Application Fee &middot; Review Pending</div>' : freeApp ? '<div class="status-line" style="color:#166534;background:#f0fdf4">&#x2713; &nbsp; Application Received &middot; No Fee Required &middot; Entering Review</div>' : '<div class="status-line status-pending">&#x23F3; &nbsp; Application Received &middot; Review Pending</div>'}
   <div class="email-body">
     <p class="greeting">Dear ${firstName},</p>
     <p class="intro-text">Thank you for choosing Choice Properties. We have successfully received your rental application and your file is now in our system. This confirmation serves as your official acknowledgment that your submission has been recorded.</p>
@@ -213,23 +232,11 @@ export function applicationConfirmationHtml(
       </table>
     </div>
 
-    <div class="section">
-      <div class="section-label">Application Fee &amp; Payment</div>
-      <div class="callout amber">
-        <h4>Application Fee — ${feeDisplay}</h4>
-        <p style="margin-bottom:12px;">A member of our leasing team will contact you within 24 hours via text${fields?.['Phone'] ? ` at <strong>${fields['Phone']}</strong>` : ''} to coordinate your application fee. Your application will not be reviewed until payment is received and confirmed.</p>
-        ${payMethods.length ? `<div>${payMethods.map(m => `<span class="pay-pill">${m}</span>`).join('')}</div>` : ''}
-      </div>
-    </div>
+    ${paymentSection}
 
     <div class="section">
       <div class="section-label">What Happens Next</div>
-      <ul class="steps-list">
-        <li><span class="step-num">1</span><span><strong>Payment Arrangement</strong> — Our leasing team will contact you within 24 hours to coordinate your application fee via your preferred payment method.</span></li>
-        <li><span class="step-num">2</span><span><strong>Payment Confirmation</strong> — Once your fee is received and confirmed, you will receive an email notification and your application will advance to the review stage.</span></li>
-        <li><span class="step-num">3</span><span><strong>Application Review</strong> — Our team will conduct a thorough review within 24–72 hours of payment confirmation. Applicants who complete steps promptly are often prioritized in the review queue.</span></li>
-        <li><span class="step-num">4</span><span><strong>Decision Notification</strong> — You will be notified of our decision via email. If approved, our leasing team will prepare your lease agreement for signature.</span></li>
-      </ul>
+      ${nextSteps}
     </div>
 
     <div class="callout">
@@ -248,8 +255,7 @@ export function applicationConfirmationHtml(
         <a href="${POLICY_BASE_URL}/terms.html" style="color:#1a5276;">Terms of Service</a> (including binding arbitration and class-action waiver in Sections 18–19),
         the <a href="${POLICY_BASE_URL}/privacy.html" style="color:#1a5276;">Privacy Policy</a>, and the
         <a href="${POLICY_BASE_URL}/policies.html" style="color:#1a5276;">Complete Policy &amp; Legal Framework</a> (v2.0).
-        The <strong>$50 application fee is non-refundable</strong> once payment is confirmed, except as described in the
-        <a href="${POLICY_BASE_URL}/application-credit-policy.html" style="color:#1a5276;">Application Credit Policy</a>.
+        ${agreementFeeLine}
         ${fields?.['SMS Consent'] === 'yes'
           ? `You opted in to transactional SMS at <strong>${fields?.['Phone'] || 'the number on file'}</strong>. Reply STOP to opt out at any time.`
           : `You did not opt in to SMS — we will reach you by email and phone only.`}
@@ -279,15 +285,24 @@ export function adminNotificationHtml(
   propertyAddress: string,
   appId: string,
   fields?: ApplicationFields,
+  enforcedFee?: number | null,
 ): string {
   const adminUrl = getAdminUrl();
-  const fee = fields?.['Application Fee'];
-  const feeDisplay = fee != null && Number(fee) > 0 ? `$${Number(fee).toFixed(0)}.00` : 'Per property terms';
+  const feeRaw = fields?.['Application Fee'];
+  const feeNum = enforcedFee != null ? enforcedFee : (feeRaw != null ? Number(feeRaw) : -1);
+  const hasFee = feeNum > 0;
+  const freeApp = feeNum === 0;
+  const feeDisplay = hasFee ? `$${feeNum.toFixed(2)}` : (freeApp ? 'Free \u2014 No Fee' : 'Per property terms');
   const payMethods = [
     fields?.['Primary Payment Method'],
     fields?.['Alternative Payment Method'],
     fields?.['Third Choice Payment Method'],
   ].filter(Boolean) as string[];
+  const adminPaymentSection = hasFee
+    ? `<div class="section"><div class="section-label" style="color:#1d4ed8;">\ud83d\udcb3 Payment Coordination \u2014 Act First</div><div class="callout amber"><h4>Collect ${feeDisplay} Application Fee via Applicant\u2019s Preferred Method</h4>${payMethods.length ? `<p style="margin-bottom:10px;"><strong>Contact ${firstName} using:</strong></p><div style="margin-bottom:8px;">${payMethods.map((m, i) => `<span class="pay-pill" style="${i===0?'background:#1e3a8a;color:#fff;font-weight:700;':''}">${i===0?'\u2605 ':''}${m}</span>`).join('')}</div><p style="font-size:12px;color:#6b7280;margin-top:8px;">Once payment is received, open the application in the admin panel and click \u201cMark paid\u201d.</p>` : '<p>No payment method preference specified \u2014 contact applicant directly to arrange.</p>'}</div></div>`
+    : freeApp
+      ? `<div class="section"><div class="callout green"><h4>\u2713 No Application Fee</h4><p>No payment collection required \u2014 proceed directly to review.</p></div></div>`
+      : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -300,22 +315,12 @@ export function adminNotificationHtml(
 <body>
 <div class="email-wrapper">
   ${buildEmailHeader('New Application Received', appId)}
-  <div class="status-line status-pending">&#x26A1; &nbsp; Action Required — Contact Applicant Within 24 Hours</div>
+  ${hasFee ? '<div class="status-line status-pending">&#x26A1; &nbsp; Action Required \u2014 Contact Applicant Within 24 Hours to Collect Fee</div>' : freeApp ? '<div class="status-line" style="color:#166534;background:#f0fdf4">\ud83d\udccb &nbsp; New Application \u2014 No Fee \u2014 Proceed Directly to Review</div>' : '<div class="status-line status-pending">&#x26A1; &nbsp; New Application Received \u2014 Review Required</div>'}
   <div class="email-body">
     <p class="greeting">New Application Alert,</p>
-    <p class="intro-text">A new rental application has been submitted. Contact the applicant to arrange payment of the application fee using their preferred method below, then mark as paid once confirmed.</p>
+    <p class="intro-text">${hasFee ? 'A new rental application has been submitted. Contact the applicant to arrange payment of the application fee using their preferred method below, then mark as paid once confirmed.' : freeApp ? 'A new rental application has been submitted for a no-fee property. No payment collection required \u2014 proceed directly to review.' : 'A new rental application has been submitted. Review the application and take the appropriate next steps.'}</p>
 
-    <div class="section">
-      <div class="section-label" style="color:#1d4ed8;">💳 Payment Coordination — Act First</div>
-      <div class="callout amber">
-        <h4>Collect ${feeDisplay} Application Fee via Applicant's Preferred Method</h4>
-        ${payMethods.length
-          ? `<p style="margin-bottom:10px;"><strong>Contact ${firstName} using:</strong></p>
-             <div style="margin-bottom:8px;">${payMethods.map((m, i) => `<span class="pay-pill" style="${i===0?'background:#1e3a8a;color:#fff;font-weight:700;':''}">${i===0?'★ ':''} ${m}</span>`).join('')}</div>
-             <p style="font-size:12px;color:#6b7280;margin-top:8px;">Once payment is received, open the application in the admin panel and click "Mark paid".</p>`
-          : '<p>No payment method preference specified — contact applicant directly to arrange.</p>'}
-      </div>
-    </div>
+    ${adminPaymentSection}
 
     <div class="section">
       <div class="section-label">Applicant Overview</div>

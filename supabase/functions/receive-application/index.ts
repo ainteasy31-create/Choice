@@ -467,7 +467,7 @@ Deno.serve(async (req: Request) => {
     sendEmail({
       to: email,
       subject: `Application Received — ${propLabel.split(',')[0]} | Choice Properties (Ref: ${appId})`,
-      html: applicationConfirmationHtml(firstName, propLabel, appId, fields, portalUrl),
+      html: applicationConfirmationHtml(firstName, propLabel, appId, fields, portalUrl, enforcedFee ?? null),
     }).then(result => logEmail('application_confirmation', email, result.ok ? 'sent' : 'failed', result.provider, result.ok ? null : (result.error || 'send failed')))
       .catch(async err => {
         console.error('Confirmation email error:', err);
@@ -477,7 +477,7 @@ Deno.serve(async (req: Request) => {
       sendEmail({
         to: adminEmail,
         subject: `New Application — ${appId} | ${firstName} ${lastName}`,
-        html: adminNotificationHtml(firstName, lastName, email, propLabel, appId, fields),
+        html: adminNotificationHtml(firstName, lastName, email, propLabel, appId, fields, enforcedFee ?? null),
       }).then(result => logEmail('admin_notification', adminEmail, result.ok ? 'sent' : 'failed', result.provider, result.ok ? null : (result.error || 'send failed')))
         .catch(async err => {
           console.error('Admin notification error:', err);
