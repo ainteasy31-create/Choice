@@ -14,6 +14,49 @@ Nationwide rental property marketplace and management platform. Static HTML/CSS/
 - **Scraper (Zillow):** `scraper/zillow_scraper.py` — run from **iSH Shell on iPhone** (requires residential IP; Zillow blocks Replit/datacenter IPs) → same pipeline table
 - **iOS Single-listing Importer:** `shortcuts/import-to-choice.js` — Scriptable script; lets the owner import any Zillow listing from Safari on iPhone directly into the pipeline with one tap, no computer required
 
+## iOS Scriptable Importer (iPhone — Single Listing Import)
+
+A zero-cost, no-computer-required way to import any individual Zillow listing directly into the admin pipeline from iPhone Safari.
+
+**How it works:**
+1. User opens a Zillow listing detail page in Safari (residential IP — Zillow doesn't block it)
+2. Tap Share → Run Script → "Import to Choice"
+3. The Scriptable script loads the page in a WebView, extracts `__NEXT_DATA__`, POSTs to the `receive-pipeline-import` edge function
+4. Listing appears instantly in the admin pipeline with quality score, ready to review and publish
+
+**One-time setup on iPhone:**
+1. Install **Scriptable** (free, App Store — search "Scriptable by Simon Støvring")
+2. Open your admin pipeline: `https://choice-properties-site.pages.dev/admin/pipeline.html`
+3. Tap **"Install script"** in the banner at the top of the page
+4. iOS will download `import-to-choice.js` → tap the share icon → **"Open in Scriptable"**
+5. The script is now in your Scriptable library. On the first run it may ask for permission to access the network — allow it.
+6. Enable "Allow in Share Sheet": In Scriptable → Settings → Enable share extension
+
+**Using it daily:**
+1. Open any Zillow listing detail page in Safari (not a search results page)
+2. Tap the Share button (box with arrow) → scroll down → tap **"Import to Choice"**
+3. Wait ~5 seconds (WebView loads the page)
+4. ✓ "Added to Pipeline" alert — listing is in the admin pipeline
+
+**Key files:**
+- `shortcuts/import-to-choice.js` — the Scriptable script (hosted at `/shortcuts/import-to-choice.js` on Cloudflare Pages)
+- `supabase/functions/receive-pipeline-import/index.ts` — edge function that receives and stores the payload
+
+**Authentication:**
+Uses a shared secret (`SHORTCUT_IMPORT_SECRET` Supabase env var) sent via `x-import-secret` header. No user login required on the phone. The secret is hard-coded into the script file. This is intentional — it's equivalent to the anon key exposure in the frontend. The secret is NOT the service role key.
+
+**Deduplication:**
+The edge function checks `source_listing_id` (Zillow zpid) + `source = 'zillow'` before inserting. Re-importing the same listing returns `{ok: false, duplicate: true}` with a friendly alert.
+
+**Quality score:**
+Computed server-side using the same algorithm as `zillow_scraper.py` (CORE fields × 6pts, BONUS fields × 2pts, photos bonus). Score appears on the pipeline card immediately.
+
+**If the script stops working:**
+Zillow occasionally changes their `__NEXT_DATA__` schema paths. The script tries three known paths for `gdpClientCache`. If all fail, the alert will say "Listing data not found in page data." — update the `cachePaths` array in the script to match the new structure, then push to GitHub and re-download the script file on iPhone.
+
+**To update the script on iPhone after a code change:**
+Open the pipeline admin page again → tap "Install script" → overwrite the existing script in Scriptable.
+
 ## iSH Shell (iPhone — Zillow Scraper)
 The Zillow scraper must run from a residential IP. The owner uses **iSH** (free Alpine Linux terminal app for iOS, available on the App Store).
 
@@ -173,6 +216,7 @@ The `pipeline` schema is private (service_role only via direct REST). Frontend a
 ### Deployed functions relevant to the scraper/pipeline workflow
 | Function | Purpose |
 |----------|---------|
+| `receive-pipeline-import` | Receives parsed Zillow listing data from the iOS Scriptable importer. Auth: `x-import-secret` header (no user login). Deduplicates by `source_listing_id`, computes quality score, inserts into `pipeline.pipeline_properties`. Returns `{ok, id, title, score}` or `{ok:false, duplicate:true}` if already exists. |
 | `import-pipeline-photos` | Fetches source photos (Zillow/Realtor CDN) server-side, uploads to ImageKit, stores in `property_photos` via `add_property_photo` RPC. Accepts `{ property_id }` — looks up the pipeline source automatically via `choice_property_id`. Returns `{ transferred, skipped, no_source }`. |
 | `imagekit-upload` | Uploads a base64-encoded file to ImageKit; optionally persists to `property_photos` when `propertyId` is provided. Rate-limited to 60 uploads per 10 min per user. |
 | `imagekit-watermark` | Applies watermark to an existing ImageKit photo by URL + file_id. Called from property-detail watermark button. |
