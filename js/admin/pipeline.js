@@ -156,7 +156,7 @@
           ? `<img class="pl-thumb" src="${S.esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           : ''}
         <div class="pl-thumb-placeholder" style="${thumb ? 'display:none' : ''}">
-          <svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-listings"/></svg>
+          <svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-property"/></svg>
         </div>
         <label class="pl-card-check" onclick="event.stopPropagation()" title="Select">
           <input type="checkbox" class="pl-check" data-id="${S.esc(l.id)}" ${isChecked ? 'checked' : ''} aria-label="Select listing">
@@ -395,7 +395,11 @@
     requestAnimationFrame(() => {
       panel.classList.add('open');
       backdrop.classList.add('open');
+      document.body.style.overflow = 'hidden';
       panel.querySelector('#pl-close-btn').addEventListener('click', closePanel);
+      // Focus first focusable input for accessibility
+      const firstInput = panel.querySelector('input,select,textarea,button');
+      if(firstInput) setTimeout(() => firstInput.focus(), 100);
     });
 
     const saveBtn = panel.querySelector('.pl-save-btn');
@@ -413,6 +417,7 @@
     const backdrop = document.getElementById('pl-backdrop');
     panel.classList.remove('open');
     backdrop.classList.remove('open');
+    document.body.style.overflow = '';
     setTimeout(() => { panel.innerHTML = ''; _current = null; _dirty = {}; }, 300);
   }
 
@@ -449,7 +454,8 @@
       const el = panel.querySelector('#pf-'+f);
       if(!el) return;
       const v = el.value.trim() || null;
-      if(v !== (l[f]??'').toString().trim() || (v === null && l[f] != null)) patch[f] = v;
+      const oldV = l[f] != null ? String(l[f]).trim() : null;
+      if(v !== oldV) patch[f] = v;
     });
     intFields.forEach(f => {
       const el = panel.querySelector('#pf-'+f);
@@ -866,6 +872,10 @@
       wireBackdrop();
       wireLoadMore();
       wireBulkBar();
+      // ESC key closes the detail panel
+      document.addEventListener('keydown', e => {
+        if(e.key === 'Escape' && _current) closePanel();
+      });
       load(false);
     })
     .catch(err => console.error('[pipeline] boot failed', err));

@@ -158,7 +158,7 @@ img,svg{display:block;max-width:100%}
   backdrop-filter:saturate(180%) blur(16px);
   -webkit-backdrop-filter:saturate(180%) blur(16px);
   border-top:1px solid var(--border);
-  display:grid; grid-template-columns:repeat(5,1fr);
+  display:grid; grid-auto-flow:column; grid-auto-columns:1fr;
   z-index:var(--z-tabs);
 }
 .tab{

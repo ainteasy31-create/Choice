@@ -52,7 +52,7 @@
           .map(([k,v]) => '<span class="meta-pill">'+S.esc(k)+': '+S.esc(String(v).slice(0,40))+'</span>').join('')
       : '';
     const actor = r.user_id
-      ? '<span class="muted text-xs">'+S.esc(r.user_id.slice(0,8))+'…</span>'
+      ? '<span class="muted text-xs" title="User ID: '+S.esc(r.user_id)+'">'+S.esc(r.user_id.slice(0,8))+'…</span>'
       : '<span class="muted text-xs" style="font-style:italic">System / Tenant</span>';
     return ''
       + '<div class="audit-row">'
@@ -131,6 +131,35 @@
     document.getElementById('btn-next').addEventListener('click', () => loadPage(currentPage+1));
 
     AdminShell.on('refresh', () => loadPage(currentPage));
+
+    // CSV export — exports the current visible page of audit rows
+    AdminShell.on('export-csv', async () => {
+      const S = AdminShell;
+      const from = (currentPage-1)*PAGE_SIZE, to = from+PAGE_SIZE-1;
+      let q = CP.sb().from('admin_actions').select('*').order('created_at',{ascending:false}).range(from,to);
+      if(activeAction) q = q.eq('action', activeAction);
+      if(activeAppId)  q = q.eq('target_id', activeAppId);
+      const { data } = await q;
+      if(!data || !data.length){ S.toast('No rows to export','error'); return; }
+      const cols = ['action','target_type','target_id','user_id','created_at'];
+      const header = cols.join(',');
+      const csvRows = data.map(r =>
+        cols.map(c => {
+          let v = r[c];
+          if(c === 'created_at' && v) v = new Date(v).toISOString();
+          if(c === 'action') v = ACTION_LABELS[v] || v;
+          return v == null ? '' : '"' + String(v).replace(/"/g,'""') + '"';
+        }).join(',')
+      );
+      const csv = [header, ...csvRows].join('\n');
+      const blob = new Blob([csv], { type:'text/csv' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'audit-log-p'+currentPage+'.csv'; a.click();
+      URL.revokeObjectURL(url);
+      S.toast('CSV exported','success');
+    });
+
     loadPage(1);
   });
 })();

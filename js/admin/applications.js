@@ -76,7 +76,7 @@
     // Payment method coordination chip — shown on unpaid apps so team sees preferred method at a glance
     const prefMethod = app.primary_payment_method || '';
     const payMethodChip = (prefMethod && app.payment_status !== 'paid' && app.payment_status !== 'waived')
-      ? `<span title="Applicant's preferred payment method" style="display:inline-flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600;color:#1d4ed8;margin-left:4px;"><i class="fas fa-money-bill-wave" style="font-size:10px;"></i>${S.esc(prefMethod)}</span>`
+      ? `<span title="Applicant's preferred payment method" style="display:inline-flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600;color:#1d4ed8;margin-left:4px;"><svg viewBox="0 0 24 24" width="11" height="11" style="stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>${S.esc(prefMethod)}</span>`
       : '';
 
     const ds = `data-id="${S.esc(app.id)}" data-app-id="${S.esc(app.app_id||app.id)}" data-name="${S.esc(name)}" data-status="${S.esc(app.status||'')}"`;
@@ -107,22 +107,22 @@
       </div>
 
       <div class="card-actions">
-        ${!isArchived && !isApproved   ? `<button class="btn-act btn-approve"  data-action="status" data-set="approved"   ${ds}>✓ Approve</button>` : ''}
-        ${!isArchived && !isDenied     ? `<button class="btn-act btn-deny"     data-action="status" data-set="denied"     ${ds}>✗ Deny</button>` : ''}
-        ${!isArchived && !isWaitlisted ? `<button class="btn-act btn-waitlist" data-action="status" data-set="waitlisted" ${ds}>⧗ Waitlist</button>` : ''}
-        ${!isArchived && app.status!=='pending' ? `<button class="btn-act btn-pending" data-action="status" data-set="pending" ${ds}>↺ Reset</button>` : ''}
-        ${!isArchived ? `<button class="btn-act btn-archive" data-action="status" data-set="archived" ${ds} style="opacity:.7">🗄 Archive</button>` : `<button class="btn-act btn-pending" data-action="status" data-set="pending" ${ds}>↺ Unarchive</button>`}
+        ${!isArchived && !isApproved   ? `<button class="btn-act btn-approve"  data-action="status" data-set="approved"   ${ds}><svg class="i i-sm"><use href="#i-check"/></svg> Approve</button>` : ''}
+        ${!isArchived && !isDenied     ? `<button class="btn-act btn-deny"     data-action="status" data-set="denied"     ${ds}><svg class="i i-sm"><use href="#i-x"/></svg> Deny</button>` : ''}
+        ${!isArchived && !isWaitlisted ? `<button class="btn-act btn-waitlist" data-action="status" data-set="waitlisted" ${ds}><svg class="i i-sm"><use href="#i-clock"/></svg> Waitlist</button>` : ''}
+        ${!isArchived && app.status!=='pending' ? `<button class="btn-act btn-pending" data-action="status" data-set="pending" ${ds}><svg class="i i-sm"><use href="#i-refresh"/></svg> Reset</button>` : ''}
+        ${!isArchived ? `<button class="btn-act btn-archive" data-action="status" data-set="archived" ${ds} style="opacity:.7"><svg class="i i-sm"><use href="#i-trash"/></svg> Archive</button>` : `<button class="btn-act btn-pending" data-action="status" data-set="pending" ${ds}><svg class="i i-sm"><use href="#i-refresh"/></svg> Unarchive</button>`}
 
-        ${!isPaid && !isWaived ? `<button class="btn-act btn-pay"   data-action="pay"   ${ds}>$ Mark paid</button>` : ''}
-        ${isPaid                ? `<button class="btn-act btn-unpay" data-action="unpay" ${ds}>↺ Mark unpaid</button>` : ''}
-        ${isPaid                ? `<button class="btn-act btn-refund" data-action="refund" ${ds}>↶ Refund</button>` : ''}
+        ${!isPaid && !isWaived ? `<button class="btn-act btn-pay"   data-action="pay"   ${ds}><svg class="i i-sm"><use href="#i-card"/></svg> Mark paid</button>` : ''}
+        ${isPaid                ? `<button class="btn-act btn-unpay" data-action="unpay" ${ds}><svg class="i i-sm"><use href="#i-refresh"/></svg> Mark unpaid</button>` : ''}
+        ${isPaid                ? `<button class="btn-act btn-refund" data-action="refund" ${ds}>Refund</button>` : ''}
         ${!isWaived             ? `<button class="btn-act"           data-action="waive"  ${ds}>Waive</button>` : ''}
 
-        ${isApproved && !hfRequested ? `<button class="btn-act btn-hf-send"  data-action="hf-send" ${ds} title="Send holding fee request email and reserve the unit">⏳ Send holding</button>` : ''}
-        ${hfRequested && !hfPaid     ? `<button class="btn-act btn-hf-paid"  data-action="hf-paid" ${ds} title="Mark holding fee as received and notify applicant">$ Mark holding paid</button>` : ''}
-        ${hfPaid                     ? `<button class="btn-act btn-hf-undo"  data-action="hf-undo" ${ds} title="Undo: mark holding fee unpaid">↺ Undo holding paid</button>` : ''}
+        ${isApproved && !hfRequested ? `<button class="btn-act btn-hf-send"  data-action="hf-send" ${ds} title="Send holding fee request email and reserve the unit"><svg class="i i-sm"><use href="#i-clock"/></svg> Send holding</button>` : ''}
+        ${hfRequested && !hfPaid     ? `<button class="btn-act btn-hf-paid"  data-action="hf-paid" ${ds} title="Mark holding fee as received and notify applicant"><svg class="i i-sm"><use href="#i-card"/></svg> Mark holding paid</button>` : ''}
+        ${hfPaid                     ? `<button class="btn-act btn-hf-undo"  data-action="hf-undo" ${ds} title="Undo: mark holding fee unpaid"><svg class="i i-sm"><use href="#i-refresh"/></svg> Undo holding paid</button>` : ''}
 
-        <button class="btn-act btn-email" data-action="resend" ${ds} title="Resend any notification email">✉ Resend</button>
+        <button class="btn-act btn-email" data-action="resend" ${ds} title="Resend any notification email"><svg class="i i-sm"><use href="#i-mail"/></svg> Resend</button>
         <button class="btn-act"           data-action="toggle" ${ds}>Details</button>
       </div>
 

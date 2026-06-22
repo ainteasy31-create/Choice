@@ -124,7 +124,7 @@
       const reviewable = scraped + edited;
       if(reviewable > 0){
         queue.push(actionCard({
-          icon:  'i-listings',
+          icon:  'i-spark',
           tone:  'info',
           count: reviewable,
           label: reviewable === 1 ? 'Scraped listing awaiting pipeline review' : 'Scraped listings awaiting pipeline review',
@@ -134,10 +134,10 @@
       }
 
       strip.innerHTML = [
-        kpi({ label:'Scraped (new)',  value:scraped,   tone: scraped > 0 ? 'warn' : '',    sub:'Pending review',     href:'#' }),
-        kpi({ label:'Edited',         value:edited,    tone: edited  > 0 ? 'info' : '',    sub:'Ready to publish',   href:'#' }),
+        kpi({ label:'Scraped (new)',  value:scraped,   tone: scraped > 0 ? 'warn' : '',    sub:'Pending review',     href:'pipeline.html?status=scraped' }),
+        kpi({ label:'Edited',         value:edited,    tone: edited  > 0 ? 'info' : '',    sub:'Ready to publish',   href:'pipeline.html?status=edited' }),
         kpi({ label:'Published',      value:published, tone:'success',                      sub:'Sent to live site',  href:'/listings.html' }),
-        kpi({ label:'Archived',       value:archived,  tone:'',                             sub:'In pipeline archive',href:'#' }),
+        kpi({ label:'Archived',       value:archived,  tone:'',                             sub:'In pipeline archive',href:'pipeline.html?status=archived' }),
       ].join('');
 
       stamp.textContent = total.toLocaleString() + ' total in pipeline';

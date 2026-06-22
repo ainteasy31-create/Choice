@@ -50,7 +50,14 @@
   function $$(s, root){return Array.from((root||document).querySelectorAll(s));}
 
   function toast(msg, kind){
+    // Delegate to AdminShell when available (consistent portal toasts)
+    if(window.AdminShell && AdminShell.toast){
+      AdminShell.toast(msg, kind === 'error' ? 'error' : kind === 'ok' ? 'success' : undefined);
+      return;
+    }
+    // Fallback: in-page toast (for edge cases where AdminShell hasn't loaded)
     const t = $('#toast');
+    if(!t) return;
     t.textContent = msg;
     t.className = 'toast show ' + (kind || 'ok');
     clearTimeout(toast._t);
@@ -62,17 +69,29 @@
     const sb = window.CP && window.CP.sb && window.CP.sb();
     if (!sb) { $('#loading').textContent = 'Auth not ready.'; return; }
 
-    // Apps with a recorded move-out
-    const { data: apps, error: appErr } = await sb
-      .from('applications')
-      .select(`id, app_id, first_name, last_name, email,
-               property_address,
-               move_in_date_actual, move_out_date_actual,
-               lease_state_code, security_deposit, pet_deposit, key_deposit,
-               updated_at, created_at`)
-      .not('move_out_date_actual', 'is', null)
-      .order('move_out_date_actual', { ascending: false })
-      .limit(500);
+    // Apps + accountings fetched in parallel for speed
+    const [appsResult, accsAllResult] = await Promise.all([
+      sb.from('applications')
+        .select(`id, app_id, first_name, last_name, email,
+                 property_address,
+                 move_in_date_actual, move_out_date_actual,
+                 lease_state_code, security_deposit, pet_deposit, key_deposit,
+                 updated_at, created_at`)
+        .not('move_out_date_actual', 'is', null)
+        .order('move_out_date_actual', { ascending: false })
+        .limit(500),
+      sb.from('lease_deposit_accountings')
+        .select(`id, app_id, total_deposit_held, amount_withheld,
+                 refund_owed_to_tenant, interest_accrued,
+                 state_code_snapshot, state_return_days_snapshot,
+                 state_return_deadline, late_generated,
+                 letter_pdf_path, letter_pdf_sha256, letter_pdf_bytes,
+                 generated_at, sent_at, tenant_disputed_at,
+                 admin_notes, lease_termination_id`)
+        .order('created_at', { ascending: false })
+        .limit(500)
+    ]);
+    const { data: apps, error: appErr } = appsResult;
     if (appErr) {
       $('#loading').textContent = 'Failed to load: ' + appErr.message;
       return;
@@ -85,17 +104,8 @@
     }
     const appIds = apps.map(a => a.id);
 
-    // Accountings
-    const { data: accs } = await sb
-      .from('lease_deposit_accountings')
-      .select(`id, app_id, total_deposit_held, amount_withheld,
-               refund_owed_to_tenant, interest_accrued,
-               state_code_snapshot, state_return_days_snapshot,
-               state_return_deadline, late_generated,
-               letter_pdf_path, letter_pdf_sha256, letter_pdf_bytes,
-               generated_at, sent_at, tenant_disputed_at,
-               admin_notes, lease_termination_id`)
-      .in('app_id', appIds);
+    // Filter accountings to only those matching our app IDs (already fetched above)
+    const accs = (accsAllResult.data || []).filter(a => appIds.includes(a.app_id));
     const accByApp = new Map();
     for (const a of (accs || [])) accByApp.set(a.app_id, a);
 

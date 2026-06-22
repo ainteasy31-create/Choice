@@ -51,13 +51,16 @@
     }).join('');
   }
 
+  let _threads = {};
+
   async function load(){
     document.getElementById('threads').innerHTML = AdminShell.skeletonRows(3);
     document.getElementById('page-sub').textContent = 'Loading…';
     const { data: msgs, error } = await CP.sb()
       .from('messages')
       .select('*,applications(first_name,last_name,email,app_id)')
-      .order('created_at',{ascending:false});
+      .order('created_at',{ascending:false})
+      .limit(300);
     if(error){
       document.getElementById('threads').innerHTML =
         '<div class="empty"><h3>Could not load</h3><p>'+AdminShell.esc(error.message)+'</p></div>';
@@ -70,8 +73,31 @@
       if(!threads[id]) threads[id] = { app: m.applications, msgs: [] };
       threads[id].msgs.push(m);
     });
+    _threads = threads;
     document.getElementById('page-sub').textContent = Object.keys(threads).length+' thread'+(Object.keys(threads).length===1?'':'s');
     render(threads);
+  }
+
+  // Append a newly-sent message to the thread without a full reload
+  function appendMessage(appId, msg, senderName){
+    const S = AdminShell;
+    _threads[appId] = _threads[appId] || { app: null, msgs: [] };
+    const newMsg = { app_id: appId, sender: 'admin', sender_name: senderName || 'Choice Properties', message: msg, created_at: new Date().toISOString() };
+    _threads[appId].msgs.unshift(newMsg);
+    // Only re-render the affected thread body so scroll position stays intact for other threads
+    const threadEl = document.querySelector('.thread[data-app="'+S.esc(appId)+'"]');
+    if(!threadEl){ render(_threads); return; }
+    const bodyEl = threadEl.querySelector('.th-body');
+    const replyEl = bodyEl ? bodyEl.querySelector('.reply') : null;
+    if(!bodyEl || !replyEl){ render(_threads); return; }
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'msg msg-admin';
+    msgDiv.innerHTML = '<div class="msg-meta">'+S.esc(newMsg.sender_name)+' · just now</div>'+S.esc(msg);
+    bodyEl.insertBefore(msgDiv, replyEl);
+    msgDiv.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    // Update thread header count
+    const header = threadEl.querySelector('.row-meta');
+    if(header) header.textContent = _threads[appId].msgs.length + ' · just now';
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
@@ -105,15 +131,28 @@
       const res = await CP.Applications.sendMessage(appId, msg, 'admin', 'Choice Properties');
       target.disabled = false;
       if(res.ok){
+        const prevValue = ta.value;
         ta.value = '';
         const counter = document.querySelector('[data-reply-count="'+appId+'"]');
         if(counter) counter.textContent = '0 / 2000';
         AdminShell.toast('Message sent','success');
-        load();
+        appendMessage(appId, prevValue.trim(), 'Choice Properties');
       } else {
         AdminShell.toast('Error: '+res.error,'error');
       }
     });
+
+    // Realtime: reload when a new tenant message arrives
+    try {
+      CP.sb()
+        .channel('admin-messages')
+        .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' }, (payload) => {
+          const m = payload.new;
+          if(m && m.sender !== 'admin') load().catch(()=>{});
+        })
+        .subscribe();
+    } catch(e){ console.warn('[messages] realtime sub failed:', e); }
+
     AdminShell.on('refresh', () => load());
     load();
   });

@@ -202,6 +202,16 @@
 
   async function openGenerateSheet(id, appId){
     const app = findApp(id) || {};
+    // Warn before overwriting a lease the tenant has already signed
+    if(['signed','co_signed'].includes(app.lease_status)){
+      const proceed = await S.confirm({
+        title: 'Regenerate signed lease?',
+        message: 'The tenant has already signed this lease. Regenerating will send a new signing link, invalidating their existing signature. This cannot be undone.',
+        ok: 'Yes, regenerate',
+        danger: true
+      });
+      if(!proceed) return;
+    }
     const moneyVal = (v) => (v == null || v === '') ? '' : v;
 
     const data = await S.formSheet({
@@ -355,35 +365,17 @@
   async function sendReminder(appId){
     const ok = await S.confirm({ title:'Send signing reminder?', message:'A reminder email will be sent to the tenant.', ok:'Send reminder' });
     if(!ok) return;
-    const session = await CP.Auth.getSession();
-    const token = session?.access_token || window.CONFIG?.SUPABASE_ANON_KEY;
-    try {
-      const res = await fetch(window.CONFIG.SUPABASE_URL + '/functions/v1/send-email', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'apikey': window.CONFIG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + token },
-        body: JSON.stringify({ app_id: appId, type:'lease_signing_reminder' })
-      });
-      const json = await res.json().catch(() => ({}));
-      if(!res.ok || json.success === false){ S.toast('Email failed: ' + (json.error || res.statusText),'error'); return; }
-      S.toast('Reminder sent to tenant.','success');
-    } catch(e){ S.toast('Error: ' + e.message,'error'); }
+    const res = await S.callFn('/send-email', { app_id: appId, type:'lease_signing_reminder' });
+    if(!res || !res.ok){ S.toast('Email failed: ' + ((res && res.json && res.json.error) || 'Unknown error'),'error'); return; }
+    S.toast('Reminder sent to tenant.','success');
   }
 
   async function sendExpiryAlert(appId){
     const ok = await S.confirm({ title:'Send unsigned-lease alert?', message:'An alert email will be sent to all admin addresses flagging this unsigned lease. Use when a lease has been pending signature too long.', ok:'Send alert' });
     if(!ok) return;
-    const session = await CP.Auth.getSession();
-    const token = session?.access_token || window.CONFIG?.SUPABASE_ANON_KEY;
-    try {
-      const res = await fetch(window.CONFIG.SUPABASE_URL + '/functions/v1/send-email', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'apikey': window.CONFIG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + token },
-        body: JSON.stringify({ app_id: appId, type:'lease_expiry_alert' })
-      });
-      const json = await res.json().catch(() => ({}));
-      if(!res.ok || json.success === false){ S.toast('Alert failed: ' + (json.error || res.statusText),'error'); return; }
-      S.toast('Expiry alert sent to admin.','success');
-    } catch(e){ S.toast('Error: ' + e.message,'error'); }
+    const res = await S.callFn('/send-email', { app_id: appId, type:'lease_expiry_alert' });
+    if(!res || !res.ok){ S.toast('Alert failed: ' + ((res && res.json && res.json.error) || 'Unknown error'),'error'); return; }
+    S.toast('Expiry alert sent to admin.','success');
   }
 
   async function voidLease(id){

@@ -62,7 +62,12 @@
 
     <div class="row-flex between">
       <div class="text-strong">Actions</div>
-      <span class="text-xs muted" id="result-count"></span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="text-xs muted" id="result-count"></span>
+        <button class="btn btn-ghost btn-sm" data-action="export-csv" title="Export current page as CSV">
+          <svg class="i i-sm"><use href="#i-download"/></svg> CSV
+        </button>
+      </div>
     </div>
 
     <div id="audit-list"></div>
