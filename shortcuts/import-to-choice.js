@@ -4,20 +4,24 @@
 
 // ============================================================
 // Import to Choice Properties
-// Version 3.0 — June 2026
+// Version 3.1 — June 2026
 //
-// HOW TO USE:
+// HOW TO USE (best — via iOS Shortcut, one tap from Safari):
 //   1. Open any Zillow listing DETAIL page in Safari.
-//   2. Tap the address bar → Copy (copies the URL).
+//   2. Tap Share → "Import to Choice" (iOS Shortcut).
+//   3. Done. Listing appears in your admin pipeline.
+//
+// HOW TO USE (fallback — clipboard method):
+//   1. Open any Zillow listing DETAIL page in Safari.
+//   2. Tap the address bar → Copy.
 //   3. Switch to Scriptable → tap "import-to-choice".
-//   4. The listing is added to your admin pipeline instantly.
 //
 // UPDATES: The script checks for updates automatically on every
 // run. When a new version is available it self-updates and asks
 // you to tap Run once more — no manual reinstall ever needed.
 // ============================================================
 
-const VERSION      = '3.0';
+const VERSION      = '3.1';
 const VERSION_URL  = 'https://choice-properties-site.pages.dev/shortcuts/version.json';
 const SCRIPT_URL   = 'https://choice-properties-site.pages.dev/shortcuts/import-to-choice.js';
 const EDGE_URL     = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
@@ -60,15 +64,27 @@ try {
   // The import itself will still work; update will retry next run.
 }
 
-// ── 1. Get URL — share sheet args first, then clipboard, then prompt ──────────
+// ── 1. Get URL ────────────────────────────────────────────────────────────────
+// Priority: iOS Shortcut input → Share Sheet args → clipboard → manual prompt
 let sharedUrl = null;
 
-if (args.urls && args.urls.length > 0) {
-  sharedUrl = args.urls[0];
-} else if (args.plainTexts && args.plainTexts.length > 0 && args.plainTexts[0].includes('zillow.com')) {
-  sharedUrl = args.plainTexts[0];
+// Source A: iOS Shortcuts "Run Script" action passes the URL as shortcutParameter
+if (args.shortcutParameter) {
+  const sp = String(args.shortcutParameter).trim();
+  if (sp.startsWith('http')) sharedUrl = sp;
 }
 
+// Source B: Share Sheet URL args (direct Scriptable share extension)
+if (!sharedUrl && args.urls && args.urls.length > 0) {
+  sharedUrl = String(args.urls[0]).trim();
+}
+
+// Source C: Share Sheet plain text
+if (!sharedUrl && args.plainTexts && args.plainTexts.length > 0 && args.plainTexts[0].includes('zillow.com')) {
+  sharedUrl = args.plainTexts[0].trim();
+}
+
+// Source D: Clipboard (reliable manual fallback — copy URL from Safari address bar)
 if (!sharedUrl) {
   const clip = Pasteboard.paste();
   if (clip && clip.trim().startsWith('http')) {
