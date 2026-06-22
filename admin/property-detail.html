@@ -14,7 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"></noscript>
 <link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
 <script defer src="/config.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js" integrity="sha384-YieCqqg9gQufX7+5HcFvCEg/n3KUEdl8/Jb+A6J0npf1mB740VayvwKjTrtCeUoy" crossorigin="anonymous"></script>
@@ -249,6 +250,29 @@ select.pd-edit-input{cursor:pointer}
 @media(max-width:380px){
   .pd-pm-grid{grid-template-columns:1fr 1fr}
 }
+
+/* ── CSS spinner (no Font Awesome needed) ── */
+.pd-spin{
+  display:inline-block;width:.85em;height:.85em;
+  border:2px solid rgba(255,255,255,.3);border-top-color:currentColor;
+  border-radius:50%;animation:pd-rotate .6s linear infinite;
+  vertical-align:-.1em;flex-shrink:0
+}
+@keyframes pd-rotate{to{transform:rotate(360deg)}}
+
+/* ── Mobile FAB (quick-edit shortcut on phone) ── */
+.pd-fab{
+  position:fixed;bottom:76px;right:16px;z-index:500;
+  width:52px;height:52px;border-radius:50%;
+  background:var(--brand);color:#fff;border:none;
+  box-shadow:0 4px 18px rgba(99,102,241,.5);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:transform .15s,box-shadow .15s,opacity .2s;
+}
+.pd-fab:hover{transform:scale(1.07);box-shadow:0 6px 24px rgba(99,102,241,.6)}
+.pd-fab:active{transform:scale(.93)}
+@media(min-width:769px){.pd-fab{display:none}}
 
 /* ── Bulk replace zone ── */
 .pd-pm-replace-section{background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.18);border-radius:var(--r-md);padding:14px;margin-bottom:16px}

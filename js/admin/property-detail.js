@@ -35,6 +35,27 @@
             reviewing:'pill-info',waitlisted:'pill-warning'}[s] || 'pill-muted';
   }
 
+  // ── Inline SVG icons (no Font Awesome blocking render) ──────────────────────
+  const _SV = {
+    edit:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+    photos:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
+    dnload:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="21" x2="12" y2="9"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>`,
+    ext:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+    copy:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+    expand:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
+    pin:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em;opacity:.55"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+    drop:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`,
+    vr:      `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01M7 12a5 5 0 0 0 10 0"/></svg>`,
+    note:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+    check:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><polyline points="20 6 9 17 4 12"/></svg>`,
+    cam:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+    locate:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 14 8 14s8-8.75 8-14a8 8 0 0 0-8-8z"/></svg>`,
+    clock:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em;color:var(--brand)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+    spin:    `<span class="pd-spin" aria-hidden="true"></span>`,
+    dot:     `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style="flex-shrink:0;vertical-align:.05em"><circle cx="5" cy="5" r="4" fill="currentColor" opacity=".45"/></svg>`,
+  };
+  function ico(n){ return _SV[n] || ''; }
+
   // ── Option constants ──────────────────────────────────────────────────────────
   const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
   const AMENITY_OPTIONS    = ['Pool','Gym / Fitness Center','Rooftop Access','Elevator','Doorman / Concierge','Storage Unit','Bike Room','BBQ / Grill Area','Courtyard / Garden','Balcony / Patio','In-unit Laundry','Washer/Dryer Hookups','Fireplace','EV Charging','Dog Run','High Ceilings','City Views','Smart Home'];
@@ -149,14 +170,14 @@
   function renderGallery(photos) {
     const urls = photos.map(p => p.url).filter(Boolean);
     if (!urls.length) {
-      return '<div id="pd-gallery-wrap"><div class="pd-no-photo pd-no-photo-btn" id="pd-no-photo-zone" role="button" tabindex="0" title="Click to upload photos"><i class="fas fa-camera" style="font-size:1.4rem;color:var(--brand);margin-bottom:6px"></i><span>No photos — tap to upload</span></div></div>';
+      return '<div id="pd-gallery-wrap"><div class="pd-no-photo pd-no-photo-btn" id="pd-no-photo-zone" role="button" tabindex="0" title="Click to upload photos"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand);margin-bottom:6px" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>No photos — tap to upload</span></div></div>';
     }
     const main = `<div class="pd-mosaic">
       <div class="pd-mosaic-main" id="pd-mosaic-main" data-idx="0">
         <img src="${esc(galleryPhotoUrl(urls[0]))}" alt="Photo 1" id="pd-main-img" loading="eager">
         ${urls.length > 1 ? '<button class="pd-mosaic-prev" id="pd-prev" aria-label="Previous">‹</button><button class="pd-mosaic-next" id="pd-next" aria-label="Next">›</button>' : ''}
         <div class="pd-photo-count" id="pd-photo-count">${urls.length > 1 ? '1 / ' + urls.length : ''}</div>
-        <button class="pd-expand-btn" id="pd-expand-btn" title="View all photos"><i class="fas fa-expand"></i> ${urls.length} photo${urls.length !== 1 ? 's' : ''}</button>
+        <button class="pd-expand-btn" id="pd-expand-btn" title="View all photos">${ico('expand')} ${urls.length} photo${urls.length !== 1 ? 's' : ''}</button>
       </div>
       ${urls.length > 1 ? `<div class="pd-mosaic-side">
         ${urls.slice(1, 5).map((u, i) => {
@@ -372,7 +393,7 @@
       <div class="pd-header">
         <div class="pd-header-price">${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() : 'TBD'}<span>/month</span></div>
         <h2 class="pd-header-title">${esc(p.title || 'Untitled')}</h2>
-        <div class="pd-header-address"><i class="fas fa-map-marker-alt"></i> ${esc([p.address, p.city, p.state, p.zip].filter(Boolean).join(', ') || '—')}</div>
+        <div class="pd-header-address">${ico('pin')} ${esc([p.address, p.city, p.state, p.zip].filter(Boolean).join(', ') || '—')}</div>
         ${landlord ? `<div class="pd-listed-by">Listed by <strong>${esc(landlord.business_name || landlord.contact_name || '—')}</strong></div>` : ''}
       </div>`;
 
@@ -397,11 +418,11 @@
     </div>`;
 
     const actionsHtml = `<div class="pd-actions">
-      <button class="btn btn-primary btn-sm" id="pd-btn-edit"><i class="fas fa-pen-to-square"></i> Edit &amp; Upload</button>
-      <button class="btn btn-ghost btn-sm" id="pd-btn-photos"><i class="fas fa-images"></i> ${_photos.length ? 'All photos ('+_photos.length+')' : 'Manage photos'}</button>
-      <button class="btn btn-ghost btn-sm" id="pd-btn-import-photos" title="Pull photos from the original Zillow/Realtor listing into ImageKit"><i class="fas fa-cloud-arrow-down"></i> Import source photos</button>
-      <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Public listing</a>
-      <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft"><i class="fas fa-copy"></i> Duplicate</button>
+      <button class="btn btn-primary btn-sm" id="pd-btn-edit">${ico('edit')} Edit &amp; Upload</button>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-photos">${ico('photos')} ${_photos.length ? 'All photos ('+_photos.length+')' : 'Manage photos'}</button>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-import-photos" title="Pull photos from the original Zillow/Realtor listing into ImageKit">${ico('dnload')} Import source photos</button>
+      <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">${ico('ext')} Public listing</a>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft">${ico('copy')} Duplicate</button>
     </div>
     ${_lastSavedAt ? `<div id="pd-lastsaved" class="pd-lastsaved">Last saved ${_lastSavedAt}</div>` : ''}
     ${metricsHtml}`;
@@ -451,37 +472,37 @@
     const leaseTerms = Array.isArray(p.lease_terms) ? p.lease_terms : [];
 
     const amenItems = [
-      ...amenities.map(a => `<div class="pd-amenity-item"><i class="fas fa-circle-check"></i>${esc(a)}</div>`),
-      ...appliances.map(a => `<div class="pd-amenity-item"><i class="fas fa-blender"></i>${esc(a)}</div>`),
-      ...flooring.map(f => `<div class="pd-amenity-item"><i class="fas fa-layer-group"></i>${esc(f)}</div>`),
+      ...amenities.map(a => `<div class="pd-amenity-item">${ico('dot')}${esc(a)}</div>`),
+      ...appliances.map(a => `<div class="pd-amenity-item">${ico('dot')}${esc(a)}</div>`),
+      ...flooring.map(f => `<div class="pd-amenity-item">${ico('dot')}${esc(f)}</div>`),
     ];
 
     const utilItems = [];
     if (Array.isArray(p.utilities_included) && p.utilities_included.length) {
-      p.utilities_included.forEach(u => utilItems.push(`<div class="pd-amenity-item"><i class="fas fa-bolt"></i>${esc(u)} Included</div>`));
+      p.utilities_included.forEach(u => utilItems.push(`<div class="pd-amenity-item">${ico('dot')}${esc(u)} Included</div>`));
     }
-    if (p.parking) utilItems.push(`<div class="pd-amenity-item"><i class="fas fa-car"></i>Parking: ${esc(p.parking)}</div>`);
-    if (p.laundry_type) utilItems.push(`<div class="pd-amenity-item"><i class="fas fa-shirt"></i>Laundry: ${esc(p.laundry_type)}</div>`);
-    if (p.heating_type) utilItems.push(`<div class="pd-amenity-item"><i class="fas fa-fire"></i>Heating: ${esc(p.heating_type)}</div>`);
-    if (p.cooling_type) utilItems.push(`<div class="pd-amenity-item"><i class="fas fa-snowflake"></i>Cooling: ${esc(p.cooling_type)}</div>`);
-    if (p.garage_spaces) utilItems.push(`<div class="pd-amenity-item"><i class="fas fa-car-side"></i>Parking Spaces: ${p.garage_spaces}</div>`);
-    if (p.parking_fee) utilItems.push(`<div class="pd-amenity-item"><i class="fas fa-dollar-sign"></i>Parking Fee: $${Number(p.parking_fee).toLocaleString()}/mo</div>`);
+    if (p.parking) utilItems.push(`<div class="pd-amenity-item">${ico('dot')}Parking: ${esc(p.parking)}</div>`);
+    if (p.laundry_type) utilItems.push(`<div class="pd-amenity-item">${ico('dot')}Laundry: ${esc(p.laundry_type)}</div>`);
+    if (p.heating_type) utilItems.push(`<div class="pd-amenity-item">${ico('dot')}Heating: ${esc(p.heating_type)}</div>`);
+    if (p.cooling_type) utilItems.push(`<div class="pd-amenity-item">${ico('dot')}Cooling: ${esc(p.cooling_type)}</div>`);
+    if (p.garage_spaces) utilItems.push(`<div class="pd-amenity-item">${ico('dot')}Parking Spaces: ${p.garage_spaces}</div>`);
+    if (p.parking_fee) utilItems.push(`<div class="pd-amenity-item">${ico('dot')}Parking Fee: $${Number(p.parking_fee).toLocaleString()}/mo</div>`);
 
     const leaseItems = [];
-    if (leaseTerms.length) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-file-contract"></i>${leaseTerms.map(esc).join(', ')}</div>`);
-    if (p.minimum_lease_months) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-calendar-check"></i>Min. Lease: ${p.minimum_lease_months} month${p.minimum_lease_months !== 1 ? 's' : ''}</div>`);
-    if (p.security_deposit) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-shield-alt"></i>Security Deposit: $${Number(p.security_deposit).toLocaleString()}</div>`);
-    if (p.last_months_rent) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-calendar-alt"></i>Last Month's Rent: $${Number(p.last_months_rent).toLocaleString()}</div>`);
-    if (p.admin_fee) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-receipt"></i>Admin/Move-in Fee: $${Number(p.admin_fee).toLocaleString()}</div>`);
-    if (p.pet_deposit) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-paw"></i>Pet Deposit: $${Number(p.pet_deposit).toLocaleString()}</div>`);
-    if (p.pet_types_allowed?.length) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-paw"></i>Pet Types: ${p.pet_types_allowed.map(esc).join(', ')}</div>`);
-    if (p.pet_weight_limit) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-weight-scale"></i>Pet Weight Limit: ${esc(String(p.pet_weight_limit))} lbs max</div>`);
-    if (p.pet_details) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1"><i class="fas fa-paw"></i><span><strong>Pet Policy:</strong> ${esc(p.pet_details)}</span></div>`);
-    if (p.smoking_allowed != null) leaseItems.push(`<div class="pd-amenity-item"><i class="fas ${p.smoking_allowed ? 'fa-smoking' : 'fa-ban'}"></i>${p.smoking_allowed ? 'Smoking Permitted' : 'No Smoking'}</div>`);
-    if (p.minimum_income_multiplier) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-coins"></i>Min. Income: ${p.minimum_income_multiplier}× rent/mo</div>`);
-    if (p.minimum_credit_score) leaseItems.push(`<div class="pd-amenity-item"><i class="fas fa-chart-line"></i>Min. Credit Score: ${p.minimum_credit_score}</div>`);
-    if (p.move_in_special) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1"><i class="fas fa-tag"></i><strong>Move-in Special:</strong> ${esc(p.move_in_special)}</div>`);
-    if (p.showing_instructions) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1"><i class="fas fa-key"></i><strong>Showings:</strong> ${esc(p.showing_instructions)}</div>`);
+    if (leaseTerms.length) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}${leaseTerms.map(esc).join(', ')}</div>`);
+    if (p.minimum_lease_months) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Min. Lease: ${p.minimum_lease_months} month${p.minimum_lease_months !== 1 ? 's' : ''}</div>`);
+    if (p.security_deposit) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Security Deposit: $${Number(p.security_deposit).toLocaleString()}</div>`);
+    if (p.last_months_rent) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Last Month's Rent: $${Number(p.last_months_rent).toLocaleString()}</div>`);
+    if (p.admin_fee) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Admin/Move-in Fee: $${Number(p.admin_fee).toLocaleString()}</div>`);
+    if (p.pet_deposit) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Pet Deposit: $${Number(p.pet_deposit).toLocaleString()}</div>`);
+    if (p.pet_types_allowed?.length) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Pet Types: ${p.pet_types_allowed.map(esc).join(', ')}</div>`);
+    if (p.pet_weight_limit) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Pet Weight Limit: ${esc(String(p.pet_weight_limit))} lbs max</div>`);
+    if (p.pet_details) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1">${ico('dot')}<span><strong>Pet Policy:</strong> ${esc(p.pet_details)}</span></div>`);
+    if (p.smoking_allowed != null) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}${p.smoking_allowed ? 'Smoking Permitted' : 'No Smoking'}</div>`);
+    if (p.minimum_income_multiplier) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Min. Income: ${p.minimum_income_multiplier}× rent/mo</div>`);
+    if (p.minimum_credit_score) leaseItems.push(`<div class="pd-amenity-item">${ico('dot')}Min. Credit Score: ${p.minimum_credit_score}</div>`);
+    if (p.move_in_special) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1">${ico('dot')}<strong>Move-in Special:</strong> ${esc(p.move_in_special)}</div>`);
+    if (p.showing_instructions) leaseItems.push(`<div class="pd-amenity-item" style="grid-column:1/-1">${ico('dot')}<strong>Showings:</strong> ${esc(p.showing_instructions)}</div>`);
 
     const hasAmen  = amenItems.length > 0;
     const hasUtil  = utilItems.length > 0;
@@ -593,7 +614,7 @@
       ? `<div class="pd-section">
           <div class="pd-section-title">Virtual Tour</div>
           <a href="${esc(p.virtual_tour_url)}" class="btn btn-ghost btn-sm" target="_blank" rel="noopener">
-            <i class="fas fa-vr-cardboard"></i> Open virtual tour ↗
+            ${ico('vr')} Open virtual tour ↗
           </a>
         </div>`
       : '';
@@ -601,7 +622,7 @@
     // ── Admin notes (read-only display, admin-only) ──
     const adminNotesHtml = p.admin_notes
       ? `<div class="pd-section" style="border-left:3px solid var(--brand);padding-left:12px">
-          <div class="pd-section-title" style="color:var(--brand)"><i class="fas fa-note-sticky"></i> Admin Notes (internal)</div>
+          <div class="pd-section-title" style="color:var(--brand)">${ico('note')} Admin Notes (internal)</div>
           <div class="pd-desc" style="font-style:italic;color:var(--muted)">${esc(p.admin_notes)}</div>
         </div>`
       : '';
@@ -622,6 +643,16 @@
       + wmHtml
       + appsHtml
       + inqsHtml;
+
+    // ── Mobile FAB ──
+    if (!document.getElementById('pd-fab')) {
+      const fab = document.createElement('button');
+      fab.id = 'pd-fab'; fab.className = 'pd-fab';
+      fab.setAttribute('aria-label', 'Edit property'); fab.title = 'Edit property';
+      fab.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+      document.body.appendChild(fab);
+    }
+    document.getElementById('pd-fab').onclick = () => { if (_prop) openEditPanel(_prop); };
 
     // Update page subtitle
     const sub = document.querySelector('[data-page-sub]');
@@ -654,7 +685,7 @@
       const btn = document.getElementById('pd-btn-import-photos');
       if (!btn) return;
       btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+      btn.innerHTML = ico('spin') + ' Importing…';
       try {
         const { data, error } = await CP.sb().functions.invoke('import-pipeline-photos', {
           body: { property_id: propId }
@@ -682,7 +713,7 @@
         S.toast('Import failed: ' + (e.message || 'unknown error'), 'error');
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cloud-arrow-down"></i> Import source photos';
+        btn.innerHTML = ico('dnload') + ' Import source photos';
       }
     });
 
@@ -693,10 +724,10 @@
       const photosToWm = _photos.filter(ph => ph.url);
       if (!photosToWm.length) { S.toast('No photos to watermark.', 'info'); return; }
       btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying…';
+      btn.innerHTML = ico('spin') + ' Applying…';
       let ok = 0, fail = 0;
       const token = await CP.Auth.getAccessToken().catch(() => null);
-      if (!token) { S.toast('Session expired — please sign in again.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-droplet"></i> Apply watermark'; return; }
+      if (!token) { S.toast('Session expired — please sign in again.', 'error'); btn.disabled = false; btn.innerHTML = ico('drop') + ' Apply watermark'; return; }
       for (const ph of photosToWm) {
         try {
           const resp = await fetch((window.CONFIG?.SUPABASE_URL || '') + '/functions/v1/imagekit-watermark', {
@@ -708,7 +739,7 @@
         } catch (_) { fail++; }
       }
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-droplet"></i> Apply watermark';
+      btn.innerHTML = ico('drop') + ' Apply watermark';
       if (ok)   S.toast(`Watermark applied to ${ok} photo${ok===1?'':'s'}.`, 'success');
       if (fail) S.toast(`${fail} photo${fail===1?'':'s'} failed.`, 'error');
     });
@@ -832,7 +863,7 @@
               <div id="pd-edit-pending-zone" class="pd-edit-thumb-grid" style="margin-top:${_photos.length ? '8px' : '0'}"></div>
               <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
                 <label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-                  <i class="fas fa-camera"></i> Add photos
+                  ${ico('cam')} Add photos
                   <input type="file" id="pd-edit-file-input" accept="image/*" multiple style="display:none">
                 </label>
                 <span id="pd-edit-photo-status" style="font-size:.72rem;color:var(--brand);display:none"></span>
@@ -1079,7 +1110,7 @@
                 </label>
               </div>
               <button type="button" id="pd-geocode-btn" class="btn btn-ghost btn-sm" style="margin-top:4px;align-self:flex-start">
-                <i class="fas fa-location-dot"></i> Get coords from address
+                ${ico('locate')} Get coords from address
               </button>
             </div>
 
@@ -1101,7 +1132,7 @@
         <div class="pd-edit-footer">
           <button class="btn btn-ghost" id="pd-edit-cancel">Cancel</button>
           <button class="btn btn-primary" id="pd-edit-save">
-            <i class="fas fa-check"></i> Save changes
+            ${ico('check')} Save changes
           </button>
         </div>
       </div>`;
@@ -1260,7 +1291,7 @@
       const apiKey = window.CONFIG && CONFIG.GEOAPIFY_API_KEY;
       if (!apiKey) { S.toast('Geocoding not configured', 'error'); return; }
       const btn = document.getElementById('pd-geocode-btn');
-      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Looking up…';
+      btn.disabled = true; btn.innerHTML = ico('spin') + ' Looking up…';
       try {
         const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(addr)}&limit=1&apiKey=${encodeURIComponent(apiKey)}`);
         const json = await res.json();
@@ -1284,7 +1315,7 @@
       } catch (err) {
         S.toast('Geocode failed: ' + (err.message || err), 'error');
       } finally {
-        btn.disabled = false; btn.innerHTML = '<i class="fas fa-location-dot"></i> Get coords from address';
+        btn.disabled = false; btn.innerHTML = ico('locate') + ' Get coords from address';
       }
     });
 
@@ -1311,7 +1342,7 @@
       item.dataset.pendingSid = sid;
       item.style.cssText = 'position:relative;overflow:hidden;border-radius:6px;background:var(--surface-2);border:2px dashed var(--brand)';
       item.innerHTML = `<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;z-index:2">
-        <i class="fas fa-clock" style="font-size:.9rem;color:var(--brand)"></i>
+        ${ico('clock')}
         <span style="font-size:.6rem;color:var(--muted);text-align:center;padding:0 4px;word-break:break-all">${esc(file.name.length > 18 ? file.name.slice(0, 15) + '…' : file.name)}</span>
         <button type="button" data-remove-sid="${sid}" style="font-size:.6rem;padding:1px 6px;border-radius:3px;background:rgba(220,38,38,.85);color:#fff;border:none;cursor:pointer">Remove</button>
       </div>`;
@@ -1425,13 +1456,13 @@
     }
 
     const saveBtn = document.getElementById('pd-edit-save');
-    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = ico('spin') + ' Saving…'; }
 
     // ── Upload any photos queued in the edit panel ──
     if (_editPendingPhotos.size > 0) {
       const statusEl = document.getElementById('pd-edit-photo-status');
       if (statusEl) { statusEl.style.display = ''; statusEl.textContent = 'Uploading photos…'; }
-      if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+      if (saveBtn) saveBtn.innerHTML = ico('spin') + ' Uploading…';
 
       const entries = [..._editPendingPhotos.entries()];
       const baseOrder = _photos.length ? Math.max(..._photos.map(ph => ph.display_order ?? 0)) + 1 : 0;
@@ -1455,7 +1486,7 @@
 
       _editPendingPhotos.clear();
       if (statusEl) { statusEl.textContent = uploadedCnt > 0 ? `${uploadedCnt} photo${uploadedCnt > 1 ? 's' : ''} uploaded!` : ''; }
-      if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+      if (saveBtn) saveBtn.innerHTML = ico('spin') + ' Saving…';
     }
 
     // ── Auto-geocode if address filled but no coords yet ──
@@ -1540,7 +1571,7 @@
 
     const { error } = await CP.sb().from('properties').update(patch).eq('id', propId);
 
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-check"></i> Save changes'; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = ico('check') + ' Save changes'; }
 
     if (error) { S.toast('Save failed: ' + error.message, 'error'); return; }
 
@@ -2327,7 +2358,7 @@
     if (!items.length) { closePanel(); return; }
 
     const saveBtn = document.getElementById('pd-pm-save');
-    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = ico('spin') + ' Saving…'; }
 
     // ── Batch upsert: single DB call instead of N individual UPDATEs ──
     const updates = Array.from(items)

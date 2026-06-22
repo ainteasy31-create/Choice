@@ -15,6 +15,13 @@
   let _landlords = [];  // cache for publish landlord picker
   let _selected  = new Set(); // IDs of selected cards for bulk actions
 
+  // ── Session cache (30 s TTL — avoid re-fetch on back-navigation) ──────────
+  const _CPFX = 'pl_v1_';
+  const _CTTL = 30000;
+  function _cGet(k){ try{ const r=sessionStorage.getItem(_CPFX+k); if(!r) return null; const {t,d}=JSON.parse(r); return Date.now()-t>_CTTL?null:d; }catch{ return null; } }
+  function _cSet(k,d){ try{ sessionStorage.setItem(_CPFX+k,JSON.stringify({t:Date.now(),d})); }catch{} }
+  function _cClear(){ try{ Object.keys(sessionStorage).filter(k=>k.startsWith(_CPFX)).forEach(k=>sessionStorage.removeItem(k)); }catch{} }
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   function fmt$$(n){ return n != null ? '$' + Number(n).toLocaleString() : '—'; }
@@ -121,6 +128,9 @@
   }
 
   async function fetchListings(status, page){
+    const ck = status + '_' + page;
+    const cv = _cGet(ck);
+    if(cv){ _hasMore = cv.m; return cv.r; }
     const { data, error } = await CP.sb().rpc('pipeline_list', {
       p_status: status,
       p_limit:  PAGE + 1,
@@ -129,7 +139,9 @@
     if(error) throw error;
     const rows = typeof data === 'string' ? JSON.parse(data) : (data || []);
     _hasMore = rows.length > PAGE;
-    return _hasMore ? rows.slice(0, PAGE) : rows;
+    const r = _hasMore ? rows.slice(0, PAGE) : rows;
+    _cSet(ck, {r, m: _hasMore});
+    return r;
   }
 
   async function loadLandlords(){
@@ -149,36 +161,39 @@
     const isPublished = l.status === 'published';
     const isArchived  = l.status === 'archived';
     const isChecked   = _selected.has(l.id);
+    const srcLabel = l.source === 'zillow' ? 'Zillow' : l.source === 'realtor' ? 'Realtor' : (l.source ? S.esc(l.source) : '');
 
     return `<div class="pl-card${isChecked ? ' pl-card-selected' : ''}" data-pl-id="${S.esc(l.id)}" role="button" tabindex="0" aria-label="${S.esc((l.address||'Listing') + ', ' + (l.city||''))}">
       <div class="pl-thumb-wrap">
-        ${thumb
-          ? `<img class="pl-thumb" src="${S.esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-          : ''}
-        <div class="pl-thumb-placeholder" style="${thumb ? 'display:none' : ''}">
-          <svg class="i" width="24" height="24" style="opacity:.3"><use href="#i-property"/></svg>
+        ${thumb ? `<img class="pl-thumb" src="" data-src="${S.esc(thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}
+        <div class="pl-thumb-placeholder"${thumb ? ' style="display:none"' : ''}>
+          <svg class="i" width="28" height="28" style="opacity:.2"><use href="#i-property"/></svg>
         </div>
         <label class="pl-card-check" onclick="event.stopPropagation()" title="Select">
           <input type="checkbox" class="pl-check" data-id="${S.esc(l.id)}" ${isChecked ? 'checked' : ''} aria-label="Select listing">
         </label>
-      </div>
-      <div class="pl-body">
-        <div class="pl-addr">${S.esc(l.address || '(no address)')}${l.unit_number ? ' #'+l.unit_number : ''}</div>
-        <div class="pl-meta">${S.esc([l.city, l.state].filter(Boolean).join(', '))} ${S.esc(l.zip||'')} · ${fmtBeds(l)}${l.square_footage ? ' · ' + fmtSqft(l) : ''}</div>
-        <div class="pl-tags">
-          <strong style="font-size:.82rem;color:var(--text)">${fmt$$(l.monthly_rent)}/mo</strong>
-          ${l.source ? `<span class="src-badge src-${S.esc(l.source)}" title="Listing source">${l.source === 'zillow' ? 'Zillow' : l.source === 'realtor' ? 'Realtor' : S.esc(l.source)}</span>` : ''}
+        <div class="pl-card-badges">
+          ${l.source ? `<span class="src-badge src-${S.esc(l.source)}">${srcLabel}</span>` : ''}
           ${qsBadge(score)}
-          ${missing.length ? `<span class="qs-badge qs-low" title="Missing fields: ${S.esc(missing.join(', '))}">${missing.length} missing</span>` : ''}
-          ${isEnriched(l) ? `<span class="qs-badge qs-high" title="Phase 2 detail enrichment complete — heating, cooling, appliances and more populated">✓ Full data</span>` : ''}
-          ${l.available_date ? `<span class="qs-badge" style="background:rgba(99,102,241,.1);color:var(--brand)" title="Available date">Avail ${S.esc(l.available_date)}</span>` : ''}
-          ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none" target="_blank">Live ↗</a>` : ''}
+          ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none;pointer-events:auto" target="_blank" onclick="event.stopPropagation()">Live ↗</a>` : ''}
         </div>
       </div>
-      <div class="pl-actions" onclick="event.stopPropagation()">
-        ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-outline pl-pub-btn" data-id="${S.esc(l.id)}" title="Publish to site">Publish →</button>` : ''}
-        ${!isArchived ? `<button class="btn btn-sm btn-ghost pl-arc-btn" data-id="${S.esc(l.id)}" title="Archive">Archive</button>` : ''}
-      </div></div>`;
+      <div class="pl-body">
+        <div class="pl-addr">${S.esc(l.address || '(no address)')}${l.unit_number ? ' #'+S.esc(l.unit_number) : ''}</div>
+        <div class="pl-meta">${S.esc([l.city, l.state].filter(Boolean).join(', '))}${l.zip ? ' '+S.esc(l.zip) : ''} · ${fmtBeds(l)}${l.square_footage ? ' · '+fmtSqft(l) : ''}</div>
+        <div class="pl-rent">${fmt$$(l.monthly_rent)}/mo</div>
+        <div class="pl-tags">
+          ${missing.length ? `<span class="qs-badge qs-low" title="Missing: ${S.esc(missing.join(', '))}">${missing.length} missing</span>` : '<span class="qs-badge qs-high">✓ Complete</span>'}
+          ${isEnriched(l) ? `<span class="qs-badge qs-high" title="Phase 2 scrape data available">Full data</span>` : ''}
+          ${l.available_date ? `<span class="qs-badge" style="background:rgba(99,102,241,.1);color:var(--brand)">Avail ${S.esc(l.available_date)}</span>` : ''}
+        </div>
+      </div>
+      <div class="pl-card-ft" onclick="event.stopPropagation()">
+        ${!isArchived ? `<button class="btn btn-sm btn-ghost pl-arc-btn" data-id="${S.esc(l.id)}" title="Archive">Archive</button>` : '<span class="pill pill-muted" style="font-size:.68rem">Archived</span>'}
+        ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-primary pl-pub-btn" data-id="${S.esc(l.id)}" title="Publish to site">Publish →</button>` : ''}
+        ${isPublished && l.choice_property_id ? `<a class="btn btn-sm btn-ghost" href="/admin/property-detail.html?id=${S.esc(l.choice_property_id)}" target="_blank" onclick="event.stopPropagation()">Edit ↗</a>` : ''}
+      </div>
+    </div>`;
   }
 
   function renderList(listings, append){
@@ -509,6 +524,7 @@
   async function doArchive(id){
     const ok = await S.confirm('Archive this listing?', 'It will be hidden from the pipeline. You can still find it under the Archived filter.');
     if(!ok) return;
+    _cClear();
     const { data, error } = await CP.sb().rpc('pipeline_archive', { p_id: id });
     if(error){ S.toast('Archive failed: ' + error.message, 'error'); return; }
     const res = typeof data === 'string' ? JSON.parse(data) : data;
@@ -571,6 +587,7 @@
       'A draft property will be created in your listings. Photos will be transferred to ImageKit automatically.'
     );
     if(!ok) return;
+    _cClear();
 
     const btn = document.querySelector('.pl-pub-btn-panel');
     if(btn){ btn.disabled = true; btn.textContent = 'Publishing…'; }
@@ -671,6 +688,26 @@
     wireCardEvents();
   }
 
+  // ── Lazy-load card thumbnails via IntersectionObserver ───────────────────────
+  function setupLazyLoad(){
+    const imgs = document.querySelectorAll('.pl-thumb[data-src]');
+    if(!imgs.length) return;
+    if(!('IntersectionObserver' in window)){
+      imgs.forEach(img => { img.src = img.dataset.src; img.removeAttribute('data-src'); });
+      return;
+    }
+    const obs = new IntersectionObserver((entries, ob) => {
+      entries.forEach(e => {
+        if(!e.isIntersecting) return;
+        const img = e.target;
+        img.src = img.dataset.src;
+        img.removeAttribute('data-src');
+        ob.unobserve(img);
+      });
+    }, { rootMargin: '160px' });
+    imgs.forEach(img => obs.observe(img));
+  }
+
   // ── Event wiring ─────────────────────────────────────────────────────────────
 
   function wireCardEvents(){
@@ -708,6 +745,9 @@
         updateBulkBar();
       };
     });
+
+    // Lazy-load thumbnails after cards are in the DOM
+    setupLazyLoad();
   }
 
   function wireChips(){
