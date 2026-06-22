@@ -224,14 +224,9 @@
     </div>
     <script>
       (function(){
-        if(localStorage.getItem('cp_importer_dismissed')==='1'){
-          var b=document.getElementById('importer-banner');
-          if(b) b.hidden=true;
-        }
         document.addEventListener('DOMContentLoaded',function(){
           var btn=document.getElementById('importer-banner-dismiss');
           if(btn) btn.addEventListener('click',function(){
-            localStorage.setItem('cp_importer_dismissed','1');
             var b=document.getElementById('importer-banner');
             if(b) b.hidden=true;
           });
