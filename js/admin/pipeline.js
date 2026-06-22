@@ -507,6 +507,7 @@
   async function doSave(id){
     const patch = collectPatch();
     if(!Object.keys(patch).length){ S.toast('No changes to save', 'info'); return; }
+    _cClear();
     const btn = document.querySelector('.pl-save-btn');
     if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
     const { data, error } = await CP.sb().rpc('pipeline_save', { p_id: id, p_patch: patch });

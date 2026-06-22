@@ -537,7 +537,7 @@
             : '<span class="pill pill-muted">Not scanned yet</span>'}
           <a class="btn btn-ghost btn-sm" href="/admin/watermark-review.html?property_id=${esc(propId)}" style="font-size:.72rem">Scan &amp; review</a>
           <button class="btn btn-ghost btn-sm" id="pd-btn-apply-wm" style="font-size:.72rem" title="Apply watermark to all photos via ImageKit">
-            <i class="fas fa-droplet"></i> Apply watermark
+            ${ico('drop')} Apply watermark
           </button>
         </div>
       </div>`;
