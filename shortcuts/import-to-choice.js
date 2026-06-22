@@ -12,20 +12,53 @@
 //   3. Switch to Scriptable → tap "import-to-choice".
 //   4. The listing is added to your admin pipeline instantly.
 //
-// What v3.0 captures vs v2.0:
-//   • Highest-resolution photos (responsivePhotosOriginalRatio first)
-//   • All fee fields: pet deposit, admin fee, parking fee, HOA,
-//     application fee, last month's rent, move-in specials
-//   • Walk / transit / bike scores → location_context
-//   • Floors, garage spaces, lot size, total units
-//   • Smoking policy, minimum lease term
-//   • Expanded amenities: interior + exterior + lot + pool features
-//   • property_type in UPPER_UNDERSCORE format (matches scraper)
-//   • available_date normalized to YYYY-MM-DD
+// UPDATES: The script checks for updates automatically on every
+// run. When a new version is available it self-updates and asks
+// you to tap Run once more — no manual reinstall ever needed.
 // ============================================================
 
-const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
-const SECRET   = 'cp_import_7Kx3m9P2w5';
+const VERSION      = '3.0';
+const VERSION_URL  = 'https://choice-properties-site.pages.dev/shortcuts/version.json';
+const SCRIPT_URL   = 'https://choice-properties-site.pages.dev/shortcuts/import-to-choice.js';
+const EDGE_URL     = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
+const SECRET       = 'cp_import_7Kx3m9P2w5';
+
+// ── 0. Self-update check — runs silently, never blocks import on failure ──────
+try {
+  const verReq = new Request(VERSION_URL);
+  verReq.timeoutInterval = 6;
+  const manifest = await verReq.loadJSON();
+
+  if (manifest && manifest.version && manifest.version !== VERSION) {
+    // Newer version available — download and overwrite this script on disk
+    const scriptReq = new Request(SCRIPT_URL);
+    scriptReq.timeoutInterval = 20;
+    const newCode = await scriptReq.loadString();
+
+    if (newCode && newCode.length > 500) {
+      // Try iCloud FileManager first (default Scriptable setup), fall back to local
+      let fm;
+      try { fm = FileManager.iCloud(); fm.documentsDirectory(); }
+      catch(e) { fm = FileManager.local(); }
+
+      const scriptPath = fm.joinPath(fm.documentsDirectory(), Script.name() + '.js');
+      fm.writeString(scriptPath, newCode);
+
+      const ua = new Alert();
+      ua.title   = '\u2728 Script Updated';
+      ua.message = 'Import to Choice updated to v' + manifest.version + '.'
+        + (manifest.changelog ? '\n\n' + manifest.changelog : '')
+        + '\n\nTap Run again to use the new version.';
+      ua.addAction('Run now');
+      await ua.present();
+      Script.complete();
+      return;
+    }
+  }
+} catch (updateErr) {
+  // Update check failed (no network, server down, etc.) — continue normally.
+  // The import itself will still work; update will retry next run.
+}
 
 // ── 1. Get URL — share sheet args first, then clipboard, then prompt ──────────
 let sharedUrl = null;
