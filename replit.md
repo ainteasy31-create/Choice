@@ -12,6 +12,7 @@ Nationwide rental property marketplace and management platform. Static HTML/CSS/
 - **Auth:** Supabase Auth (PKCE flow)
 - **Scraper (Realtor.com):** `scraper/scraper.py` — run from Replit shell → stages into `pipeline.pipeline_properties`
 - **Scraper (Zillow):** `scraper/zillow_scraper.py` — run from **iSH Shell on iPhone** (requires residential IP; Zillow blocks Replit/datacenter IPs) → same pipeline table
+- **iOS Single-listing Importer:** `shortcuts/import-to-choice.js` — Scriptable script; lets the owner import any Zillow listing from Safari on iPhone directly into the pipeline with one tap, no computer required
 
 ## iSH Shell (iPhone — Zillow Scraper)
 The Zillow scraper must run from a residential IP. The owner uses **iSH** (free Alpine Linux terminal app for iOS, available on the App Store).

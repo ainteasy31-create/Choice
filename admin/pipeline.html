@@ -174,11 +174,70 @@
     font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap}
   .pl-bulk-bar .btn-bulk-pub:hover{opacity:.92}
   .pl-bulk-bar .btn-bulk-pub:disabled{opacity:.6;cursor:not-allowed}
+
+  /* ── iOS Importer banner ─────────────────────────────────────────────────── */
+  .importer-banner{
+    display:flex;align-items:center;gap:12px;
+    background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.10));
+    border:1px solid rgba(99,102,241,.3);border-radius:var(--r-md,10px);
+    padding:12px 14px;margin-bottom:var(--sp-4);
+  }
+  .importer-banner-icon{
+    flex-shrink:0;width:36px;height:36px;border-radius:8px;
+    background:rgba(99,102,241,.22);display:flex;align-items:center;justify-content:center;
+    font-size:1.2rem;
+  }
+  .importer-banner-body{flex:1;min-width:0}
+  .importer-banner-title{font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:2px}
+  .importer-banner-sub{font-size:.72rem;color:var(--muted-2);line-height:1.4}
+  .importer-banner-actions{display:flex;gap:8px;flex-shrink:0;align-items:center}
+  .btn-install{
+    background:var(--brand,#6366f1);color:#fff;border:none;
+    padding:6px 14px;border-radius:var(--r-sm,6px);
+    font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;
+    text-decoration:none;display:inline-block;
+  }
+  .btn-install:hover{opacity:.88}
+  .importer-banner-dismiss{
+    background:none;border:none;cursor:pointer;
+    color:var(--muted-2);font-size:1.1rem;padding:2px 4px;line-height:1;
+  }
+  .importer-banner-dismiss:hover{color:var(--text)}
+  .importer-banner[hidden]{display:none!important}
 </style>
 </head>
 <body data-page-title="Pipeline" data-page-sub="Scraped listings for review">
 <div class="app">
   <main class="app-content">
+
+    <!-- iOS Importer install banner (dismissed permanently via localStorage) -->
+    <div class="importer-banner" id="importer-banner">
+      <div class="importer-banner-icon">📱</div>
+      <div class="importer-banner-body">
+        <div class="importer-banner-title">Import Zillow listings straight from your iPhone</div>
+        <div class="importer-banner-sub">Install the free Scriptable app, download the script once, then tap Share → Import to Choice on any Zillow listing.</div>
+      </div>
+      <div class="importer-banner-actions">
+        <a class="btn-install" href="/shortcuts/import-to-choice.js" download="import-to-choice.js">Install script</a>
+        <button class="importer-banner-dismiss" id="importer-banner-dismiss" title="Dismiss">✕</button>
+      </div>
+    </div>
+    <script>
+      (function(){
+        if(localStorage.getItem('cp_importer_dismissed')==='1'){
+          var b=document.getElementById('importer-banner');
+          if(b) b.hidden=true;
+        }
+        document.addEventListener('DOMContentLoaded',function(){
+          var btn=document.getElementById('importer-banner-dismiss');
+          if(btn) btn.addEventListener('click',function(){
+            localStorage.setItem('cp_importer_dismissed','1');
+            var b=document.getElementById('importer-banner');
+            if(b) b.hidden=true;
+          });
+        });
+      })();
+    </script>
 
     <!-- Toolbar: status filter chips + source filter chips + address search -->
     <div class="pl-toolbar">
