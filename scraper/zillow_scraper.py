@@ -79,32 +79,42 @@ _USER_AGENTS = [
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/125.0.0.0 Safari/537.36"
+        "Chrome/128.0.0.0 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.6367.202 Safari/537.36"
+        "Chrome/127.0.6533.119 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+        "Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0"
     ),
     (
         "Mozilla/5.0 (X11; Linux x86_64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/123.0.0.0 Safari/537.36"
+        "Chrome/127.0.0.0 Safari/537.36"
     ),
     (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) "
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.6261.128 Safari/537.36"
+        "Chrome/127.0.6533.99 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
+        "Chrome/126.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.6478.234 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
     ),
 ]
 
@@ -113,7 +123,7 @@ _BASE_HEADERS = {
     "Accept-Language":           "en-US,en;q=0.9",
     "Accept-Encoding":           "gzip, deflate, br",
     "Referer":                   "https://www.zillow.com/",
-    "sec-ch-ua":                 '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "sec-ch-ua":                 '"Chromium";v="128", "Google Chrome";v="128", "Not-A.Brand";v="99"',
     "sec-ch-ua-mobile":          "?0",
     "sec-ch-ua-platform":        '"Windows"',
     "sec-fetch-dest":            "document",
@@ -149,6 +159,7 @@ _IMPORTANT = [
 _BONUS = [
     "county", "neighborhood", "year_built", "parking",
     "pets_allowed", "security_deposit", "amenities", "appliances",
+    "heating_type", "cooling_type", "laundry_type",
 ]
 _TRACKABLE_MISSING = [
     "lat", "lng", "county", "neighborhood", "year_built", "square_footage",
@@ -717,8 +728,8 @@ def _map_listing(raw):
     yr_built = _safe_int(hi.get("yearBuilt"))
     hoa      = _safe_int(hi.get("hoaFee"))
 
-    agent  = raw.get("brokerName") or hi.get("agentName")
-    broker = raw.get("brokerName") or hi.get("brokerName")
+    agent  = hi.get("agentName") or raw.get("agentName") or raw.get("brokerName")
+    broker = hi.get("brokerName") or raw.get("brokerName")
 
     original_data = {
         "zpid":       zpid,
@@ -939,6 +950,18 @@ def _enrich_from_detail(record, prop):
         record["hoa_fee"] = _safe_int(rf.get("monthlyHoaFee") or prop.get("monthlyHoaFee") or rf.get("hoaFee"))
     if not record.get("tax_value"):
         record["tax_value"] = _safe_int(prop.get("taxAnnualAmount") or rf.get("taxAnnualAmount"))
+    if not record.get("admin_fee"):
+        record["admin_fee"] = _safe_int(rf.get("adminFee") or prop.get("adminFee"))
+    if not record.get("last_months_rent"):
+        record["last_months_rent"] = _safe_int(rf.get("lastMonthRent") or rf.get("lastMonthsRent"))
+    if not record.get("move_in_special"):
+        concessions = rf.get("concessions") or prop.get("specialOffers") or prop.get("concessions")
+        if concessions:
+            record["move_in_special"] = str(concessions).strip()[:200]
+    if not record.get("total_units"):
+        record["total_units"] = _safe_int(
+            prop.get("unitCount") or prop.get("numberOfUnitsTotal") or rf.get("unitCount")
+        )
 
     # -- Listing details -------------------------------------------------------
     # Description -- always prefer detail page (much longer and complete)
@@ -1709,7 +1732,7 @@ def _map_from_detail_only(prop, source_url=None, zpid=None):
         "location_context":      None,
         "property_type":         None,
         "bedrooms":              _safe_int(prop.get("bedrooms")),
-        "bathrooms":             _safe_float(prop.get("bathrooms")),
+        "bathrooms":             _safe_int(prop.get("bathrooms")),
         "half_bathrooms":        None,
         "total_bathrooms":       _safe_float(prop.get("bathrooms")),
         "square_footage":        _safe_int(prop.get("livingArea")),

@@ -115,27 +115,37 @@ _REALTOR_UA_POOL = [
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/125.0.0.0 Safari/537.36"
+        "Chrome/128.0.0.0 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.6367.202 Safari/537.36"
+        "Chrome/127.0.6533.119 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+        "Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0"
     ),
     (
         "Mozilla/5.0 (X11; Linux x86_64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/123.0.0.0 Safari/537.36"
+        "Chrome/127.0.0.0 Safari/537.36"
     ),
     (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) "
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.6478.234 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) "
         "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-        "Version/17.4 Safari/605.1.15"
+        "Version/17.5 Safari/605.1.15"
     ),
 ]
 
@@ -360,7 +370,7 @@ def _collect_photos(prop):
     for p in (getattr(prop, "alt_photos", None) or []):
         _add(p)
 
-    return urls[:40]
+    return urls[:50]
 
 # ── Quality scoring (mirrors zillow_scraper.py) ───────────────────────────────
 _IMPORTANT = [
@@ -371,7 +381,7 @@ _IMPORTANT = [
 _BONUS = [
     "county", "neighborhood", "year_built", "parking",
     "pets_allowed", "security_deposit", "amenities", "appliances",
-    "heating_type", "cooling_type",
+    "heating_type", "cooling_type", "laundry_type",
 ]
 _TRACKABLE_MISSING = [
     "lat", "lng", "county", "neighborhood", "year_built", "square_footage",
