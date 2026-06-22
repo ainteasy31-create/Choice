@@ -4,6 +4,7 @@
   let S;            // AdminShell
   let _status   = 'scraped';
   let _source   = null;    // null = all, 'zillow', 'realtor'
+  let _quality  = null;    // null = all, 'high' (≥80), 'mid' (60-79), 'low' (<60)
   let _search   = '';      // address search query
   let _page     = 0;
   const PAGE    = 40;
@@ -78,10 +79,19 @@
     return src === 'ios' || src === 'enriched' || src === 'admin-url';
   }
 
-  // Returns _pageData filtered by the active source chip and search query
+  // Returns _pageData filtered by active source, quality, and search query
   function visibleListings(){
     let list = _pageData;
     if(_source) list = list.filter(l => (l.source || '') === _source);
+    if(_quality){
+      list = list.filter(l => {
+        const s = l.data_quality_score ?? 0;
+        if(_quality === 'high') return s >= 80;
+        if(_quality === 'mid')  return s >= 60 && s < 80;
+        if(_quality === 'low')  return s < 60;
+        return true;
+      });
+    }
     if(_search){
       const q = _search.toLowerCase();
       list = list.filter(l => {
@@ -1118,6 +1128,22 @@
     }
   }
 
+  function wireQualityChips(){
+    const row = document.getElementById('quality-chips');
+    if(!row) return;
+    row.addEventListener('click', e => {
+      const chip = e.target.closest('.chip');
+      if(!chip || !('plQuality' in chip.dataset)) return;
+      row.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      _quality = chip.dataset.plQuality || null;
+      _selected.clear();
+      updateBulkBar();
+      renderList(visibleListings(), false);
+      wireCardEvents();
+    });
+  }
+
   function wireImportButton(){
     const btn = document.getElementById('pl-import-url-btn');
     if(btn) btn.addEventListener('click', openImportModal);
@@ -1207,6 +1233,7 @@
       _cClear();
       wireChips();
       wireSourceChips();
+      wireQualityChips();
       wireSearch();
       wireBackdrop();
       wireLoadMore();

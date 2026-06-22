@@ -289,6 +289,13 @@
         <button class="chip chip-sm" data-pl-source="zillow">Zillow</button>
         <button class="chip chip-sm" data-pl-source="realtor">Realtor</button>
       </div>
+      <div class="source-chip-row" id="quality-chips" role="tablist" aria-label="Filter by quality score">
+        <span class="source-filter-label">Quality:</span>
+        <button class="chip chip-sm active" data-pl-quality="">All</button>
+        <button class="chip chip-sm" data-pl-quality="high" title="Score ≥ 80 — ready to publish">✓ Ready</button>
+        <button class="chip chip-sm" data-pl-quality="mid"  title="Score 60–79 — a few fields missing">Needs work</button>
+        <button class="chip chip-sm" data-pl-quality="low"  title="Score < 60 — significant gaps">Incomplete</button>
+      </div>
       <div style="width:100%;display:flex;align-items:flex-start;gap:8px">
         <div class="pl-search-wrap" style="flex:1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
