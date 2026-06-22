@@ -672,7 +672,7 @@ export function holdingFeeRequestHtml(
     <div class="callout amber">
       <h4>Refund &amp; Forfeiture Summary</h4>
       <p style="margin-bottom:8px;"><strong>Fully credited:</strong> the holding deposit is applied 100% toward your move-in costs once the lease is executed.</p>
-      <p style="margin-bottom:8px;"><strong>May be refunded:</strong> if the property becomes unavailable through no fault of yours, or materially differs from how it was advertised — see Section 9 of the <a href="${POLICY_BASE_URL}/policies.html" style="color:#1a5276;">Policy Framework</a>.</p>
+      <p style="margin-bottom:8px;"><strong>May be refunded:</strong> if the property becomes unavailable through no fault of yours, or materially differs from how it was advertised — see Section 9 of the <a href="${POLICY_BASE_URL}/policies.html#s9" style="color:#1a5276;">Policy Framework</a>.</p>
       <p style="margin-bottom:0;"><strong>May be forfeited:</strong> if you withdraw, fail to sign the lease in time, or change your mind — see the <a href="${POLICY_BASE_URL}/holding-deposit-policy.html" style="color:#1a5276;">Holding Deposit Policy</a>.</p>
     </div>
 
@@ -736,7 +736,7 @@ export function holdingFeeReceivedHtml(
     <div class="callout amber">
       <h4>Refund &amp; Forfeiture Summary</h4>
       <p style="margin-bottom:8px;"><strong>Fully credited:</strong> the holding deposit you just paid will be applied 100% toward your move-in costs once the lease is executed.</p>
-      <p style="margin-bottom:8px;"><strong>May be refunded:</strong> if the property becomes unavailable through no fault of yours, or materially differs from how it was advertised — see Section 9 of the <a href="${POLICY_BASE_URL}/policies.html" style="color:#1a5276;">Policy Framework</a>.</p>
+      <p style="margin-bottom:8px;"><strong>May be refunded:</strong> if the property becomes unavailable through no fault of yours, or materially differs from how it was advertised — see Section 9 of the <a href="${POLICY_BASE_URL}/policies.html#s9" style="color:#1a5276;">Policy Framework</a>.</p>
       <p style="margin-bottom:0;"><strong>May be forfeited:</strong> if you withdraw, fail to sign the lease in time, or change your mind before signing — see the <a href="${POLICY_BASE_URL}/holding-deposit-policy.html" style="color:#1a5276;">Holding Deposit Policy</a>.</p>
     </div>
 
@@ -817,7 +817,7 @@ export function signingEmailHtml(
     <div class="callout amber">
       <h4>Holding Deposit — Refund &amp; Forfeiture Reminder</h4>
       <p style="margin-bottom:8px;"><strong>Fully credited:</strong> once you sign, your holding deposit is applied 100% toward your move-in costs.</p>
-      <p style="margin-bottom:8px;"><strong>May be refunded:</strong> if the property becomes unavailable through no fault of yours, or materially differs from how it was advertised — see Section 9 of the <a href="${POLICY_BASE_URL}/policies.html" style="color:#1a5276;">Policy Framework</a>.</p>
+      <p style="margin-bottom:8px;"><strong>May be refunded:</strong> if the property becomes unavailable through no fault of yours, or materially differs from how it was advertised — see Section 9 of the <a href="${POLICY_BASE_URL}/policies.html#s9" style="color:#1a5276;">Policy Framework</a>.</p>
       <p style="margin-bottom:0;"><strong>May be forfeited:</strong> if you do not sign within the 48-hour window above, withdraw, or change your mind before signing — see the <a href="${POLICY_BASE_URL}/holding-deposit-policy.html" style="color:#1a5276;">Holding Deposit Policy</a>.</p>
     </div>
 
@@ -1027,7 +1027,7 @@ export function moveinEmailHtml(
     <div class="callout">
       <h4>Holding Deposit — Now Credited</h4>
       <p style="margin-bottom:8px;"><strong>Fully credited:</strong> as of move-in, the holding deposit you paid earlier has been applied 100% toward your move-in costs — it was not an additional charge.</p>
-      <p style="margin-bottom:0;">The refund and forfeiture terms that applied prior to move-in are governed by Section 9 of the <a href="${POLICY_BASE_URL}/policies.html" style="color:#1a5276;">Policy Framework</a> and the <a href="${POLICY_BASE_URL}/holding-deposit-policy.html" style="color:#1a5276;">Holding Deposit Policy</a>. From move-in forward, your security deposit and rent obligations are governed by your signed lease.</p>
+      <p style="margin-bottom:0;">The refund and forfeiture terms that applied prior to move-in are governed by Section 9 of the <a href="${POLICY_BASE_URL}/policies.html#s9" style="color:#1a5276;">Policy Framework</a> and the <a href="${POLICY_BASE_URL}/holding-deposit-policy.html" style="color:#1a5276;">Holding Deposit Policy</a>. From move-in forward, your security deposit and rent obligations are governed by your signed lease.</p>
     </div>
 
     <div class="cta-wrap">
