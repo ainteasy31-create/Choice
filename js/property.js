@@ -391,7 +391,22 @@ function renderProperty(p) {
   document.getElementById('breadcrumbCity').textContent = `${p.city}, ${p.state}`;
   const bcGroup = document.getElementById('breadcrumbTitleGroup');
   const bcTitle = document.getElementById('breadcrumbTitle');
-  if (bcTitle && bcGroup) { bcTitle.textContent = p.title; bcGroup.style.display = ''; }
+  if (bcTitle && bcGroup) {
+    bcGroup.style.display = '';
+    // Trim to word boundary so ellipsis never cuts mid-word (e.g. "San A..." → "San Antonio…")
+    const _trimBc = () => {
+      bcTitle.textContent = p.title;
+      if (bcTitle.scrollWidth > bcTitle.offsetWidth + 2) {
+        const words = p.title.split(' ');
+        while (words.length > 1 && bcTitle.scrollWidth > bcTitle.offsetWidth + 2) {
+          words.pop();
+          bcTitle.textContent = words.join(' ') + '\u2026';
+        }
+      }
+    };
+    requestAnimationFrame(_trimBc);
+    window.addEventListener('resize', _trimBc, { passive: true });
+  }
 
   // Gallery
   allPhotos = p.photo_urls?.length ? p.photo_urls : ['/assets/placeholder-property.jpg'];
