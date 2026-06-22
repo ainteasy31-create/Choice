@@ -140,3 +140,9 @@ verify_jwt = false
 # Same dual-auth pattern as cleanup-expired-drafts.
 [functions.nudge-expiring-drafts]
 verify_jwt = false
+
+# receive-pipeline-import: iOS Scriptable importer — no user session on the phone.
+# Auth is enforced inside the function via x-import-secret header (SHORTCUT_IMPORT_SECRET).
+# verify_jwt must be false so the phone can POST without a Supabase JWT.
+[functions.receive-pipeline-import]
+verify_jwt = false
