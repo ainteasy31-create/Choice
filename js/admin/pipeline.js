@@ -54,12 +54,14 @@
     return JSON.stringify(s.split(',').map(x => x.trim()).filter(Boolean));
   }
   // Returns the import type for labelling in the panel
-  // 'ios'      — imported via iOS Scriptable from Zillow detail page (has full data)
-  // 'enriched' — Realtor.com Phase 2 detail scrape complete
-  // 'search'   — basic search-results scrape only (limited data)
+  // 'ios'       — imported via iOS Scriptable from Zillow detail page (has full data)
+  // 'admin-url' — imported via admin "Import URL" button on desktop
+  // 'enriched'  — Realtor.com Phase 2 detail scrape complete
+  // 'search'    — basic search-results scrape only (limited data)
   function importSource(l){
     const od = parseJSON(l.original_data);
     if(od && od._import && String(od._import).startsWith('ios-scriptable')) return 'ios';
+    if(od && od._import && String(od._import).startsWith('admin-url-import')) return 'admin-url';
     if(od && od._phase === 'detail') return 'enriched';
     return 'search';
   }
@@ -70,10 +72,10 @@
     return od && od._phase === 'detail';
   }
 
-  // Returns true if the listing has full detail data (either Phase 2 or iOS import)
+  // Returns true if the listing has full detail data (either Phase 2 or iOS/admin import)
   function hasDetailData(l){
     const src = importSource(l);
-    return src === 'ios' || src === 'enriched';
+    return src === 'ios' || src === 'enriched' || src === 'admin-url';
   }
 
   // Returns _pageData filtered by the active source chip and search query
@@ -179,6 +181,7 @@
     const isArchived  = l.status === 'archived';
     const isChecked   = _selected.has(l.id);
     const srcLabel = l.source === 'zillow' ? 'Zillow' : l.source === 'realtor' ? 'Realtor' : (l.source ? S.esc(l.source) : '');
+    const srcImp = importSource(l);
 
     return `<div class="pl-card${isChecked ? ' pl-card-selected' : ''}" data-pl-id="${S.esc(l.id)}" role="button" tabindex="0" aria-label="${S.esc((l.address||'Listing') + ', ' + (l.city||''))}">
       <div class="pl-thumb-wrap">
@@ -192,6 +195,7 @@
         <div class="pl-card-badges">
           ${l.source ? `<span class="src-badge src-${S.esc(l.source)}">${srcLabel}</span>` : ''}
           ${qsBadge(score)}
+          ${srcImp === 'admin-url' ? `<span class="qs-badge qs-high" title="Imported via admin URL import">🖥 Desktop</span>` : ''}
           ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none;pointer-events:auto" target="_blank" onclick="event.stopPropagation()">Live ↗</a>` : ''}
         </div>
       </div>
@@ -274,9 +278,10 @@
         <div class="pl-panel-title">${S.esc(l.address || '(no address)')}</div>
         <div class="pl-panel-sub">${S.esc([l.city, l.state, l.zip].filter(Boolean).join(', '))}
           ${score != null ? ` · <span class="qs-badge ${qsClass(score)}">Q: ${score}/100</span>` : ''}
-          ${srcType === 'ios'      ? ` · <span class="qs-badge qs-high" title="Imported from Zillow detail page via iOS Scriptable">📱 iOS import</span>` :
-            srcType === 'enriched' ? ` · <span class="qs-badge qs-high" title="Phase 2 detail scrape complete">✓ Full data</span>` :
-                                     ` · <span class="qs-badge qs-low" title="Only basic search data — open the listing and re-import for full details">Search only</span>`}
+          ${srcType === 'ios'       ? ` · <span class="qs-badge qs-high" title="Imported from Zillow detail page via iOS Scriptable">📱 iOS import</span>` :
+            srcType === 'admin-url' ? ` · <span class="qs-badge qs-high" title="Imported via admin URL import on desktop">🖥 Desktop import</span>` :
+            srcType === 'enriched'  ? ` · <span class="qs-badge qs-high" title="Phase 2 detail scrape complete">✓ Full data</span>` :
+                                      ` · <span class="qs-badge qs-low" title="Only basic search data — open the listing and re-import for full details">Search only</span>`}
           ${editedFields.length ? ` · <span style="font-size:.7rem;color:var(--brand)">${editedFields.length} fields edited</span>` : ''}
         </div>
         ${l.source_url ? `<a href="${S.esc(l.source_url)}" target="_blank" rel="noopener" class="pl-source-link" style="margin-top:4px">
@@ -341,7 +346,7 @@
         </div>
       </div>
 
-      <!-- Features (Phase 2 data) -->
+      <!-- Features -->
       <div class="pl-section">
         <div class="pl-section-title">Features ${hasDetailData(l) ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
         <div class="pl-form-grid">
@@ -361,7 +366,7 @@
         </div>
       </div>
 
-      <!-- Appliances & Utilities (Phase 2 data) -->
+      <!-- Appliances & Utilities -->
       <div class="pl-section">
         <div class="pl-section-title">Appliances &amp; utilities ${hasDetailData(l) ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
         <div class="pl-form-grid full">
@@ -506,6 +511,184 @@
     backdrop.classList.remove('open');
     document.body.style.overflow = '';
     setTimeout(() => { panel.innerHTML = ''; _current = null; _dirty = {}; }, 300);
+  }
+
+  // ── Import from URL (desktop import) ────────────────────────────────────────
+
+  function openImportModal(){
+    // Remove any existing modal
+    const existing = document.getElementById('pl-import-modal');
+    if(existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'pl-import-modal';
+    modal.innerHTML = `
+      <div class="pl-import-backdrop"></div>
+      <div class="pl-import-dialog" role="dialog" aria-modal="true" aria-label="Import Zillow listing">
+        <div class="pl-import-hd">
+          <div style="font-size:.95rem;font-weight:700">Import Zillow listing</div>
+          <button class="pl-import-close" aria-label="Close">✕</button>
+        </div>
+        <div class="pl-import-body">
+          <p style="font-size:.82rem;color:var(--muted-2);margin:0 0 14px">
+            Paste any Zillow listing detail URL. The server will fetch and parse the listing data automatically.
+            <br><span style="font-size:.75rem;opacity:.8">Note: Zillow occasionally blocks datacenter IPs. If that happens, use the iOS importer instead.</span>
+          </p>
+          <div class="pl-field" style="margin-bottom:14px">
+            <label for="pl-import-url">Zillow listing URL</label>
+            <input id="pl-import-url" type="url" placeholder="https://www.zillow.com/homedetails/…" autocomplete="off" spellcheck="false">
+          </div>
+          <div id="pl-import-result" style="display:none"></div>
+        </div>
+        <div class="pl-import-ft">
+          <button class="btn btn-ghost" id="pl-import-cancel">Cancel</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary" id="pl-import-submit">Import listing →</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+
+    // Wire events
+    modal.querySelector('.pl-import-backdrop').addEventListener('click', closeImportModal);
+    modal.querySelector('.pl-import-close').addEventListener('click', closeImportModal);
+    document.getElementById('pl-import-cancel').addEventListener('click', closeImportModal);
+    document.getElementById('pl-import-submit').addEventListener('click', doImportFromUrl);
+
+    // Allow Enter to submit
+    document.getElementById('pl-import-url').addEventListener('keydown', e => {
+      if(e.key === 'Enter') { e.preventDefault(); doImportFromUrl(); }
+    });
+
+    // Focus URL input
+    setTimeout(() => {
+      const input = document.getElementById('pl-import-url');
+      if(input) input.focus();
+    }, 50);
+
+    // ESC to close
+    modal._escHandler = e => { if(e.key === 'Escape') closeImportModal(); };
+    document.addEventListener('keydown', modal._escHandler);
+  }
+
+  function closeImportModal(){
+    const modal = document.getElementById('pl-import-modal');
+    if(!modal) return;
+    if(modal._escHandler) document.removeEventListener('keydown', modal._escHandler);
+    modal.remove();
+  }
+
+  async function doImportFromUrl(){
+    const urlInput  = document.getElementById('pl-import-url');
+    const submitBtn = document.getElementById('pl-import-submit');
+    const resultEl  = document.getElementById('pl-import-result');
+    if(!urlInput || !submitBtn || !resultEl) return;
+
+    const url = urlInput.value.trim();
+    if(!url){
+      urlInput.focus();
+      return;
+    }
+    if(!url.includes('zillow.com')){
+      showImportResult('error', 'Please paste a Zillow URL (zillow.com).');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Importing…';
+    resultEl.style.display = 'none';
+
+    try {
+      const { data, error } = await CP.sb().functions.invoke('import-from-url', {
+        body: { url }
+      });
+      if(error) throw error;
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+
+      if(res?.ok){
+        // Success
+        const score = res.score ?? '?';
+        const photos = res.photos ?? 0;
+        const city   = res.city   ? ' in ' + res.city : '';
+        const pop    = res.populated_fields?.length ?? '?';
+        const miss   = res.missing_fields?.length   ?? 0;
+
+        showImportResult('success',
+          `<strong>✓ Added to pipeline!</strong><br>
+           <span style="font-size:.78rem">${S.esc(res.title||'')}${city}</span><br>
+           <span style="font-size:.75rem;color:var(--muted-2);margin-top:4px;display:block">
+             Quality score: <strong>${score}/100</strong> · ${photos} photo${photos!==1?'s':''} · ${pop} fields populated
+             ${miss ? ` · <span style="color:var(--danger)">${miss} missing</span>` : ' · <span style="color:var(--success)">Complete</span>'}
+           </span>`
+        );
+        submitBtn.textContent = '✓ Imported';
+
+        // Refresh the list in the background
+        _cClear();
+        fetchCounts().catch(()=>{});
+        setTimeout(async () => {
+          try {
+            const [listings] = await Promise.all([fetchListings(_status, 0), Promise.resolve()]);
+            _pageData = listings;
+            renderList(visibleListings(), false);
+            wireCardEvents();
+          } catch(_){}
+        }, 800);
+
+        // Auto-close modal after 3s
+        setTimeout(closeImportModal, 3000);
+
+      } else if(res?.duplicate){
+        showImportResult('info',
+          `<strong>Already in pipeline</strong><br>
+           <span style="font-size:.78rem">${S.esc(res.title||'')} (${S.esc(res.id||'')})</span><br>
+           <span style="font-size:.75rem;color:var(--muted-2)">This listing has already been imported. Try a different URL.</span>`
+        );
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Import listing →';
+
+      } else if(res?.blocked){
+        showImportResult('warning',
+          `<strong>Zillow blocked the request</strong><br>
+           <span style="font-size:.78rem">${S.esc(res.message||'Zillow blocked the server-side fetch.')}</span><br>
+           <span style="font-size:.75rem;color:var(--muted-2);margin-top:4px;display:block">
+             Use the <strong>iOS Scriptable importer</strong> instead — it runs from your phone's residential IP which Zillow allows.
+           </span>`
+        );
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Try another URL';
+
+      } else {
+        showImportResult('error',
+          `<strong>Import failed</strong><br>
+           <span style="font-size:.78rem">${S.esc(res?.error || 'Unknown error')}</span>`
+        );
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Import listing →';
+      }
+    } catch(e){
+      console.error('[pipeline] import-from-url failed', e);
+      showImportResult('error',
+        `<strong>Request failed</strong><br>
+         <span style="font-size:.78rem">${S.esc(e.message||'Network error')}</span>`
+      );
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Import listing →';
+    }
+  }
+
+  function showImportResult(type, html){
+    const el = document.getElementById('pl-import-result');
+    if(!el) return;
+    const colors = {
+      success: { bg:'rgba(34,197,94,.1)', border:'rgba(34,197,94,.25)', color:'var(--text)' },
+      error:   { bg:'rgba(239,68,68,.08)', border:'rgba(239,68,68,.25)', color:'var(--text)' },
+      warning: { bg:'rgba(234,179,8,.08)', border:'rgba(234,179,8,.25)', color:'var(--text)' },
+      info:    { bg:'rgba(99,102,241,.08)', border:'rgba(99,102,241,.2)', color:'var(--text)' },
+    };
+    const c = colors[type] || colors.info;
+    el.style.cssText = `display:block;padding:12px 14px;border-radius:8px;border:1px solid ${c.border};background:${c.bg};color:${c.color};font-size:.82rem;line-height:1.5;margin-top:4px`;
+    el.innerHTML = html;
   }
 
   // ── Actions ─────────────────────────────────────────────────────────────────
@@ -835,8 +1018,6 @@
       _page   = 0;
       _selected.clear();
       updateBulkBar();
-      // Preserve search across status switches — data reloads from server so
-      // filtering re-applies automatically via visibleListings() in load()
       load(false);
     });
   }
@@ -921,6 +1102,11 @@
     }
   }
 
+  function wireImportButton(){
+    const btn = document.getElementById('pl-import-url-btn');
+    if(btn) btn.addEventListener('click', openImportModal);
+  }
+
   function wireBackdrop(){
     document.getElementById('pl-backdrop').addEventListener('click', closePanel);
   }
@@ -981,8 +1167,6 @@
       if(!ok) return;
       // Always clear the session cache on page load so newly-imported listings
       // are visible immediately without waiting for the 30-second TTL to expire.
-      // (sessionStorage survives browser refreshes within the same tab, so
-      // stale "empty" cache entries would otherwise hide fresh imports.)
       _cClear();
       wireChips();
       wireSourceChips();
@@ -990,6 +1174,7 @@
       wireBackdrop();
       wireLoadMore();
       wireBulkBar();
+      wireImportButton();
       // ESC key closes the detail panel
       document.addEventListener('keydown', e => {
         if(e.key === 'Escape' && _current) closePanel();

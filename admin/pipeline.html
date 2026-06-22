@@ -202,6 +202,19 @@
   .pl-bulk-bar .btn-bulk-pub:hover{opacity:.92}
   .pl-bulk-bar .btn-bulk-pub:disabled{opacity:.6;cursor:not-allowed}
 
+  /* ── Import from URL modal ──────────────────────────────────────────────── */
+  #pl-import-modal{position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;padding:16px}
+  .pl-import-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+  .pl-import-dialog{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md,12px);
+    width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,.3);display:flex;flex-direction:column;
+    animation:fadeUp .2s ease}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .pl-import-hd{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .pl-import-close{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--muted-2);font-size:1.1rem;padding:2px 6px;border-radius:4px}
+  .pl-import-close:hover{background:var(--surface-2);color:var(--text)}
+  .pl-import-body{padding:18px}
+  .pl-import-ft{padding:14px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+
   /* ── iOS Importer banner ─────────────────────────────────────────────────── */
   .importer-banner{
     display:flex;align-items:center;gap:12px;
@@ -276,14 +289,17 @@
         <button class="chip chip-sm" data-pl-source="zillow">Zillow</button>
         <button class="chip chip-sm" data-pl-source="realtor">Realtor</button>
       </div>
-      <div style="width:100%">
-        <div class="pl-search-wrap">
+      <div style="width:100%;display:flex;align-items:flex-start;gap:8px">
+        <div class="pl-search-wrap" style="flex:1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input id="pl-search" type="search" placeholder="Search by address, city, or ZIP…" autocomplete="off" aria-label="Search pipeline listings">
           <button class="pl-search-clear" id="pl-search-clear" aria-label="Clear search">✕</button>
         </div>
-        <div class="pl-search-count" id="pl-search-count"></div>
+        <button class="btn btn-outline" id="pl-import-url-btn" title="Import a Zillow listing by pasting its URL" style="white-space:nowrap;flex-shrink:0">
+          ↑ Import URL
+        </button>
       </div>
+      <div class="pl-search-count" id="pl-search-count"></div>
     </div>
 
     <!-- Listing cards -->
