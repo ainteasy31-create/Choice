@@ -85,11 +85,11 @@
       </div>
       <div class="mosaic-side" id="mosaicSide"></div>
       <!-- Mobile swipe nav -->
-      <button class="mosaic-nav-btn prev" id="mosaicPrev"><i class="fas fa-chevron-left"></i></button>
-      <button class="mosaic-nav-btn next" id="mosaicNext"><i class="fas fa-chevron-right"></i></button>
-      <div class="mosaic-mobile-count" id="mosaicMobileCount">1 / 1</div>
+      <button type="button" class="mosaic-nav-btn prev" id="mosaicPrev" aria-label="Previous photo"><i class="fas fa-chevron-left"></i></button>
+      <button type="button" class="mosaic-nav-btn next" id="mosaicNext" aria-label="Next photo"><i class="fas fa-chevron-right"></i></button>
+      <div class="mosaic-mobile-count" id="mosaicMobileCount" aria-live="polite">1 / 1</div>
       <!-- See all (desktop) -->
-      <button class="mosaic-expand-btn" id="mosaicExpandBtn">
+      <button type="button" class="mosaic-expand-btn" id="mosaicExpandBtn">
         <i class="fas fa-th-large"></i>
         <span class="mosaic-expand-label">See All Photos</span>
         <span class="mosaic-photo-count"></span>
@@ -159,6 +159,48 @@
     <!-- Renter requirements strip (pets, smoking, credit, income) -->
     <div id="renterReqsSection" style="display:none;margin-top:16px"></div>
 
+    <!-- Costs — shown early so price/apply are near the top on mobile -->
+    <div class="prop-section" id="costsSection">
+      <div class="prop-section-eyebrow">Costs</div>
+      <div class="prop-section-head">What you'll <em>pay</em>.</div>
+      <table class="prop-cost-table">
+        <tbody>
+          <tr><td>Monthly Rent</td><td id="sidebarRent"><span class="skeleton" style="height:14px;width:60px;border-radius:3px;display:inline-block"></span></td></tr>
+          <tr><td>Security Deposit</td><td id="sidebarDeposit">—</td></tr>
+          <tr><td>Application Fee</td><td id="sidebarFee">—</td></tr>
+          <tr id="sidebarMoveInRow" style="display:none"><td>Available From</td><td id="sidebarMoveIn">—</td></tr>
+          <tr id="sidebarLastMonthRow" style="display:none"><td>Last Month's Rent</td><td id="sidebarLastMonth">—</td></tr>
+          <tr id="sidebarAdminFeeRow" style="display:none"><td>Admin / Move-in Fee</td><td id="sidebarAdminFee">—</td></tr>
+          <tr id="sidebarMoveInSpecialRow" style="display:none"><td>Move-in Special</td><td id="sidebarMoveInSpecial" style="color:#10b981">—</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Apply strip -->
+      <div class="prop-apply-strip" id="applyStrip">
+        <div class="prop-apply-strip-text">
+          <div class="prop-apply-strip-price" id="sidebarPrice">
+            <div class="skeleton" style="height:26px;width:130px;border-radius:6px;display:inline-block"></div>
+          </div>
+          <div class="prop-apply-strip-sub">
+            <i class="fas fa-lock" style="color:#d4a017;font-size:10px"></i>
+            Submit <span id="applyFeeAmt">a free application</span> — we contact you within 24 hrs.
+          </div>
+        </div>
+        <a href="#" class="prop-apply-btn" id="applyBtn" type="button">
+          Apply Now <i class="fas fa-paper-plane" style="font-size:13px"></i>
+        </a>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">
+        <p style="font-size:11.5px;color:#6b7280;line-height:1.55;display:flex;align-items:flex-start;gap:6px">
+          <i class="fas fa-clock" style="color:#1d4ed8;margin-top:2px;font-size:11px;flex-shrink:0"></i>
+          <span>Decisions are typically made within 24–72 hours of payment. Applicants who respond promptly are often prioritized.</span>
+        </p>
+        <a id="trackAppLink" href="/apply/?path=dashboard" class="prop-track-link">
+          <i class="fas fa-search" style="font-size:11px"></i> Already applied? Track your application →
+        </a>
+      </div>
+    </div>
+
     <div class="prop-divider"></div>
 
     <!-- About -->
@@ -212,49 +254,7 @@
     <div id="propFactsSection" style="display:none"></div>
     <div class="prop-divider" id="dividerAfterFacts" style="display:none"></div>
 
-    <!-- Costs -->
-    <div class="prop-section" id="costsSection">
-      <div class="prop-section-eyebrow">Costs</div>
-      <div class="prop-section-head">What you'll <em>pay</em>.</div>
-      <table class="prop-cost-table">
-        <tbody>
-          <tr><td>Monthly Rent</td><td id="sidebarRent"><span class="skeleton" style="height:14px;width:60px;border-radius:3px;display:inline-block"></span></td></tr>
-          <tr><td>Security Deposit</td><td id="sidebarDeposit">—</td></tr>
-          <tr><td>Application Fee</td><td id="sidebarFee">—</td></tr>
-          <tr id="sidebarMoveInRow" style="display:none"><td>Available From</td><td id="sidebarMoveIn">—</td></tr>
-          <tr id="sidebarLastMonthRow" style="display:none"><td>Last Month's Rent</td><td id="sidebarLastMonth">—</td></tr>
-          <tr id="sidebarAdminFeeRow" style="display:none"><td>Admin / Move-in Fee</td><td id="sidebarAdminFee">—</td></tr>
-          <tr id="sidebarMoveInSpecialRow" style="display:none"><td>Move-in Special</td><td id="sidebarMoveInSpecial" style="color:#10b981">—</td></tr>
-        </tbody>
-      </table>
-
-      <!-- Apply strip -->
-      <div class="prop-apply-strip" id="applyStrip">
-        <div class="prop-apply-strip-text">
-          <div class="prop-apply-strip-price" id="sidebarPrice">
-            <div class="skeleton" style="height:26px;width:130px;border-radius:6px;display:inline-block"></div>
-          </div>
-          <div class="prop-apply-strip-sub">
-            <i class="fas fa-lock" style="color:#d4a017;font-size:10px"></i>
-            Submit <span id="applyFeeAmt">a free application</span> — we contact you within 24 hrs.
-          </div>
-        </div>
-        <a href="#" class="prop-apply-btn" id="applyBtn">
-          Apply Now <i class="fas fa-paper-plane" style="font-size:13px"></i>
-        </a>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px">
-        <p style="font-size:11.5px;color:#6b7280;line-height:1.55;display:flex;align-items:flex-start;gap:6px">
-          <i class="fas fa-clock" style="color:#1d4ed8;margin-top:2px;font-size:10px;flex-shrink:0"></i>
-          <span>Decisions are typically made within 24–72 hours of payment. Applicants who respond promptly are often prioritized.</span>
-        </p>
-        <a id="trackAppLink" href="/apply/?path=dashboard" class="prop-track-link">
-          <i class="fas fa-search" style="font-size:11px"></i> Already applied? Track your application →
-        </a>
-      </div>
-    </div>
-
-    <div class="prop-divider"></div>
+    <div class="prop-divider" id="dividerBeforeMap"></div>
 
     <!-- Map -->
     <div class="prop-section">

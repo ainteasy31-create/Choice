@@ -2128,6 +2128,10 @@ body[data-portal="public"][data-page="property"] .mosaic-expand-btn:hover {
   background: #fff; transform: translateY(-2px);
   box-shadow: 0 12px 40px rgba(0,0,0,0.32), 0 4px 12px rgba(0,0,0,0.18);
 }
+body[data-portal="public"][data-page="property"] .mosaic-expand-btn:focus-visible {
+  opacity: 1; pointer-events: auto; transform: translateY(0);
+  outline: 3px solid #006aff; outline-offset: 2px;
+}
 body[data-portal="public"][data-page="property"] .mosaic-expand-btn i { font-size: 12px; color: var(--m-brand); }
 body[data-portal="public"][data-page="property"] .mosaic-expand-btn .mosaic-photo-count {
   background: transparent; color: inherit;
@@ -3195,6 +3199,13 @@ body[data-portal="public"][data-page="property"] .prop-split-content .detail-lis
   body[data-portal="public"][data-page="property"] #mobile-apply-bar .mob-actions {
     flex: 0 0 auto;
   }
+  /* iOS Safari input zoom prevention — inputs < 16px zoom the viewport on focus */
+  body[data-portal="public"][data-page="property"] .mv2-contact-card .form-input,
+  body[data-portal="public"][data-page="property"] .mv2-contact-card input,
+  body[data-portal="public"][data-page="property"] .mv2-contact-card .form-textarea,
+  body[data-portal="public"][data-page="property"] .mv2-contact-card textarea { font-size: 16px !important; }
+  /* Textarea resize handle is unusable on touch — disable it */
+  body[data-portal="public"][data-page="property"] .mv2-contact-card textarea { resize: none; }
 }
 
 /* ── Responsive: ≤900px = single-column stack ── */
@@ -3218,12 +3229,25 @@ body[data-portal="public"][data-page="property"] .prop-split-content .detail-lis
     border-radius: var(--m-r-xl) !important;
     margin: var(--m-s-3) var(--m-s-3) 0 !important;
   }
-  /* Show carousel nav arrows + counter on mobile stack */
+  /* Show carousel nav arrows + counter on mobile stack — with overlay positioning */
   body[data-portal="public"][data-page="property"] .prop-split-photos .mosaic-nav-btn {
     display: flex !important;
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 10;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(0,0,0,0.52); border: 1.5px solid rgba(255,255,255,0.22);
+    color: #fff; font-size: 15px; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 160ms ease;
   }
+  body[data-portal="public"][data-page="property"] .prop-split-photos .mosaic-nav-btn:hover { background: rgba(0,0,0,0.72); }
+  body[data-portal="public"][data-page="property"] .prop-split-photos .mosaic-nav-btn.prev { left: 10px; }
+  body[data-portal="public"][data-page="property"] .prop-split-photos .mosaic-nav-btn.next { right: 10px; }
   body[data-portal="public"][data-page="property"] .prop-split-photos .mosaic-mobile-count {
     display: flex !important;
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 10;
+    background: rgba(0,0,0,0.52); color: #fff;
+    font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+    padding: 4px 12px; border-radius: 999px;
+    pointer-events: none; white-space: nowrap;
   }
   /* Show thumbnail strip below the hero photo on mobile */
   body[data-portal="public"][data-page="property"] .prop-split-photos .gallery-strip {
@@ -3242,11 +3266,20 @@ body[data-portal="public"][data-page="property"] .prop-split-content .detail-lis
   body[data-portal="public"][data-page="property"] .prop-title { font-size: 21px; }
   body[data-portal="public"][data-page="property"] .prop-apply-strip { flex-direction: column; align-items: stretch; }
   body[data-portal="public"][data-page="property"] .prop-apply-btn { width: 100%; justify-content: center; padding: 15px; }
+  /* Bump sub-12px text to readable sizes on mobile */
+  body[data-portal="public"][data-page="property"] .prop-section-eyebrow { font-size: 11px; }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-label { font-size: 11px; }
+  body[data-portal="public"][data-page="property"] .prop-ll-label { font-size: 11px; }
+  body[data-portal="public"][data-page="property"] .prop-avail-chip { font-size: 12px; }
 }
 @media (max-width: 480px) {
   body[data-portal="public"][data-page="property"] .prop-meta-grid { grid-template-columns: repeat(2, 1fr); }
   body[data-portal="public"][data-page="property"] .prop-split-photos .gallery-mosaic {
     margin: 0 !important; border-radius: 0 !important;
+  }
+  /* Span orphaned last item full-width when total count is odd in the 2-col grid */
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 }
 

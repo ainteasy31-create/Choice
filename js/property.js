@@ -604,13 +604,13 @@ function renderProperty(p) {
   }
   document.getElementById('sidebarRent').textContent    = `${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() : 'TBD'}`;
   document.getElementById('sidebarDeposit').textContent = p.security_deposit ? `$${Number(p.security_deposit).toLocaleString()}` : 'Contact landlord';
-  document.getElementById('sidebarFee').textContent     = (p.application_fee != null && p.application_fee > 0) ? `$${Number(p.application_fee).toLocaleString()}` : '$50';
+  document.getElementById('sidebarFee').textContent     = (p.application_fee != null && p.application_fee > 0) ? `$${Number(p.application_fee).toLocaleString()}` : 'Free';
   // Update apply disclaimer fee amount dynamically
   const _feeAmtEl = document.getElementById('applyFeeAmt');
   if (_feeAmtEl) {
     _feeAmtEl.textContent = (p.application_fee != null && p.application_fee > 0)
       ? `$${Number(p.application_fee).toLocaleString()} application fee`
-      : '$50 application fee';
+      : 'a free application';
   }
   if (p.available_date) {
     document.getElementById('sidebarMoveInRow').style.display = '';
