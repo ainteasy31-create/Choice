@@ -2336,20 +2336,6 @@ body[data-portal="public"][data-page="property"] .detail-breadcrumb a {
 }
 body[data-portal="public"][data-page="property"] .detail-breadcrumb a:hover { color: var(--m-brand); }
 body[data-portal="public"][data-page="property"] .detail-breadcrumb i { font-size: 9px; flex-shrink: 0; }
-body[data-portal="public"][data-page="property"] #breadcrumbTitleGroup {
-  display: inline-flex; align-items: center; gap: var(--m-s-2);
-  min-width: 0; overflow: hidden;
-}
-body[data-portal="public"][data-page="property"] #breadcrumbTitle {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 140px;
-}
-@media (min-width: 480px) {
-  body[data-portal="public"][data-page="property"] #breadcrumbTitle { max-width: 220px; }
-}
-@media (min-width: 900px) {
-  body[data-portal="public"][data-page="property"] #breadcrumbTitle { max-width: 320px; }
-}
 
 /* Header */
 body[data-portal="public"][data-page="property"] .detail-header { margin-bottom: var(--m-s-5); }
