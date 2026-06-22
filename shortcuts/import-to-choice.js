@@ -23,12 +23,16 @@ const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-
 const SECRET   = 'cp_import_7Kx3m9P2w5';
 
 // ── 1. Get URL from Share Sheet ───────────────────────────────────────────────
-const sharedUrl = args.urls && args.urls.length > 0 ? args.urls[0] : null;
+const sharedUrl = args.urls && args.urls.length > 0 ? args.urls[0] :
+                  args.plainTexts && args.plainTexts.length > 0 ? args.plainTexts[0] : null;
 
 if (!sharedUrl) {
   const a = new Alert();
   a.title = 'No URL Found';
-  a.message = 'Open a Zillow listing in Safari, then tap Share \u2192 Run Script \u2192 Import to Choice.\n\nDo not run this script directly from the Scriptable app.';
+  a.message = 'Debug info:\nurls: ' + JSON.stringify(args.urls) +
+              '\nplainTexts: ' + JSON.stringify(args.plainTexts) +
+              '\nfileURLs: ' + JSON.stringify(args.fileURLs) +
+              '\n\nTrigger this from Safari Share \u2192 Run Script, not from inside Scriptable.';
   a.addAction('OK');
   await a.present();
   Script.complete();
