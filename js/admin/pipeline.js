@@ -53,10 +53,27 @@
     if(!s || !s.trim()) return '[]';
     return JSON.stringify(s.split(',').map(x => x.trim()).filter(Boolean));
   }
+  // Returns the import type for labelling in the panel
+  // 'ios'      — imported via iOS Scriptable from Zillow detail page (has full data)
+  // 'enriched' — Realtor.com Phase 2 detail scrape complete
+  // 'search'   — basic search-results scrape only (limited data)
+  function importSource(l){
+    const od = parseJSON(l.original_data);
+    if(od && od._import && String(od._import).startsWith('ios-scriptable')) return 'ios';
+    if(od && od._phase === 'detail') return 'enriched';
+    return 'search';
+  }
+
   // Returns true if the listing was enriched by Phase 2 detail scraping
   function isEnriched(l){
     const od = parseJSON(l.original_data);
     return od && od._phase === 'detail';
+  }
+
+  // Returns true if the listing has full detail data (either Phase 2 or iOS import)
+  function hasDetailData(l){
+    const src = importSource(l);
+    return src === 'ios' || src === 'enriched';
   }
 
   // Returns _pageData filtered by the active source chip and search query
@@ -248,6 +265,7 @@
     const isArchived  = l.status === 'archived';
     const editedFields = parseJSON(l.edited_fields) || [];
     const enriched = isEnriched(l);
+    const srcType  = importSource(l);
     const photoCount = (parseJSON(l.original_image_urls) || []).length;
 
     return `
@@ -256,7 +274,9 @@
         <div class="pl-panel-title">${S.esc(l.address || '(no address)')}</div>
         <div class="pl-panel-sub">${S.esc([l.city, l.state, l.zip].filter(Boolean).join(', '))}
           ${score != null ? ` · <span class="qs-badge ${qsClass(score)}">Q: ${score}/100</span>` : ''}
-          ${enriched ? ` · <span class="qs-badge qs-high" title="Phase 2 detail scrape complete">✓ Full data</span>` : ` · <span class="qs-badge qs-low" title="Only basic search data — run scraper with Phase 2 for full details">Search only</span>`}
+          ${srcType === 'ios'      ? ` · <span class="qs-badge qs-high" title="Imported from Zillow detail page via iOS Scriptable">📱 iOS import</span>` :
+            srcType === 'enriched' ? ` · <span class="qs-badge qs-high" title="Phase 2 detail scrape complete">✓ Full data</span>` :
+                                     ` · <span class="qs-badge qs-low" title="Only basic search data — open the listing and re-import for full details">Search only</span>`}
           ${editedFields.length ? ` · <span style="font-size:.7rem;color:var(--brand)">${editedFields.length} fields edited</span>` : ''}
         </div>
         ${l.source_url ? `<a href="${S.esc(l.source_url)}" target="_blank" rel="noopener" class="pl-source-link" style="margin-top:4px">
@@ -323,7 +343,7 @@
 
       <!-- Features (Phase 2 data) -->
       <div class="pl-section">
-        <div class="pl-section-title">Features ${enriched ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
+        <div class="pl-section-title">Features ${hasDetailData(l) ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
         <div class="pl-form-grid">
           ${fi('heating_type','Heating', l.heating_type,'text',false)}
           ${fi('cooling_type','Cooling', l.cooling_type,'text',false)}
@@ -343,7 +363,7 @@
 
       <!-- Appliances & Utilities (Phase 2 data) -->
       <div class="pl-section">
-        <div class="pl-section-title">Appliances &amp; utilities ${enriched ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
+        <div class="pl-section-title">Appliances &amp; utilities ${hasDetailData(l) ? '' : '<span style="font-size:.65rem;font-weight:400;color:var(--muted-2)">(populated by Phase 2 scrape)</span>'}</div>
         <div class="pl-form-grid full">
           ${fi('appliances','Appliances (comma-separated)', jArrToText(l.appliances),'text',false,true)}
           ${fi('utilities_included','Utilities included (comma-separated)', jArrToText(l.utilities_included),'text',false,true)}
