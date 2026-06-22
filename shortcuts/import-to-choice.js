@@ -4,41 +4,53 @@
 
 // ============================================================
 // Import to Choice Properties
-// Version 1.0 — June 2026
-//
-// Imports the current Zillow listing page into the Choice
-// Properties admin pipeline — no computer required.
+// Version 2.0 — June 2026
 //
 // HOW TO USE:
-//   1. Open any Zillow listing page in Safari (the full detail
-//      page, not a search results page).
-//   2. Tap the Share button → scroll down → tap "Import to Choice".
-//   3. The listing is added to your admin pipeline instantly.
-//
-// FIRST-TIME SETUP:
-//   See /admin/pipeline.html → "Install iPhone Importer" section.
+//   1. Open any Zillow listing page in Safari.
+//   2. Tap the address bar → Copy (copies the URL).
+//   3. Switch to Scriptable → tap "import-to-choice".
+//   4. The listing is added to your admin pipeline instantly.
 // ============================================================
 
 const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
 const SECRET   = 'cp_import_7Kx3m9P2w5';
 
-// ── 0. Debug notification — fires immediately so we know the script started ───
-const debugNote = new Notification();
-debugNote.title = '🔍 Import Script Started';
-debugNote.body  = 'urls=' + JSON.stringify(args.urls) + ' | texts=' + JSON.stringify(args.plainTexts);
-await debugNote.schedule();
+// ── 1. Get URL — clipboard first, then share sheet args ──────────────────────
+let sharedUrl = null;
 
-// ── 1. Get URL from Share Sheet ───────────────────────────────────────────────
-const sharedUrl = args.urls && args.urls.length > 0 ? args.urls[0] :
-                  args.plainTexts && args.plainTexts.length > 0 ? args.plainTexts[0] : null;
+// Try share sheet args first (works on some iOS configs)
+if (args.urls && args.urls.length > 0) {
+  sharedUrl = args.urls[0];
+} else if (args.plainTexts && args.plainTexts.length > 0 && args.plainTexts[0].includes('zillow.com')) {
+  sharedUrl = args.plainTexts[0];
+}
 
+// Fall back to clipboard (most reliable — user copies URL from Safari address bar)
 if (!sharedUrl) {
+  const clip = Pasteboard.paste();
+  if (clip && clip.trim().startsWith('http')) {
+    sharedUrl = clip.trim();
+  }
+}
+
+// If still nothing, prompt the user to paste the URL
+if (!sharedUrl) {
+  const prompt = new Alert();
+  prompt.title   = 'Paste Zillow URL';
+  prompt.message = 'Copy the URL from the Safari address bar, then paste it below.';
+  prompt.addTextField('https://www.zillow.com/homedetails/...');
+  prompt.addAction('Import');
+  prompt.addCancelAction('Cancel');
+  const choice = await prompt.present();
+  if (choice === -1) { Script.complete(); return; }
+  sharedUrl = prompt.textFieldValue(0).trim();
+}
+
+if (!sharedUrl || !sharedUrl.startsWith('http')) {
   const a = new Alert();
-  a.title = 'No URL Found';
-  a.message = 'Debug info:\nurls: ' + JSON.stringify(args.urls) +
-              '\nplainTexts: ' + JSON.stringify(args.plainTexts) +
-              '\nfileURLs: ' + JSON.stringify(args.fileURLs) +
-              '\n\nTrigger this from Safari Share \u2192 Run Script, not from inside Scriptable.';
+  a.title   = 'No URL';
+  a.message = 'Enter a valid Zillow listing URL.';
   a.addAction('OK');
   await a.present();
   Script.complete();
@@ -47,25 +59,26 @@ if (!sharedUrl) {
 
 if (!sharedUrl.includes('zillow.com')) {
   const a = new Alert();
-  a.title = 'Wrong Page';
-  a.message = 'This script only works on Zillow listing pages.\n\nPage received:\n' + sharedUrl;
+  a.title   = 'Wrong Page';
+  a.message = 'This script only works on Zillow listing pages.\n\nURL received:\n' + sharedUrl;
   a.addAction('OK');
   await a.present();
   Script.complete();
   return;
 }
 
-// ── 2. Load page in WebView using phone's residential IP ──────────────────────
+// ── 2. Load page in WebView ───────────────────────────────────────────────────
 const wv = new WebView();
 try {
   await wv.loadURL(sharedUrl);
 } catch (loadErr) {
   const a = new Alert();
-  a.title = 'Page Load Failed';
-  a.message = 'Could not load the Zillow page:\n' + loadErr.message + '\n\nMake sure you have an internet connection.';
+  a.title   = 'Page Load Failed';
+  a.message = 'Could not load the Zillow page:\n' + loadErr.message + '\n\nCheck your internet connection.';
   a.addAction('OK');
   await a.present();
   Script.complete();
+  return;
 }
 
 // ── 3. Extract listing data from __NEXT_DATA__ ────────────────────────────────
@@ -137,13 +150,13 @@ const extractionCode = `
     var bathF = (bathsRaw !== null && bathsRaw !== undefined) ? Math.floor(bathsRaw) : null;
     var bathH = (bathsRaw && bathsRaw !== bathF) ? 1 : null;
 
-    var amenities = JSON.stringify(prop.tags || rf.communityFeatures || []);
+    var amenities  = JSON.stringify(prop.tags || rf.communityFeatures || []);
     var appliances = JSON.stringify(rf.appliances || []);
-    var utilities = JSON.stringify(rf.utilities || rf.utilitiesIncluded || []);
-    var heating = rf.heating && rf.heating.length ? rf.heating.join(', ') : null;
-    var cooling = rf.cooling && rf.cooling.length ? rf.cooling.join(', ') : null;
-    var laundry = rf.laundryFeatures && rf.laundryFeatures.length ? rf.laundryFeatures.join(', ') : null;
-    var parking = null;
+    var utilities  = JSON.stringify(rf.utilities || rf.utilitiesIncluded || []);
+    var heating    = rf.heating && rf.heating.length ? rf.heating.join(', ') : null;
+    var cooling    = rf.cooling && rf.cooling.length ? rf.cooling.join(', ') : null;
+    var laundry    = rf.laundryFeatures && rf.laundryFeatures.length ? rf.laundryFeatures.join(', ') : null;
+    var parking    = null;
     if (rf.parkingFeatures && rf.parkingFeatures.length) { parking = rf.parkingFeatures.join(', '); }
     else if (prop.parkingType) { parking = String(prop.parkingType).replace(/_/g, ' '); }
 
@@ -227,11 +240,12 @@ try {
   raw = await wv.evaluateJavaScript(extractionCode);
 } catch (evalErr) {
   const a = new Alert();
-  a.title = 'Script Error';
+  a.title   = 'Script Error';
   a.message = 'JavaScript extraction failed:\n' + evalErr.message;
   a.addAction('OK');
   await a.present();
   Script.complete();
+  return;
 }
 
 let data;
@@ -239,38 +253,41 @@ try {
   data = JSON.parse(raw);
 } catch (parseErr) {
   const a = new Alert();
-  a.title = 'Parse Error';
+  a.title   = 'Parse Error';
   a.message = 'Could not read extraction result. Raw output:\n' + String(raw).slice(0, 200);
   a.addAction('OK');
   await a.present();
   Script.complete();
+  return;
 }
 
 if (data._error) {
   const a = new Alert();
-  a.title = 'Import Failed';
+  a.title   = 'Import Failed';
   a.message = data._error;
   a.addAction('OK');
   await a.present();
   Script.complete();
+  return;
 }
 
 // ── 4. POST to edge function ──────────────────────────────────────────────────
-const httpReq = new Request(EDGE_URL);
-httpReq.method  = 'POST';
-httpReq.headers = {'Content-Type': 'application/json', 'x-import-secret': SECRET};
-httpReq.body    = JSON.stringify(data);
+const httpReq    = new Request(EDGE_URL);
+httpReq.method   = 'POST';
+httpReq.headers  = {'Content-Type': 'application/json', 'x-import-secret': SECRET};
+httpReq.body     = JSON.stringify(data);
 
 let resp;
 try {
   resp = await httpReq.loadJSON();
 } catch (netErr) {
   const a = new Alert();
-  a.title = 'Network Error';
+  a.title   = 'Network Error';
   a.message = 'Could not reach the server:\n' + netErr.message + '\n\nCheck your internet connection.';
   a.addAction('OK');
   await a.present();
   Script.complete();
+  return;
 }
 
 // ── 5. Show result ────────────────────────────────────────────────────────────
