@@ -1107,6 +1107,27 @@
     if(btn) btn.addEventListener('click', openImportModal);
   }
 
+  function wireRefreshButton(){
+    const btn = document.getElementById('pl-refresh-btn');
+    if(!btn) return;
+    btn.addEventListener('click', async () => {
+      if(_loading) return;
+      btn.disabled = true;
+      btn.style.opacity = '.5';
+      _cClear();
+      _page = 0;
+      try {
+        await load(false);
+        S.toast('Pipeline refreshed', 'success');
+      } catch(_){
+        S.toast('Refresh failed', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.style.opacity = '';
+      }
+    });
+  }
+
   function wireBackdrop(){
     document.getElementById('pl-backdrop').addEventListener('click', closePanel);
   }
@@ -1175,6 +1196,7 @@
       wireLoadMore();
       wireBulkBar();
       wireImportButton();
+      wireRefreshButton();
       // ESC key closes the detail panel
       document.addEventListener('keydown', e => {
         if(e.key === 'Escape' && _current) closePanel();
