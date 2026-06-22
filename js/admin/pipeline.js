@@ -284,9 +284,12 @@
                                       ` · <span class="qs-badge qs-low" title="Only basic search data — open the listing and re-import for full details">Search only</span>`}
           ${editedFields.length ? ` · <span style="font-size:.7rem;color:var(--brand)">${editedFields.length} fields edited</span>` : ''}
         </div>
-        ${l.source_url ? `<a href="${S.esc(l.source_url)}" target="_blank" rel="noopener" class="pl-source-link" style="margin-top:4px">
-          <svg class="i i-sm"><use href="#i-arrow"/></svg> View on ${S.esc(l.source||'source')}
-        </a>` : ''}
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
+          ${l.source_url ? `<a href="${S.esc(l.source_url)}" target="_blank" rel="noopener" class="pl-source-link">
+            <svg class="i i-sm"><use href="#i-arrow"/></svg> View on ${S.esc(l.source||'source')}
+          </a>` : ''}
+          ${l.source === 'zillow' && l.source_url && srcType === 'search' ? `<button class="btn btn-sm btn-outline" id="pl-reimport-btn" style="font-size:.72rem;padding:3px 10px" title="Re-import full listing data from Zillow via desktop">↑ Import full details</button>` : ''}
+        </div>
       </div>
       <button class="btn btn-ghost btn-sm" id="pl-close-btn" aria-label="Close panel">✕</button>
     </div>
@@ -502,6 +505,12 @@
 
     const pubBtn = panel.querySelector('.pl-pub-btn-panel');
     if(pubBtn) pubBtn.addEventListener('click', () => doPublish(l.id));
+
+    // "Import full details" pre-fills the Import URL modal with this listing's source URL
+    const reimportBtn = panel.querySelector('#pl-reimport-btn');
+    if(reimportBtn) reimportBtn.addEventListener('click', () => {
+      openImportModal(l.source_url);
+    });
   }
 
   function closePanel(){
@@ -515,7 +524,7 @@
 
   // ── Import from URL (desktop import) ────────────────────────────────────────
 
-  function openImportModal(){
+  function openImportModal(prefillUrl){
     // Remove any existing modal
     const existing = document.getElementById('pl-import-modal');
     if(existing) existing.remove();
@@ -560,11 +569,18 @@
       if(e.key === 'Enter') { e.preventDefault(); doImportFromUrl(); }
     });
 
-    // Focus URL input
-    setTimeout(() => {
-      const input = document.getElementById('pl-import-url');
-      if(input) input.focus();
-    }, 50);
+    // Pre-fill URL if provided (e.g. from "Import full details" button)
+    if(prefillUrl){
+      setTimeout(() => {
+        const input = document.getElementById('pl-import-url');
+        if(input){ input.value = prefillUrl; input.focus(); }
+      }, 50);
+    } else {
+      setTimeout(() => {
+        const input = document.getElementById('pl-import-url');
+        if(input) input.focus();
+      }, 50);
+    }
 
     // ESC to close
     modal._escHandler = e => { if(e.key === 'Escape') closeImportModal(); };
