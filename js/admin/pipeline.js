@@ -907,6 +907,11 @@
       S = shell || window.AdminShell;
       const ok = await S.requireAdmin();
       if(!ok) return;
+      // Always clear the session cache on page load so newly-imported listings
+      // are visible immediately without waiting for the 30-second TTL to expire.
+      // (sessionStorage survives browser refreshes within the same tab, so
+      // stale "empty" cache entries would otherwise hide fresh imports.)
+      _cClear();
       wireChips();
       wireSourceChips();
       wireSearch();
