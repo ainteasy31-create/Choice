@@ -22,6 +22,12 @@
 const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
 const SECRET   = 'cp_import_7Kx3m9P2w5';
 
+// ── 0. Debug notification — fires immediately so we know the script started ───
+const debugNote = new Notification();
+debugNote.title = '🔍 Import Script Started';
+debugNote.body  = 'urls=' + JSON.stringify(args.urls) + ' | texts=' + JSON.stringify(args.plainTexts);
+await debugNote.schedule();
+
 // ── 1. Get URL from Share Sheet ───────────────────────────────────────────────
 const sharedUrl = args.urls && args.urls.length > 0 ? args.urls[0] :
                   args.plainTexts && args.plainTexts.length > 0 ? args.plainTexts[0] : null;
