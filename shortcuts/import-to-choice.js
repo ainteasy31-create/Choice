@@ -32,6 +32,7 @@ if (!sharedUrl) {
   a.addAction('OK');
   await a.present();
   Script.complete();
+  return;
 }
 
 if (!sharedUrl.includes('zillow.com')) {
@@ -41,6 +42,7 @@ if (!sharedUrl.includes('zillow.com')) {
   a.addAction('OK');
   await a.present();
   Script.complete();
+  return;
 }
 
 // ── 2. Load page in WebView using phone's residential IP ──────────────────────
