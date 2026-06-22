@@ -21,7 +21,7 @@
 // you to tap Run once more — no manual reinstall ever needed.
 // ============================================================
 
-const VERSION      = '3.1';
+const VERSION      = '3.2';
 const VERSION_URL  = 'https://choice-properties-site.pages.dev/shortcuts/version.json';
 const SCRIPT_URL   = 'https://choice-properties-site.pages.dev/shortcuts/import-to-choice.js';
 const EDGE_URL     = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
@@ -483,15 +483,29 @@ const extractionCode = `
 })()
 `;
 
+// ── Helper: show a blocking alert ─────────────────────────────────────────────
+async function showAlert(title, message) {
+  const a = new Alert();
+  a.title   = title;
+  a.message = message;
+  a.addAction('OK');
+  await a.present();
+}
+
 let raw;
 try {
   raw = await wv.evaluateJavaScript(extractionCode);
 } catch (evalErr) {
-  const a = new Alert();
-  a.title   = 'Script Error';
-  a.message = 'JavaScript extraction failed:\n' + evalErr.message;
-  a.addAction('OK');
-  await a.present();
+  await showAlert('Script Error', 'JavaScript extraction failed:\n' + evalErr.message
+    + '\n\nMake sure you are on a Zillow DETAIL page (with a full address), not a search results page.');
+  Script.complete();
+  return;
+}
+
+// Guard: null/empty means the WebView JS returned nothing — Zillow may have
+// shown a CAPTCHA, a redirect, or a search results page instead of a listing.
+if (!raw || raw === 'null' || raw === 'undefined' || raw.trim() === '') {
+  await showAlert('No Data Returned', 'The Zillow page loaded but did not return any listing data.\n\nPossible causes:\n• You are on a search results page, not a listing detail page\n• Zillow showed a CAPTCHA\n• The page redirected\n\nOpen the listing in Safari, scroll down until you see the full address and price, then try again.');
   Script.complete();
   return;
 }
@@ -500,21 +514,27 @@ let data;
 try {
   data = JSON.parse(raw);
 } catch (parseErr) {
-  const a = new Alert();
-  a.title   = 'Parse Error';
-  a.message = 'Could not read extraction result. Raw output:\n' + String(raw).slice(0, 300);
-  a.addAction('OK');
-  await a.present();
+  await showAlert('Parse Error', 'Could not read extraction result.\n\nRaw output (first 300 chars):\n' + String(raw).slice(0, 300));
+  Script.complete();
+  return;
+}
+
+// Guard: parsed to null
+if (!data || typeof data !== 'object') {
+  await showAlert('No Data', 'Page returned empty data. Make sure you are on a Zillow listing detail page, then try again.');
   Script.complete();
   return;
 }
 
 if (data._error) {
-  const a = new Alert();
-  a.title   = 'Import Failed';
-  a.message = data._error;
-  a.addAction('OK');
-  await a.present();
+  await showAlert('Extraction Failed', data._error);
+  Script.complete();
+  return;
+}
+
+// Guard: must have a zpid — if missing, we are not on a listing detail page
+if (!data.source_listing_id || String(data.source_listing_id).trim() === '') {
+  await showAlert('Not a Listing Page', 'Could not find a listing ID on this page.\n\nMake sure you are on a Zillow listing DETAIL page (the one with a specific address, price, and photos) — not a search results page.\n\nURL: ' + sharedUrl.slice(0, 100));
   Script.complete();
   return;
 }
@@ -529,11 +549,14 @@ let resp;
 try {
   resp = await httpReq.loadJSON();
 } catch (netErr) {
-  const a = new Alert();
-  a.title   = 'Network Error';
-  a.message = 'Could not reach the server:\n' + netErr.message + '\n\nCheck your internet connection.';
-  a.addAction('OK');
-  await a.present();
+  await showAlert('Network Error', 'Could not reach the server:\n' + netErr.message + '\n\nCheck your internet connection and try again.');
+  Script.complete();
+  return;
+}
+
+// Guard: server returned nothing or non-JSON
+if (!resp || typeof resp !== 'object') {
+  await showAlert('Server Error', 'Server returned an unexpected response. Try again in a moment.');
   Script.complete();
   return;
 }
