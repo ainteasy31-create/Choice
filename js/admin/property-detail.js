@@ -456,6 +456,7 @@
       { label:'Year built',     value: p.year_built || '—' },
       { label:'Floors',         value: p.floors || '—' },
       { label:'Available',      value: fmt(p.available_date) },
+      { label:'Listed on source', value: p.listed_at ? fmt(p.listed_at) : '—' },
       { label:'Pets allowed',   value: p.pets_allowed ? 'Yes' : 'No' },
       { label:'Parking',        value: p.parking || 'No' },
       { label:'Laundry',        value: p.laundry_type || '—' },
@@ -806,7 +807,7 @@
         application_fee: p.application_fee ?? null, admin_fee: p.admin_fee ?? null,
         last_months_rent: p.last_months_rent ?? null, minimum_lease_months: p.minimum_lease_months ?? null,
         minimum_income_multiplier: p.minimum_income_multiplier ?? null, minimum_credit_score: p.minimum_credit_score ?? null,
-        available_date: null, description: p.description || null, virtual_tour_url: p.virtual_tour_url || null,
+        available_date: null, listed_at: null, description: p.description || null, virtual_tour_url: p.virtual_tour_url || null,
         amenities: Array.isArray(p.amenities) ? [...p.amenities] : [],
         appliances: Array.isArray(p.appliances) ? [...p.appliances] : [],
         flooring: Array.isArray(p.flooring) ? [...p.flooring] : [],
@@ -1007,6 +1008,12 @@
                 <label class="pd-edit-label">Available date
                   <input class="pd-edit-input" name="available_date" type="date" value="${esc(p.available_date ? p.available_date.split('T')[0] : '')}">
                 </label>
+                <label class="pd-edit-label">Date listed on source
+                  <span class="pd-edit-hint">Original Zillow/Realtor listing date — used for sort order</span>
+                  <input class="pd-edit-input" name="listed_at" type="date" value="${esc(p.listed_at ? p.listed_at.split('T')[0] : '')}">
+                </label>
+              </div>
+              <div class="pd-edit-row">
                 <label class="pd-edit-label">Min. lease (months)
                   <input class="pd-edit-input" name="minimum_lease_months" type="number" value="${esc(String(p.minimum_lease_months || ''))}" placeholder="12" min="1">
                 </label>
@@ -1568,6 +1575,7 @@
       admin_fee:          getNum('admin_fee'),
       last_months_rent:   getNum('last_months_rent'),
       available_date:     get('available_date') || null,
+      listed_at:          get('listed_at') || null,
       minimum_lease_months:        getNum('minimum_lease_months'),
       minimum_income_multiplier:   getNum('minimum_income_multiplier'),
       minimum_credit_score:        getNum('minimum_credit_score'),
