@@ -86,7 +86,7 @@ function normalizePropType(v: unknown): string | null {
     'LOT':'LAND','LAND':'LAND','FARM':'FARM',
   };
   const up = String(v).trim().toUpperCase();
-  return MAP[up] ?? up.replace(/[\s-]+/g,'_') || null;
+  return (MAP[up] ?? up.replace(/[\s-]+/g,'_')) || null;
 }
 function normalizeDate(v: unknown): string | null {
   if (!v) return null;
