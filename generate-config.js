@@ -428,14 +428,14 @@ await (async function injectInitialListings() {
     'id','title','address','city','state','zip',
     'bedrooms','bathrooms','square_footage','monthly_rent',
     'property_type','parking','pets_allowed','available_date',
-    'utilities_included','lat','lng','status'
+    'utilities_included','lat','lng','status','listed_at'
   ].join(',');
   const apiPath = '/rest/v1/properties'
     + '?select=' + cols
     + ',landlords(verified)'
     + ',property_photos(url,display_order)'
     + '&status=eq.active'
-    + '&order=created_at.desc'
+    + '&order=listed_at.desc.nullslast,created_at.desc'
     + '&limit=' + PER_PAGE
     + '&offset=0';
 
