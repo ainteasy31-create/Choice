@@ -90,6 +90,17 @@ except ImportError:
         "    Run:  pip install requests\n"
     )
 
+# ── Guard: enrichment module ──────────────────────────────────────────────────
+try:
+    import sys as _sys2
+    import os as _os2
+    _sys2.path.insert(0, _os2.path.dirname(_os2.path.abspath(__file__)))
+    from enrichment import apply_enrichment_pipeline as _enrich_pipeline
+    _ENRICH_AVAILABLE = True
+except Exception as _enrich_err:
+    _ENRICH_AVAILABLE = False
+    _ENRICH_ERR = str(_enrich_err)
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SUPABASE_URL     = os.environ.get("SUPABASE_URL", "https://tlfmwetmhthpyrytrcfo.supabase.co").rstrip("/")
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -1240,7 +1251,7 @@ def _get_existing_ids(source_ids):
 # ── Scrape-run logger ─────────────────────────────────────────────────────────
 
 def _log_run(location, source, count_total, count_new, avg_score,
-             error_msg, started_at, count_dup=0, count_err=0):
+             error_msg, started_at, count_dup=0, count_err=0, count_watermarked=0):
     payload = {
         "source":                    source,
         "location":                  location,
@@ -1251,7 +1262,7 @@ def _log_run(location, source, count_total, count_new, avg_score,
         "started_at":                started_at,
         "completed_at":              _now(),
         "count_duplicate":           count_dup,
-        "count_watermarked":         0,
+        "count_watermarked":         count_watermarked,
         "count_validation_rejected": 0,
         "count_image_failed":        count_err,
         "partial":                   False,
@@ -1282,7 +1293,7 @@ def _insert_batch(batch, upsert, batch_num, total_batches, source_label):
 
 def _stage_records(records, location, source_label, args, started_at):
     """
-    Dedup + batch-insert a list of pipeline-ready records.
+    Dedup + enrich + batch-insert a list of pipeline-ready records.
     Returns (count_new, count_dup, count_err, avg_score).
     """
     if not records:
@@ -1302,6 +1313,21 @@ def _stage_records(records, location, source_label, args, started_at):
     else:
         count_dup = 0
 
+    # ── Enrichment pipeline ───────────────────────────────────────────────────
+    count_watermarked = 0
+    if records and _ENRICH_AVAILABLE and not getattr(args, "no_enrich", False):
+        no_detail_fetch = getattr(args, "no_detail_enrich", False)
+        try:
+            records, count_watermarked = _enrich_pipeline(
+                records,
+                verbose=True,
+                enable_detail_fetch=(not no_detail_fetch),
+            )
+        except Exception as _ee:
+            print(f"  ⚠  Enrichment pipeline error (continuing without enrichment): {_ee}")
+    elif not _ENRICH_AVAILABLE:
+        print("  ⚠  Enrichment module unavailable: " + str(globals().get("_ENRICH_ERR", "?")))
+
     scores = [r["data_quality_score"] for r in records]
 
     if args.dry_run:
@@ -1317,7 +1343,8 @@ def _stage_records(records, location, source_label, args, started_at):
         return len(records), count_dup, 0, avg_score
 
     if not records:
-        _log_run(location, source_label, total_scraped, 0, 0, None, started_at, count_dup)
+        _log_run(location, source_label, total_scraped, 0, 0, None, started_at,
+                 count_dup, 0, count_watermarked)
         return 0, count_dup, 0, 0
 
     batches       = [records[i:i+BATCH_SIZE] for i in range(0, len(records), BATCH_SIZE)]
@@ -1339,7 +1366,7 @@ def _stage_records(records, location, source_label, args, started_at):
 
     avg_score = round(sum(scores)/len(scores), 1) if scores else 0
     _log_run(location, source_label, total_scraped, count_new, avg_score,
-             None, started_at, count_dup, count_err)
+             None, started_at, count_dup, count_err, count_watermarked)
     return count_new, count_dup, count_err, avg_score
 
 
@@ -1846,6 +1873,76 @@ def _run_zillow(location, args, started_at):
     return _stage_records(records, location, "zillow", args, started_at)
 
 
+# ── Redfin scrape for one location ────────────────────────────────────────────
+
+def _run_redfin(location, args, started_at):
+    if not _HH_AVAILABLE:
+        print("❌  homeharvest is not installed. Run: pip install homeharvest")
+        return 0, 0, 0, 0
+
+    print(f"\n{'─'*55}")
+    print(f"🏠  Redfin scrape: {location}")
+    print(f"{'─'*55}")
+    t0 = time.time()
+
+    scrape_kwargs = dict(
+        site_name           = ["redfin"],
+        location            = location,
+        listing_type        = "for_rent",
+        past_days           = args.past_days,
+        return_type         = "pydantic",
+        limit               = args.limit,
+        extra_property_data = args.extra,
+    )
+    if args.beds_min  is not None: scrape_kwargs["beds_min"]  = args.beds_min
+    if args.beds_max  is not None: scrape_kwargs["beds_max"]  = args.beds_max
+    if args.price_min is not None: scrape_kwargs["price_min"] = args.price_min
+    if args.price_max is not None: scrape_kwargs["price_max"] = args.price_max
+
+    try:
+        props = scrape_property(**scrape_kwargs)
+    except (InvalidListingType, AuthenticationError) as e:
+        print(f"❌  Redfin scrape error: {e}")
+        _log_run(location, "redfin", 0, 0, 0, str(e), started_at)
+        return 0, 0, 0, 0
+    except Exception as e:
+        print(f"❌  Unexpected Redfin scrape error: {e}")
+        _log_run(location, "redfin", 0, 0, 0, str(e), started_at)
+        return 0, 0, 0, 0
+
+    elapsed = round(time.time() - t0, 1)
+    print(f"✅  HomeHarvest (Redfin) found {len(props)} listings in {elapsed}s")
+
+    if not props:
+        _log_run(location, "redfin", 0, 0, 0, None, started_at)
+        return 0, 0, 0, 0
+
+    # Use the same Realtor.com mapper — HomeHarvest returns the same Pydantic
+    # Property objects regardless of site_name.
+    records = []
+    for prop in props:
+        rec = _map_realtor_property(prop)
+        if rec["data_quality_score"] < args.min_score:
+            continue
+        has_addr   = bool(rec.get("address") and rec.get("city"))
+        has_coords = rec.get("lat") is not None and rec.get("lng") is not None
+        if not has_addr and not has_coords:
+            continue
+        # Tag source so pipeline card shows "REDFIN" badge
+        rec["source"] = "redfin"
+        records.append(rec)
+
+    dropped = len(props) - len(records)
+    if dropped:
+        print(f"   {dropped} listing(s) dropped (below min-score or no address/coords)")
+
+    if not records:
+        _log_run(location, "redfin", 0, 0, 0, None, started_at)
+        return 0, 0, 0, 0
+
+    return _stage_records(records, location, "redfin", args, started_at)
+
+
 # ── Per-location dispatcher ───────────────────────────────────────────────────
 
 def _run_location(location, args, started_at):
@@ -1865,6 +1962,12 @@ def _run_location(location, args, started_at):
 
     if args.source in ("zillow", "both"):
         new, dup, err, score = _run_zillow(location, args, started_at)
+        total_new += new; total_dup += dup; total_err += err
+        if score:
+            scores.append(score)
+
+    if args.source in ("redfin", "both"):
+        new, dup, err, score = _run_redfin(location, args, started_at)
         total_new += new; total_dup += dup; total_err += err
         if score:
             scores.append(score)
@@ -1922,6 +2025,17 @@ def run(args):
     print(f"   Extra data   : {args.extra}")
     print(f"   Realtor detail: {'DISABLED (--no-realtor-details)' if getattr(args, 'no_realtor_details', False) else 'ENABLED (Phase 2)'}")
     print(f"   Zillow detail : {'DISABLED (--no-details)' if getattr(args, 'no_details', False) else 'ENABLED (Phase 2)'}")
+    no_enrich = getattr(args, "no_enrich", False)
+    no_detail_enrich = getattr(args, "no_detail_enrich", False)
+    if no_enrich:
+        print("   Enrichment   : DISABLED (--no-enrich)")
+    elif no_detail_enrich:
+        print("   Enrichment   : partial — watermark+rules only (--no-detail-enrich)")
+    else:
+        enrich_status = "ENABLED" if _ENRICH_AVAILABLE else ("UNAVAILABLE: " + str(globals().get("_ENRICH_ERR", "?")))
+        print(f"   Enrichment   : {enrich_status}")
+    if args.source in ("redfin", "both") and not _HH_AVAILABLE:
+        print("⚠   homeharvest not installed — Redfin scraping will be skipped.")
 
     locations = list(args.location) if args.location else []
     if args.locations_file:
@@ -2026,12 +2140,13 @@ Search mode (Realtor.com is safe from Replit; Zillow needs residential IP):
         help="Text file with one location per line (# comments supported).",
     )
     p.add_argument(
-        "--source", choices=["realtor", "zillow", "both"], default="realtor",
+        "--source", choices=["realtor", "zillow", "redfin", "both"], default="realtor",
         help=(
             "Search mode source(s).\n"
             "  realtor — Realtor.com via HomeHarvest (safe from Replit, default)\n"
             "  zillow  — Zillow via __NEXT_DATA__ HTML parsing (needs residential IP)\n"
-            "  both    — run both in sequence\n"
+            "  redfin  — Redfin via HomeHarvest (safe from Replit)\n"
+            "  both    — run realtor + zillow + redfin in sequence\n"
             "Not used in URL mode (source is auto-detected from the URL)."
         ),
     )
@@ -2082,6 +2197,22 @@ Search mode (Realtor.com is safe from Replit; Zillow needs residential IP):
         help=(
             "Zillow search mode only: skip Phase 2 detail-page enrichment. "
             "Has no effect in URL mode (URL mode always does full detail scrape)."
+        ),
+    )
+    p.add_argument(
+        "--no-enrich", action="store_true", dest="no_enrich",
+        help=(
+            "Skip the enrichment pipeline entirely (watermark filter, description "
+            "cleaning, rule-based enrichment, regex detail fetch). Faster but records "
+            "will have less data and may include competitor-branded listings."
+        ),
+    )
+    p.add_argument(
+        "--no-detail-enrich", action="store_true", dest="no_detail_enrich",
+        help=(
+            "Skip the regex detail-fetch step of the enrichment pipeline only. "
+            "Still applies watermark filter, description cleaner, and rule-based "
+            "enrichment. Useful for faster runs when you don't need the HTTP fetches."
         ),
     )
     p.add_argument(
