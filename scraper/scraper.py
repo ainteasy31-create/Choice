@@ -353,6 +353,8 @@ def _collect_photos(prop):
     Collect all photo URLs from a HomeHarvest Property object.
     Checks all three locations: prop.description.(primary_photo/alt_photos),
     prop.photos (list of dicts), and legacy direct attrs on prop.
+    Strips Realtor CDN size params (e.g. _w-120_h-80) to avoid storing
+    thumbnail-sized URLs that get imported as tiny 120x80 images.
     """
     urls, seen = [], set()
 
@@ -360,7 +362,12 @@ def _collect_photos(prop):
         if not u:
             return
         s = str(u).strip()
-        if s and s.startswith("http") and s not in seen:
+        if not s or not s.startswith("http"):
+            return
+        # Strip Realtor CDN resize params (e.g. _q-80_w-1024_h-768_r-1)
+        # so we always store the original-resolution URL, not a thumbnail.
+        s = re.sub(r"_[qwhr]-\d+", "", s)
+        if s not in seen:
             urls.append(s)
             seen.add(s)
 
