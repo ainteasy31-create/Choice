@@ -19,15 +19,26 @@ const MAX_PHOTOS = 20;
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse(req.headers.get('origin'));
 
-  const auth = await requireAuth(req);
-  if (!auth.ok) return auth.response;
+  const SUPABASE_URL        = Deno.env.get('SUPABASE_URL')!;
+  const SERVICE_KEY         = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  // Admin-only
-  const { supabase: authClient, user } = auth;
-  const { data: role } = await authClient
-    .from('admin_roles').select('id').eq('user_id', user.id).maybeSingle();
-  if (!role) {
-    return jsonResponse({ success: false, error: 'Admin access required' }, 403, {}, req);
+  // Server-side bypass: if the caller presents the service role key directly,
+  // skip user auth — this allows server-side batch imports (scraper, Replit scripts).
+  const authHeader = req.headers.get('authorization') ?? '';
+  const callerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const isServiceRole = callerToken === SERVICE_KEY;
+
+  if (!isServiceRole) {
+    const auth = await requireAuth(req);
+    if (!auth.ok) return auth.response;
+
+    // Admin-only for regular users
+    const { supabase: authClient, user } = auth;
+    const { data: role } = await authClient
+      .from('admin_roles').select('id').eq('user_id', user.id).maybeSingle();
+    if (!role) {
+      return jsonResponse({ success: false, error: 'Admin access required' }, 403, {}, req);
+    }
   }
 
   let pipeline_id: string | null, property_id: string;
@@ -43,8 +54,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: 'property_id is required' }, 400, {}, req);
   }
 
-  const SUPABASE_URL        = Deno.env.get('SUPABASE_URL')!;
-  const SERVICE_KEY         = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const IMAGEKIT_PRIVATE_KEY = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
 
   if (!IMAGEKIT_PRIVATE_KEY) {
