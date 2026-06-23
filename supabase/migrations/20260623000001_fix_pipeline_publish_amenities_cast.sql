@@ -1,0 +1,73 @@
+-- Fix pipeline_publish: cast amenities from pipeline jsonb string to text[]
+-- Previously cast as ::jsonb which fails because properties.amenities is text[]
+CREATE OR REPLACE FUNCTION public.pipeline_publish(
+  p_id         text,
+  p_landlord_id uuid DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $func$
+DECLARE
+  p      pipeline.pipeline_properties%ROWTYPE;
+  new_id text;
+BEGIN
+  SELECT * INTO p FROM pipeline.pipeline_properties WHERE id = p_id;
+  IF NOT FOUND THEN
+    RETURN json_build_object('ok', false, 'error', 'Listing not found in pipeline');
+  END IF;
+  IF p.title IS NULL OR p.address IS NULL OR p.city IS NULL
+     OR p.state IS NULL OR p.zip IS NULL OR p.monthly_rent IS NULL THEN
+    RETURN json_build_object('ok', false, 'error', 'Missing required fields: title, address, city, state, zip, monthly_rent');
+  END IF;
+
+  new_id := gen_random_uuid()::text;
+
+  INSERT INTO public.properties (
+    id, landlord_id, status,
+    title, description, showing_instructions,
+    address, city, state, zip, county, neighborhood,
+    lat, lng, property_type, year_built, floors,
+    unit_number, total_units,
+    bedrooms, bathrooms, half_bathrooms, square_footage,
+    lot_size_sqft, garage_spaces,
+    monthly_rent, security_deposit, last_months_rent,
+    application_fee, pet_deposit, admin_fee, move_in_special,
+    available_date, minimum_lease_months,
+    pets_allowed, pet_details, pet_weight_limit, smoking_allowed,
+    parking, amenities,
+    location_context, virtual_tour_url, has_basement, has_central_air
+  ) VALUES (
+    new_id,
+    COALESCE(p_landlord_id, p.poster_landlord_id::uuid),
+    'draft',
+    p.title, p.description, p.showing_instructions,
+    p.address, p.city, p.state, p.zip, p.county, p.neighborhood,
+    p.lat, p.lng,
+    p.property_type, p.year_built, p.floors,
+    p.unit_number, p.total_units,
+    p.bedrooms, p.bathrooms, p.half_bathrooms, p.square_footage,
+    p.lot_size_sqft, p.garage_spaces,
+    p.monthly_rent, p.security_deposit, p.last_months_rent,
+    p.application_fee, p.pet_deposit, p.admin_fee, p.move_in_special,
+    CASE WHEN p.available_date ~ '^\d{4}-\d{2}-\d{2}$'
+         THEN p.available_date::date ELSE NULL END,
+    p.minimum_lease_months,
+    p.pets_allowed, p.pet_details, p.pet_weight_limit, p.smoking_allowed,
+    p.parking,
+    CASE WHEN p.amenities IS NOT NULL AND p.amenities <> '' AND p.amenities <> '[]'
+         THEN ARRAY(SELECT jsonb_array_elements_text(p.amenities::jsonb))
+         ELSE NULL END,
+    p.location_context, p.virtual_tour_url, p.has_basement, p.has_central_air
+  );
+
+  UPDATE pipeline.pipeline_properties
+  SET status             = 'published',
+      choice_property_id = new_id,
+      published_at       = now()::text,
+      updated_at         = now()
+  WHERE id = p_id;
+
+  RETURN json_build_object('ok', true, 'choice_property_id', new_id);
+END;
+$func$;
