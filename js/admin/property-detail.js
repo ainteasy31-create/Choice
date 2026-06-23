@@ -684,6 +684,16 @@
     document.getElementById('pd-btn-import-photos')?.addEventListener('click', async () => {
       const btn = document.getElementById('pd-btn-import-photos');
       if (!btn) return;
+
+      // Guard: warn if photos already exist (re-import would add duplicates)
+      if (_photos.length > 0) {
+        S.toast(
+          `Already has ${_photos.length} photo${_photos.length !== 1 ? 's' : ''}. ` +
+          `Delete existing photos first to re-import from source.`, 'info'
+        );
+        return;
+      }
+
       btn.disabled = true;
       btn.innerHTML = ico('spin') + ' Importing…';
       try {
@@ -694,6 +704,8 @@
         const res = typeof data === 'string' ? JSON.parse(data) : data;
         if (res?.no_source) {
           S.toast('No scraper source found — this listing was not published from the pipeline.', 'info');
+        } else if (res?.already_imported) {
+          S.toast(`Photos already imported (${res.existing} exist). Delete them first to re-import.`, 'info');
         } else if (res?.transferred > 0) {
           S.toast(`${res.transferred} photo${res.transferred !== 1 ? 's' : ''} imported from source to ImageKit ✓`, 'success');
           // Reload photos section

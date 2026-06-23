@@ -220,8 +220,14 @@ CONFIG.img = function(url, preset) {
   };
   const tr = transforms[preset] || transforms.gallery;
   if (url.startsWith(CONFIG.IMAGEKIT_URL)) {
-    const clean = url.replace(/\\/tr:[^/]+/, '');
-    return clean.replace(CONFIG.IMAGEKIT_URL, \`\${CONFIG.IMAGEKIT_URL}/\${tr}\`);
+    // Preserve watermark transform if present (ot-Choice = our text overlay).
+    // Strip all existing /tr:... segments, then rebuild with size preset first,
+    // followed by the watermark as a chained /tr: step so it renders on top.
+    const wmMatch = url.match(/\\/tr:([^/]*ot-Choice[^/]*)/);
+    const wmTr = wmMatch ? wmMatch[1] : null;
+    const clean = url.replace(/\\/tr:[^/]+/g, '');
+    const imgPath = clean.slice(CONFIG.IMAGEKIT_URL.length);
+    return CONFIG.IMAGEKIT_URL + '/' + tr + (wmTr ? '/tr:' + wmTr : '') + imgPath;
   }
   // External URLs (Zillow CDN, S3, etc.) — serve directly, never proxy through ImageKit
   return url;

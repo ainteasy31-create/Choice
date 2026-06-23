@@ -92,6 +92,23 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: true, transferred: 0, skipped: 0 }, 200, {}, req);
   }
 
+  // Dedup guard: if photos already exist for this property, refuse to re-import.
+  // Re-importing would append duplicate rows (same files, higher display_order).
+  // The admin must delete existing photos first if they want to re-import.
+  const { count: existingCount } = await adminClient
+    .from('property_photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('property_id', property_id);
+
+  if (existingCount && existingCount > 0) {
+    return jsonResponse({
+      success: false,
+      already_imported: true,
+      existing: existingCount,
+      error: `Property already has ${existingCount} photo(s). Delete them first to re-import.`,
+    }, 409, {}, req);
+  }
+
   const toProcess = urls.slice(0, MAX_PHOTOS);
   const credentials = btoa(`${IMAGEKIT_PRIVATE_KEY}:`);
   let transferred = 0;
