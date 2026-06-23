@@ -498,9 +498,27 @@ def _map_realtor_property(prop):
     basement_items  = _details_texts(details, "basement")
     fireplace_items = _details_texts(details, "fireplace")
 
-    heating_type = _list_to_str(heating_items)
-    cooling_type = _list_to_str(cooling_items)
-    laundry_type = _list_to_str(laundry_items)
+    # Raw MLS text (may be a combined blob containing both heating and cooling labels)
+    _heating_raw = _list_to_str(heating_items)
+    _cooling_raw = _list_to_str(cooling_items)
+    _laundry_raw = _list_to_str(laundry_items)
+
+    # Normalize: parse raw MLS blobs into separate heating vs cooling labels.
+    # Import here to avoid circular; enrichment module is always present.
+    try:
+        from enrichment import normalize_heating_type as _nht, normalize_cooling_type as _nct
+        heating_type = _nht(_heating_raw) or _nht(_cooling_raw)
+        cooling_type = _nct(_cooling_raw) or _nct(_heating_raw)
+    except Exception:
+        heating_type = _heating_raw
+        cooling_type = _cooling_raw
+
+    # If heating and cooling are still identical after normalization, clear cooling
+    # unless the text looks like a real AC type (not just duplicated MLS noise).
+    if heating_type and heating_type == cooling_type:
+        cooling_type = None
+
+    laundry_type = _laundry_raw
 
     # has_basement
     has_basement = False

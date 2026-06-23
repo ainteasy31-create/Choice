@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Choice Properties -- Enrichment Pipeline (v1)
+Choice Properties -- Enrichment Pipeline (v2)
 =============================================
 Post-processing applied to every scraped record before DB insert:
 
   1. clean_description      -- strip TurboTenant / agent boilerplate + screening language
-  2. is_watermarked         -- detect competitor-branded listings (drop before staging)
-  3. rule_based_enrich      -- infer missing fields using simple rules, no API calls
-  4. regex_extract_missing  -- fetch listing page and regex-extract missing fields
+  2. strip_corporate_fees   -- remove management company fee blocks from descriptions
+  3. is_watermarked         -- detect competitor-branded listings (drop before staging)
+  4. normalize_hvac         -- parse raw MLS blobs into separate heating vs cooling fields
+  5. rule_based_enrich      -- infer missing fields: laundry, parking, pets, title, deposit
+  6. regex_extract_missing  -- fetch listing page and regex-extract missing fields
                                (Realtor/non-Zillow only; skips records scored >= 75)
 
 Usage (from scraper.py):
@@ -91,7 +93,53 @@ def clean_description(text):
 
 
 # =============================================================================
-# 2. Watermark / competitor-brand filter
+# 2. Corporate management company fee block stripper
+# =============================================================================
+
+_CORPORATE_FEE_PATTERNS = [
+    # Mynd / Invitation Homes / Progress Residential / Tricon style fee blocks
+    r"ONE-TIME FEES[\s\S]*?(?=\n\n|\Z)",
+    r"REQUIRED MONTHLY CHARGES[*\s\S]*?(?=\n\n|\Z)",
+    r"Residents Benefits Package[^.]*\$[\d.]+[^.]*\.",
+    r"Utility Management Fee[^.]*\.",
+    r"\$\d+\.?\d*\s*/\s*month[:\s]+Residents Benefits",
+    r"Non-refundable\s+\$\d+\.?\d*\s+Application Fee Per Adult",
+    r"One Time Move In Fee\s+\$\d+[^.]*\.",
+    r"utility set up fee[^.]*\.",
+    r"Identity Theft Protection[^.]*\.",
+    r"rewards program[^.]*\.",
+    r"Federal Occupancy Guidelines[^.]*\.",
+    r"(?:Mynd|Progress Residential|Tricon|Invitation Homes|Main Street Renewal)"
+    r"[^.]*(?:Equal Opportunity|License #|Property Management)[^.]*\.",
+    r"License #\s*\d+[^.]*\.",
+    r"(?:does not advertise on Craigslist|never ask you to wire money)[^.]*\.",
+    r"Please report any fraudulent ads[^.]*\.",
+    r"Service provided through AT&T[^.]*\.",
+    r"Second Nature[^.]*\.",
+    r"No data caps[^\n]*\n?",
+    r"No installation or hidden fees[^\n]*\n?",
+    r"All equipment included[^\n]*\n?",
+    r"See our website[^\n]*\n?",
+]
+
+_CORPORATE_FEE_RE = [re.compile(p, re.IGNORECASE) for p in _CORPORATE_FEE_PATTERNS]
+
+
+def strip_corporate_fees(text):
+    """
+    Remove management company fee schedules and boilerplate that contradict
+    Choice Properties' own $50 flat application fee.
+    """
+    if not text:
+        return text
+    for pat in _CORPORATE_FEE_RE:
+        text = pat.sub("", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+# =============================================================================
+# 3. Watermark / competitor-brand filter
 # =============================================================================
 
 _WATERMARKED_BRANDS = (
@@ -121,7 +169,7 @@ _WATERMARKED_BRANDS = (
     "invitation homes",
     "progress residential",
     "main street renewal",
-    "amh",                     # American Homes for Rent ticker
+    "amh",
     "invitation_homes",
     "nfm lending",
 )
@@ -179,16 +227,134 @@ def watermark_reason(record):
 
 
 # =============================================================================
-# 3. Rule-based enrichment  (no API calls, runs locally)
+# 4. HVAC normalization — parse raw MLS blobs into separate heating/cooling
+# =============================================================================
+
+def normalize_heating_type(raw):
+    """
+    Extract the heating type from a raw MLS combined text like:
+      "Cooling Features: Central, Ceiling Fan(s), Heating Features: Central, Gas, ..."
+    or a bare fireplace descriptor like "Number of Fireplaces: 1".
+
+    Returns a clean heating label or None if no real heating info found.
+    """
+    if not raw:
+        return None
+
+    text = str(raw).strip()
+
+    # If the blob contains "Heating Features:", extract just that portion
+    m = re.search(r"Heating Features?[:\s]+([^,]+(?:,\s*[^,]+){0,3})", text, re.IGNORECASE)
+    if m:
+        val = m.group(1).strip()
+        # Stop at the next keyword label (e.g. "Cooling Features:", "Number of")
+        val = re.split(r",?\s*(?:Cooling|Fireplace|Number of|Ceiling|Heating:)", val)[0].strip()
+        val = val.rstrip(",").strip()
+        if val and len(val) > 2:
+            return val
+
+    # If it's just "Number of Fireplaces: N" with nothing else heating-related, return None
+    # (fireplaces are an amenity, not a heating system)
+    if re.match(r"^Number of Fireplaces\s*:", text, re.IGNORECASE):
+        return None
+
+    # Apply rule-based labels to the full text
+    for pat, label in _HEATING_RULES:
+        if re.search(pat, text):
+            return label
+
+    # If there's no heating signal at all in the blob, return None
+    if not re.search(r"heat|furnace|boiler|gas|electric|radiator|baseboard", text, re.IGNORECASE):
+        return None
+
+    return None
+
+
+def normalize_cooling_type(raw):
+    """
+    Extract the cooling type from a raw MLS combined text.
+    Returns a clean cooling label or None if no real cooling info found.
+    """
+    if not raw:
+        return None
+
+    text = str(raw).strip()
+
+    # If the blob contains "Cooling Features:", extract just that portion
+    m = re.search(r"Cooling Features?[:\s]+([^,]+(?:,\s*[^,]+){0,3})", text, re.IGNORECASE)
+    if m:
+        val = m.group(1).strip()
+        val = re.split(r",?\s*(?:Heating|Fireplace|Number of|Ceiling|Cooling:)", val)[0].strip()
+        val = val.rstrip(",").strip()
+        if val and len(val) > 2:
+            return val
+
+    # Fireplace-only descriptor has no cooling info
+    if re.match(r"^Number of Fireplaces\s*:", text, re.IGNORECASE):
+        return None
+
+    # Apply rule-based labels
+    for pat, label in _COOLING_RULES:
+        if re.search(pat, text):
+            return label
+
+    if not re.search(r"cool|air|ac|a/c|refrigerat|central|hvac", text, re.IGNORECASE):
+        return None
+
+    return None
+
+
+def normalize_hvac(record):
+    """
+    Normalize heating_type and cooling_type in-place.
+    - If both are identical raw blobs, parse them separately.
+    - Strip fireplace descriptors that aren't real HVAC data.
+    - Apply rule-based labels from the raw text.
+    """
+    ht = record.get("heating_type")
+    ct = record.get("cooling_type")
+
+    # Both identical (the common MLS blob duplication bug) or either is raw MLS text
+    raw_signals = [
+        "Cooling Features:",
+        "Heating Features:",
+        "Number of Fireplaces:",
+        "Ceiling Fan",
+        "Fireplace Features:",
+    ]
+
+    def _looks_raw(v):
+        if not v:
+            return False
+        return any(sig.lower() in v.lower() for sig in raw_signals)
+
+    if _looks_raw(ht) or _looks_raw(ct):
+        # Use the richer of the two blobs as source for both
+        source = ht if (len(str(ht or "")) >= len(str(ct or ""))) else ct
+        record["heating_type"] = normalize_heating_type(source)
+        record["cooling_type"] = normalize_cooling_type(source)
+    elif ht == ct and ht is not None:
+        # Identical but not obviously raw — still try to separate
+        record["heating_type"] = normalize_heating_type(ht)
+        record["cooling_type"] = normalize_cooling_type(ct)
+
+    return record
+
+
+# =============================================================================
+# 5. Rule-based enrichment  (no API calls, runs locally)
 # =============================================================================
 
 _PET_YES_RE = re.compile(
-    r"pets\s+(?:ok|allowed|welcome|permitted|friendly)"
+    r"pets\s+(?:ok|allowed|welcome|permitted|friendly|are allowed)"
     r"|pet[- ]friendly"
     r"|dogs?\s+(?:ok|allowed|welcome|permitted)"
     r"|cats?\s+(?:ok|allowed|welcome|permitted)"
     r"|small pets allowed"
-    r"|pets welcome",
+    r"|pets welcome"
+    r"|pets\s+are\s+allowed"
+    r"|animals\s+(?:ok|allowed|welcome)"
+    r"|pet\s+(?:ok|friendly)",
     re.IGNORECASE,
 )
 _PET_NO_RE = re.compile(
@@ -202,6 +368,177 @@ _PET_NO_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Laundry inference — checked against amenity tags (lowercase)
+_LAUNDRY_IN_UNIT_TAGS = {
+    "washer_dryer", "washer/dryer", "in_unit_laundry", "in-unit_laundry",
+    "laundry_in_unit", "washer_and_dryer", "full_size_w_d",
+}
+_LAUNDRY_HOOKUP_TAGS = {
+    "washer_dryer_hookups", "laundry_hookup", "w/d_hookup",
+    "washer_dryer_connections", "laundry_connections",
+}
+
+_LAUNDRY_IN_UNIT_RE = re.compile(
+    r"washer[/\s-]*dryer\s+(?:in\s+unit|included|in\s+home|in\s+apartment)"
+    r"|in[- ]unit\s+(?:laundry|washer)"
+    r"|w/?d\s+in\s+unit"
+    r"|(?:washer|dryer)\s+included",
+    re.IGNORECASE,
+)
+_LAUNDRY_HOOKUP_RE = re.compile(
+    r"washer[/\s-]*dryer\s+hookups?"
+    r"|laundry\s+hookups?"
+    r"|w/?d\s+hookups?"
+    r"|washer\s+and\s+dryer\s+hookup",
+    re.IGNORECASE,
+)
+
+# Parking inference from amenity tags
+_GARAGE_TAGS_RE = re.compile(
+    r"garage_(\d+)_or_more|garage_spaces?_(\d+)|attached_garage|detached_garage",
+    re.IGNORECASE,
+)
+_PARKING_DESC_RE = re.compile(
+    r"(\d+)[- ]car\s+(?:attached\s+)?garage"
+    r"|(\d+)\s+car\s+garage"
+    r"|two[- ]car\s+garage"
+    r"|2[- ]car\s+garage",
+    re.IGNORECASE,
+)
+
+_HEATING_RULES = [
+    (r"(?i)forced[- ]air|gas\s+forced", "Forced Air"),
+    (r"(?i)electric heat(?:ing)?", "Electric"),
+    (r"(?i)baseboard heat(?:ing)?", "Baseboard"),
+    (r"(?i)radiant heat(?:ing)?|radiant floor", "Radiant"),
+    (r"(?i)heat pump", "Heat Pump"),
+    (r"(?i)natural gas|gas heat(?:ing)?", "Gas"),
+]
+
+_COOLING_RULES = [
+    (r"(?i)central (?:air|a/?c|cooling)", "Central Air"),
+    (r"(?i)window\s+a/?c|window\s+air", "Window A/C"),
+    (r"(?i)mini[- ]split|ductless", "Mini-split"),
+    (r"(?i)evaporative|swamp cool", "Evaporative"),
+    (r"(?i)no\s+(?:a/?c|air conditioning|cooling)", "None"),
+]
+
+
+def _infer_laundry(record):
+    """
+    Infer laundry_type from amenity tags and description.
+    Priority: in-unit > hookups > shared > keep existing.
+    """
+    existing = record.get("laundry_type")
+    desc = (record.get("description") or "").lower()
+    amenities_raw = record.get("amenities") or "[]"
+
+    try:
+        amenities_list = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+    except Exception:
+        amenities_list = []
+
+    amenity_tags = set(str(a).lower().replace(" ", "_") for a in amenities_list)
+
+    # Check amenity tags for in-unit signals
+    if amenity_tags & _LAUNDRY_IN_UNIT_TAGS:
+        return "In-unit"
+
+    # Check description for in-unit signals
+    if _LAUNDRY_IN_UNIT_RE.search(desc):
+        return "In-unit"
+
+    # Check amenity tags for hookup signals
+    if amenity_tags & _LAUNDRY_HOOKUP_TAGS:
+        return "Washer/dryer hookups"
+
+    # Check description for hookup signals
+    if _LAUNDRY_HOOKUP_RE.search(desc):
+        return "Washer/dryer hookups"
+
+    # If existing is "Shared laundry" but description mentions laundry room (in-building),
+    # keep it — shared laundry is correct in that case.
+    # If existing is "Shared laundry" but no supporting evidence, clear it.
+    if existing == "Shared laundry":
+        if re.search(r"shared laundry|laundry\s+on[- ]site|coin[- ]operated|communal laundry", desc, re.IGNORECASE):
+            return "Shared laundry"
+        # Laundry_room tag alone is ambiguous — could be in-unit or shared building laundry room
+        if "laundry_room" in amenity_tags:
+            # If description also hints at in-unit room, treat as in-unit
+            if re.search(r"laundry\s+room\s+(?:in|inside|within|attached)", desc, re.IGNORECASE):
+                return "In-unit"
+            # Otherwise keep shared since that's what the MLS said
+            return "Shared laundry"
+        # No evidence for shared — clear the false default
+        return None
+
+    return existing
+
+
+def _infer_parking(record):
+    """
+    Infer parking description from amenity tags and description text.
+    Returns a parking string or None.
+    """
+    if record.get("parking"):
+        return record["parking"]
+
+    desc = record.get("description") or ""
+    amenities_raw = record.get("amenities") or "[]"
+
+    try:
+        amenities_list = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+    except Exception:
+        amenities_list = []
+
+    amenity_tags = " ".join(str(a).lower() for a in amenities_list)
+
+    # Check amenity tags for garage info
+    m = _GARAGE_TAGS_RE.search(amenity_tags)
+    if m:
+        n = m.group(1) or m.group(2)
+        if n:
+            return n + "-car garage"
+        if "attached" in amenity_tags:
+            return "Attached garage"
+        return "Garage"
+
+    # Detect attached/detached garage in amenities text
+    if "attached_garage" in amenity_tags or "garage attached" in amenity_tags:
+        return "Attached garage"
+    if "detached_garage" in amenity_tags:
+        return "Detached garage"
+    if re.search(r"\bgarage\b", amenity_tags):
+        # Try to get count from description
+        md = _PARKING_DESC_RE.search(desc)
+        if md:
+            n = md.group(1) or md.group(2)
+            if n:
+                return n + "-car garage"
+            if "two" in (md.group(0) or "").lower():
+                return "2-car garage"
+        return "Garage"
+
+    # Check description for garage mentions
+    md = _PARKING_DESC_RE.search(desc)
+    if md:
+        n = md.group(1) or md.group(2)
+        if n:
+            return n + "-car garage"
+        if "two" in (md.group(0) or "").lower():
+            return "2-car garage"
+        return "Attached garage"
+
+    # Driveway / off-street
+    if re.search(r"\bdriveway\b|\boff[- ]street\b", desc, re.IGNORECASE):
+        return "Driveway"
+
+    # Carport
+    if re.search(r"\bcarport\b", desc + " " + amenity_tags, re.IGNORECASE):
+        return "Carport"
+
+    return None
+
 
 def rule_based_enrich(record):
     """
@@ -209,7 +546,7 @@ def rule_based_enrich(record):
     No network calls.  Modifies record in-place; returns record.
     """
 
-    # 1. Auto-title if blank
+    # 1. Auto-title with key feature
     if not record.get("title"):
         beds = record.get("bedrooms")
         ptype = (record.get("property_type") or "Rental").replace("_", " ").title()
@@ -219,9 +556,31 @@ def rule_based_enrich(record):
         elif record.get("address"):
             record["title"] = record["address"]
 
-    # 2. Default available_date to today if missing
+    # 1b. Improve generic title with a key feature
+    title = record.get("title") or ""
+    if title and re.match(r"^\d+BR\s+\w+\s+in\s+\w+", title):
+        feature = None
+        amenities_raw = record.get("amenities") or "[]"
+        try:
+            alist = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+        except Exception:
+            alist = []
+        atags = " ".join(str(a).lower() for a in alist)
+        if re.search(r"garage|garage_\d", atags):
+            feature = "w/ Garage"
+        elif re.search(r"pool|swimming", atags):
+            feature = "w/ Pool"
+        elif re.search(r"fenced_yard|big_yard", atags):
+            feature = "w/ Yard"
+        if feature:
+            record["title"] = title + " " + feature
+
+    # 2. available_date: only default to today if listing signals "available now"
     if not record.get("available_date"):
-        record["available_date"] = date.today().isoformat()
+        desc = (record.get("description") or "").lower()
+        if re.search(r"available\s+(?:now|immediately)|move[- ]in\s+ready|immediate(?:ly)?\s+available", desc):
+            record["available_date"] = date.today().isoformat()
+        # Otherwise leave as None — don't mislead with today's date
 
     # 3. Default security_deposit to 1x rent if missing
     if not record.get("security_deposit"):
@@ -229,12 +588,24 @@ def rule_based_enrich(record):
         if rent and isinstance(rent, (int, float)) and rent > 0:
             record["security_deposit"] = int(rent)
 
-    # 4. Infer pet policy from description text
+    # 4. Infer pet policy from description + amenity tags
     if record.get("pets_allowed") is None:
         desc = (record.get("description") or "").lower()
         showing = (record.get("showing_instructions") or "").lower()
         text = desc + " " + showing
-        if _PET_NO_RE.search(text):
+
+        # Also check amenity tags for pet signals
+        amenities_raw = record.get("amenities") or "[]"
+        try:
+            alist = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+        except Exception:
+            alist = []
+        atags = " ".join(str(a).lower() for a in alist)
+        if "pets_allowed" in atags or "pet_friendly" in atags or "cats_allowed" in atags or "dogs_allowed" in atags:
+            record["pets_allowed"] = True
+        elif "no_pets" in atags or "pets_not_allowed" in atags:
+            record["pets_allowed"] = False
+        elif _PET_NO_RE.search(text):
             record["pets_allowed"] = False
         elif _PET_YES_RE.search(text):
             record["pets_allowed"] = True
@@ -244,11 +615,47 @@ def rule_based_enrich(record):
     if fee is None or (isinstance(fee, (int, float)) and fee < 50):
         record["application_fee"] = 50
 
+    # 6. Infer laundry_type from amenities + description
+    inferred_laundry = _infer_laundry(record)
+    if inferred_laundry != record.get("laundry_type"):
+        record["laundry_type"] = inferred_laundry
+
+    # 7. Infer parking from amenities + description
+    inferred_parking = _infer_parking(record)
+    if inferred_parking and not record.get("parking"):
+        record["parking"] = inferred_parking
+
+    # 8. Normalize amenities: strip raw MLS label prefixes, keep clean tags
+    amenities_raw = record.get("amenities") or "[]"
+    try:
+        alist = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+    except Exception:
+        alist = []
+    clean_amenities = []
+    seen_a = set()
+    for item in alist:
+        s = str(item).strip()
+        # Strip known MLS prefix patterns like "Interior Amenities: ...", "Flooring: ..."
+        cleaned = re.sub(
+            r"^(?:Interior Amenities|Exterior Amenities|Pool Features|Porch|Patio|"
+            r"Flooring|Walk-In Closet\(s\)|Smoke Detector\(s\)|Excl Some Window Treatmnt"
+            r"|Interior Features|Community Features)[:\s]+",
+            "", s, flags=re.IGNORECASE
+        ).strip()
+        # Only keep items that don't look like raw MLS descriptors (no ":" remaining unless measurement)
+        if ":" in cleaned and not re.match(r"\d+\s*(?:sq|sf|ft)", cleaned, re.IGNORECASE):
+            continue
+        if cleaned and cleaned.lower() not in seen_a and len(cleaned) > 2:
+            clean_amenities.append(cleaned)
+            seen_a.add(cleaned.lower())
+    if clean_amenities:
+        record["amenities"] = json.dumps(clean_amenities)
+
     return record
 
 
 # =============================================================================
-# 4. Regex extraction from listing detail page
+# 6. Regex extraction from listing detail page
 # =============================================================================
 
 _AVAIL_DATE_PATTERNS = [
@@ -271,6 +678,7 @@ _LEASE_MONTHS_PATTERNS = [
     r"lease term[:\s]+(\d{1,2})\s+months?",
     r"minimum lease[:\s]+(\d{1,2})\s+months?",
     r"(\d{1,2})[- ]month\s+minimum",
+    r"Lease term[:\s]+(\d{1,2})\s+months?",
 ]
 
 _LAUNDRY_RULES = [
@@ -279,7 +687,7 @@ _LAUNDRY_RULES = [
         r"|washer.*?dryer\s+in\s+unit"
         r"|w/?d\s+in\s+unit"
         r"|washer\s*/?\s*dryer\s+included",
-        "In-unit laundry",
+        "In-unit",
     ),
     (
         r"(?i)washer[- ]dryer hookups?"
@@ -291,28 +699,10 @@ _LAUNDRY_RULES = [
     (
         r"(?i)shared laundry"
         r"|laundry\s+on[- ]site"
-        r"|laundry\s+room"
         r"|coin[- ]operated laundry"
         r"|communal laundry",
         "Shared laundry",
     ),
-]
-
-_HEATING_RULES = [
-    (r"(?i)forced[- ]air|gas\s+forced", "Forced Air"),
-    (r"(?i)electric heat(?:ing)?", "Electric"),
-    (r"(?i)baseboard heat(?:ing)?", "Baseboard"),
-    (r"(?i)radiant heat(?:ing)?|radiant floor", "Radiant"),
-    (r"(?i)heat pump", "Heat Pump"),
-    (r"(?i)natural gas|gas heat(?:ing)?", "Gas"),
-]
-
-_COOLING_RULES = [
-    (r"(?i)central (?:air|a/?c|cooling)", "Central Air"),
-    (r"(?i)window\s+a/?c|window\s+air", "Window A/C"),
-    (r"(?i)mini[- ]split|ductless", "Mini-split"),
-    (r"(?i)evaporative|swamp cool", "Evaporative"),
-    (r"(?i)no\s+(?:a/?c|air conditioning|cooling)", "None"),
 ]
 
 # Only fetch detail pages for records below this quality score
@@ -372,7 +762,7 @@ def regex_extract_missing(record, verbose=False):
             logger.debug("detail_fetch HTTP error for %s: %s", url[:80], str(exc)[:60])
         return record
 
-    # Strip HTML tags → cleaner text for regex matching
+    # Strip HTML tags -> cleaner text for regex matching
     plain = re.sub(r"<[^>]+>", " ", raw_html)
     plain = re.sub(r"\s+", " ", plain)
 
@@ -406,14 +796,14 @@ def regex_extract_missing(record, verbose=False):
                 except Exception:
                     pass
 
-    # laundry_type
+    # laundry_type (only if not already inferred from amenities)
     if not record.get("laundry_type"):
         for pat, label in _LAUNDRY_RULES:
             if re.search(pat, plain):
                 record["laundry_type"] = label
                 break
 
-    # heating_type
+    # heating_type (only if still missing after normalization)
     if not record.get("heating_type"):
         for pat, label in _HEATING_RULES:
             if re.search(pat, plain):
@@ -441,7 +831,7 @@ def regex_extract_missing(record, verbose=False):
 
 
 # =============================================================================
-# 5. Combined pipeline entry-point
+# 7. Combined pipeline entry-point
 # =============================================================================
 
 def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
@@ -449,11 +839,13 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
     Run the full enrichment pipeline over a list of pipeline records.
 
     Steps (in order):
-      1. Watermark filter  -- drop competitor-branded listings
-      2. Description clean -- strip boilerplate from every description
-      3. Rule-based enrich -- infer title, dates, deposit, pet policy, fee floor
-      4. Regex detail fetch -- fetch page HTML for low-score records (optional)
-      5. Re-score          -- recalculate data_quality_score after enrichment
+      1. Watermark filter    -- drop competitor-branded listings
+      2. Description clean   -- strip boilerplate from every description
+      3. Corporate fee strip -- remove management company fee blocks
+      4. HVAC normalize      -- parse raw MLS heating/cooling blobs separately
+      5. Rule-based enrich   -- infer laundry, parking, pets, title, deposit, fee
+      6. Regex detail fetch  -- fetch page HTML for low-score records (optional)
+      7. Re-score            -- recalculate data_quality_score after enrichment
 
     Returns:
       (enriched_records, count_watermarked)
@@ -477,10 +869,17 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
         if rec.get("description"):
             rec["description"] = clean_description(rec["description"])
 
-        # Step 3: rule-based enrichment
+        # Step 3: strip corporate fee blocks
+        if rec.get("description"):
+            rec["description"] = strip_corporate_fees(rec["description"])
+
+        # Step 4: normalize heating/cooling from raw MLS blobs
+        normalize_hvac(rec)
+
+        # Step 5: rule-based enrichment
         rule_based_enrich(rec)
 
-        # Step 4: regex detail fetch (non-blocking — skips Zillow / high-score records)
+        # Step 6: regex detail fetch (non-blocking -- skips Zillow / high-score records)
         if enable_detail_fetch:
             try:
                 regex_extract_missing(rec, verbose=verbose)
@@ -490,7 +889,7 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
 
         clean_records.append(rec)
 
-    # Step 5: re-score after enrichment
+    # Step 7: re-score after enrichment
     if clean_records:
         _rescore(clean_records)
 
