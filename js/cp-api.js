@@ -357,7 +357,11 @@ const Properties = {
       case 'price_asc':  q = q.order('monthly_rent', { ascending: true });  break;
       case 'price_desc': q = q.order('monthly_rent', { ascending: false }); break;
       case 'beds_desc':  q = q.order('bedrooms', { ascending: false });      break;
-      default:           q = q.order('created_at', { ascending: false });    break;
+      default:
+        // Sort by original source listing date (nulls last), then creation date as fallback
+        q = q.order('listed_at', { ascending: false, nullsFirst: false })
+             .order('created_at', { ascending: false });
+        break;
     }
 
     // Pagination
@@ -412,7 +416,10 @@ const Properties = {
       case 'price_asc':  q = q.order('monthly_rent', { ascending: true });  break;
       case 'price_desc': q = q.order('monthly_rent', { ascending: false }); break;
       case 'beds_desc':  q = q.order('bedrooms',     { ascending: false }); break;
-      default:           q = q.order('created_at',   { ascending: false }); break;
+      default:
+        q = q.order('listed_at', { ascending: false, nullsFirst: false })
+             .order('created_at', { ascending: false });
+        break;
     }
     q = q.range(from, to);
 

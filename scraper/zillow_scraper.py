@@ -1292,6 +1292,14 @@ def _enrich_from_detail(record, prop):
     od["_phase"]       = "detail"
     od["zpid"]         = record.get("source_listing_id") or od.get("zpid")
     od["daysOnMarket"] = prop.get("daysOnZillow") or prop.get("daysOnMarket")
+    # Compute listed_at from daysOnMarket (today - N days = original listing date)
+    _dom = od["daysOnMarket"]
+    if _dom is not None and record.get("listed_at") is None:
+        try:
+            from datetime import date as _date, timedelta as _td
+            record["listed_at"] = (_date.today() - _td(days=int(_dom))).isoformat()
+        except Exception:
+            pass
     od["priceHistory"] = (prop.get("priceHistory") or [])[:5]     # last 5 events
     od["openHouses"]   = prop.get("openHouseSchedule") or prop.get("openHouses") or []
     od["mlsId"]        = rf.get("mlsId") or rf.get("listingId") or rf.get("listingContractDate")

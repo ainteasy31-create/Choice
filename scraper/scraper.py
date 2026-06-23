@@ -831,6 +831,7 @@ def _map_realtor_property(prop):
         "description":           desc_txt,
         "showing_instructions":  None,
         "available_date":        available_date,
+        "listed_at":             str(ld)[:10] if ld else None,
         "minimum_lease_months":  minimum_lease_months,
         "lease_terms":           _jdumps(lease_term_items),
         "pets_allowed":          pets_allowed,
