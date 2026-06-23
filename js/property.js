@@ -1129,7 +1129,12 @@ function lightboxShow(idx) {
       reveal();
     } else {
       img.addEventListener('load',  reveal, { once: true });
-      img.addEventListener('error', reveal, { once: true });
+      // FIX: on error, show placeholder instead of leaving a broken image in the lightbox.
+      img.addEventListener('error', () => {
+        img.src    = '/assets/placeholder-property.jpg';
+        img.srcset = '';
+        reveal();
+      }, { once: true });
     }
   }, _lbNavDir !== 0 ? 120 : 0);
 

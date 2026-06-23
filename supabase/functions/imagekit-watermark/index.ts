@@ -13,7 +13,7 @@
 //   4. Returns { success: true, url: watermarkedUrl }
 //
 // ImageKit URL transformation used:
-//   ot-Choice Properties,otf-roboto,ots-40,otc-FFFFFF,
+//   ot-Choice%20Properties,otf-roboto,ots-40,otc-FFFFFF,
 //   ota-bottom_right,otp-20,otbg-000000_50
 // ============================================================
 
@@ -24,7 +24,9 @@ import { jsonResponse }  from '../_shared/utils.ts';
 // Build a watermarked ImageKit URL from any existing ImageKit URL.
 // Inserts the transformation string before the image path segment.
 function buildWatermarkedUrl(originalUrl: string, endpoint: string): string {
-  const tr = 'ot-Choice Properties,otf-roboto,ots-40,otc-FFFFFF,ota-bottom_right,otp-20,otbg-000000_50';
+  // FIX: spaces in ImageKit URL path segments must be percent-encoded.
+  // "Choice Properties" → "Choice%20Properties" to produce a valid URL.
+  const tr = 'ot-Choice%20Properties,otf-roboto,ots-40,otc-FFFFFF,ota-bottom_right,otp-20,otbg-000000_50';
 
   // If URL already contains our transformation, return as-is.
   if (originalUrl.includes('ot-Choice')) return originalUrl;

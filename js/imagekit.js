@@ -181,8 +181,9 @@ export async function uploadToImageKit(file, options = {}) {
 
   onProgress?.(100);
 
-  // I-028: return both url and fileId so callers can persist fileId for CDN deletion.
-  return { url: data.url, fileId: data.fileId ?? null };
+  // I-028: return url, fileId, and photoId so callers can track the DB row.
+  // photoId is the property_photos UUID when propertyId was passed to the edge function.
+  return { url: data.url, fileId: data.fileId ?? null, photoId: data.photoId ?? null };
 }
 
 /**

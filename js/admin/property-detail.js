@@ -161,6 +161,11 @@
     if (window.CONFIG && CONFIG.img) return CONFIG.img(url, 'gallery');
     return url;
   }
+  function lightboxPhotoUrl(url) {
+    if (!url) return '/assets/placeholder-property.jpg';
+    if (window.CONFIG && CONFIG.img) return CONFIG.img(url, 'lightbox');
+    return url;
+  }
   function thumbUrl(url) {
     if (!url) return '/assets/placeholder-property.jpg';
     if (window.CONFIG && CONFIG.img) return CONFIG.img(url, 'strip');
@@ -308,7 +313,19 @@
   function lbShow(idx, urls) {
     _lbIdx = idx;
     const img = document.getElementById('pd-lb-img');
-    if (img) { img.style.opacity = '0'; setTimeout(() => { img.src = galleryPhotoUrl(urls[idx]); img.style.opacity = '1'; }, 100); }
+    if (img) {
+      img.style.opacity = '0';
+      setTimeout(() => {
+        // FIX: use lightbox preset (full quality, no width cap) instead of gallery
+        // preset (w-1200, q-90) so the admin sees actual upload quality when reviewing.
+        img.src = lightboxPhotoUrl(urls[idx]);
+        img.onerror = function() {
+          this.onerror = null;
+          this.src = '/assets/placeholder-property.jpg';
+        };
+        img.style.opacity = '1';
+      }, 100);
+    }
     const counter = document.getElementById('pd-lb-counter');
     if (counter) counter.textContent = (idx + 1) + ' / ' + urls.length;
     document.querySelectorAll('.pd-lb-thumb').forEach((t, i) => t.classList.toggle('active', i === idx));

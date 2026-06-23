@@ -6,13 +6,17 @@
 //   IMAGEKIT_PRIVATE_KEY  →  your ImageKit private key
 //
 // Phase 3b update (2026-04-22):
-//   • Ownership check now consults the new `property_photos` table
-//     first via the SECURITY INVOKER RPC `delete_property_photo_by_file_id`.
-//     Falls back to the legacy `properties.photo_file_ids` array
-//     check during the transition window.
+//   • Ownership check consults the `property_photos` table
+//     via the SECURITY INVOKER RPC `delete_property_photo_by_file_id`.
 //   • The DB row is removed inside the RPC before the CDN call so
 //     the property_photos table stays consistent even if the CDN
 //     delete is retried.
+//
+// FIX: Removed legacy fallback that referenced the dropped
+//   `photo_file_ids` array column on `properties`. That column was
+//   removed when `property_photos` was introduced. The fallback
+//   was causing false 403s for non-admin landlords whenever the
+//   RPC returned false (photo not found vs. permission denied).
 //
 // Deletion remains best-effort: a CDN failure does NOT block the UI.
 // ============================================================
@@ -22,22 +26,16 @@ import { requireAuth }  from '../_shared/auth.ts';
 import { jsonResponse } from '../_shared/utils.ts';
 import { isDbRateLimited } from '../_shared/rate-limit.ts';
 
-// Per-user delete cap: 100 / 10 min. Deletes are cheap on our side but
-// each one hits the CDN; cap protects against runaway scripts and
-// makes any compromised-account misuse obvious in the rate-limit table.
 const DELETE_MAX_PER_WINDOW = 100;
 const DELETE_WINDOW_MS      = 10 * 60 * 1000;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse(req.headers.get('origin'));
 
-  // ── Auth check ────────────────────────────────────────────
   const auth = await requireAuth(req);
   if (!auth.ok) return auth.response;
   const { user, supabase } = auth;
-  // ── End auth check ────────────────────────────────────────
 
-  // ── Per-user rate limit (DB-backed, survives cold starts) ──
   if (await isDbRateLimited('user:' + user.id, 'imagekit-delete', DELETE_MAX_PER_WINDOW, DELETE_WINDOW_MS)) {
     return jsonResponse({ success: false, error: 'Too many delete requests. Please wait a few minutes and try again.' }, 429, {}, req);
   }
@@ -53,44 +51,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'fileId is required' }, 400, {}, req);
     }
 
-    // ── Ownership + DB row removal via RPC (Phase 3b) ─────────
-    // The RPC raises if the caller doesn't own the parent property.
-    // It returns true if a row was deleted, false if it didn't exist.
+    // ── Ownership + DB row removal via RPC ────────────────────
+    // The RPC removes the property_photos row and returns true if it
+    // belonged to the calling user, false if not found, or raises if forbidden.
     const { data: rpcDeleted, error: rpcErr } = await supabase.rpc(
       'delete_property_photo_by_file_id',
       { p_file_id: fileId }
     );
 
-    let isOwner = rpcDeleted === true;
-
     if (rpcErr) {
-      // RPC raised "Forbidden" or doesn't exist yet — fall back to the
-      // legacy ownership check against the array column.
-      const { data: adminRow } = await supabase
-        .from('admin_roles')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      const isAdmin = !!adminRow;
-
-      if (!isAdmin) {
-        const { data: owned, error: ownerErr } = await supabase
-          .from('properties')
-          .select('id')
-          .eq('landlord_id', user.id)
-          .filter('photo_file_ids', 'cs', JSON.stringify([fileId]))
-          .maybeSingle();
-
-        if (ownerErr || !owned) {
-          return jsonResponse({ success: false, error: 'Forbidden' }, 403, {}, req);
-        }
-      }
-      isOwner = true;
+      // RPC raised "Forbidden" — reject.
+      console.error('[imagekit-delete] RPC error:', rpcErr);
+      return jsonResponse({ success: false, error: 'Forbidden' }, 403, {}, req);
     }
 
-    // If the RPC returned false (no row found) AND the legacy check
-    // also returned no match, treat as forbidden to prevent enumeration.
-    if (!isOwner) {
+    // rpcDeleted === false means the row wasn't found in property_photos.
+    // Admins can still proceed to clean up orphaned CDN files.
+    if (rpcDeleted === false) {
       const { data: adminRow } = await supabase
         .from('admin_roles')
         .select('id')
@@ -98,16 +75,10 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!adminRow) {
-        const { data: legacyOwned } = await supabase
-          .from('properties')
-          .select('id')
-          .eq('landlord_id', user.id)
-          .filter('photo_file_ids', 'cs', JSON.stringify([fileId]))
-          .maybeSingle();
-        if (!legacyOwned) {
-          return jsonResponse({ success: false, error: 'Forbidden' }, 403, {}, req);
-        }
+        // Non-admin, photo not in DB — treat as forbidden to prevent enumeration.
+        return jsonResponse({ success: false, error: 'Forbidden' }, 403, {}, req);
       }
+      // Admin deleting an orphaned CDN file — allow through.
     }
     // ── End ownership check ───────────────────────────────────
 
@@ -119,8 +90,6 @@ Deno.serve(async (req) => {
 
     // 204 = success, 404 = already gone — both are acceptable (idempotent).
     if (!ikRes.ok && ikRes.status !== 404) {
-      // Generic message to client; full ImageKit response logged server-side
-      // (raw text could leak account internals).
       const errText = await ikRes.text().catch(() => `HTTP ${ikRes.status}`);
       console.error('[imagekit-delete] ImageKit error:', errText);
       return jsonResponse({ success: false, error: 'Image delete failed. Please try again.' }, 502, {}, req);

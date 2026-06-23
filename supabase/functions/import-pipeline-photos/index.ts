@@ -5,8 +5,12 @@
 // transfer source photos (Zillow/Realtor CDN) into ImageKit
 // and persist them in property_photos via add_property_photo RPC.
 //
-// POST body: { pipeline_id: string, property_id: string }
+// POST body: { property_id: string, pipeline_id?: string }
 // Returns:   { success: true, transferred: number, skipped: number }
+//
+// FIX: Photos are now processed in parallel batches of 5 (was serial)
+// to avoid hitting the 150s Supabase Edge Function timeout when
+// importing 10–20 photos from slow CDN sources.
 // ============================================================
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -14,17 +18,18 @@ import { corsResponse } from '../_shared/cors.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { jsonResponse } from '../_shared/utils.ts';
 
-const MAX_PHOTOS = 20;
+const MAX_PHOTOS     = 20;
+const BATCH_SIZE     = 5;   // process this many photos concurrently
+const FETCH_TIMEOUT  = 12_000; // ms per image fetch
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse(req.headers.get('origin'));
 
-  const SUPABASE_URL        = Deno.env.get('SUPABASE_URL')!;
-  const SERVICE_KEY         = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!;
+  const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  // Server-side bypass: if the caller presents the service role key directly,
-  // skip user auth — this allows server-side batch imports (scraper, Replit scripts).
-  const authHeader = req.headers.get('authorization') ?? '';
+  // Server-side bypass: service role key skips user auth.
+  const authHeader  = req.headers.get('authorization') ?? '';
   const callerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
   const isServiceRole = callerToken === SERVICE_KEY;
 
@@ -32,7 +37,6 @@ Deno.serve(async (req) => {
     const auth = await requireAuth(req);
     if (!auth.ok) return auth.response;
 
-    // Admin-only for regular users
     const { supabase: authClient, user } = auth;
     const { data: role } = await authClient
       .from('admin_roles').select('id').eq('user_id', user.id).maybeSingle();
@@ -55,14 +59,13 @@ Deno.serve(async (req) => {
   }
 
   const IMAGEKIT_PRIVATE_KEY = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
-
   if (!IMAGEKIT_PRIVATE_KEY) {
     return jsonResponse({ success: false, error: 'ImageKit not configured' }, 500, {}, req);
   }
 
   const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
-  // Fetch pipeline record — lookup by pipeline_id if provided, otherwise by choice_property_id
+  // Fetch pipeline record
   const query = adminClient
     .schema('pipeline')
     .from('pipeline_properties')
@@ -76,7 +79,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: 'Pipeline lookup failed: ' + pErr.message }, 500, {}, req);
   }
   if (!pipeline) {
-    // No pipeline source — property wasn't published from scraper
     return jsonResponse({ success: true, transferred: 0, skipped: 0, no_source: true }, 200, {}, req);
   }
 
@@ -92,9 +94,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: true, transferred: 0, skipped: 0 }, 200, {}, req);
   }
 
-  // Dedup guard: if photos already exist for this property, refuse to re-import.
-  // Re-importing would append duplicate rows (same files, higher display_order).
-  // The admin must delete existing photos first if they want to re-import.
+  // Dedup guard: refuse to re-import if photos already exist.
   const { count: existingCount } = await adminClient
     .from('property_photos')
     .select('id', { count: 'exact', head: true })
@@ -111,36 +111,31 @@ Deno.serve(async (req) => {
 
   const toProcess = urls.slice(0, MAX_PHOTOS);
   const credentials = btoa(`${IMAGEKIT_PRIVATE_KEY}:`);
-  let transferred = 0;
-  let skipped = 0;
 
-  for (let i = 0; i < toProcess.length; i++) {
-    const url = toProcess[i];
+  // Per-photo transfer: fetch from CDN → upload to ImageKit → save to DB.
+  // Returns true on success, false on any failure.
+  async function transferPhoto(url: string, index: number): Promise<boolean> {
     try {
-      // Fetch image server-side (no CORS restriction in Deno)
       const imgRes = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; ChoiceProperties/1.0)',
           'Accept': 'image/*',
         },
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT),
       });
-
-      if (!imgRes.ok) { skipped++; continue; }
+      if (!imgRes.ok) return false;
 
       const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
       const buffer = await imgRes.arrayBuffer();
 
-      // Derive extension from content-type
       const extMap: Record<string, string> = {
         'image/jpeg': 'jpg', 'image/jpg': 'jpg',
         'image/png': 'png', 'image/webp': 'webp',
       };
       const mimeBase = contentType.split(';')[0].trim().toLowerCase();
       const ext = extMap[mimeBase] || 'jpg';
-      const fileName = `photo_${i + 1}.${ext}`;
+      const fileName = `photo_${index + 1}.${ext}`;
 
-      // Upload to ImageKit
       const formData = new FormData();
       formData.append('file', new Blob([buffer], { type: mimeBase }), fileName);
       formData.append('fileName', fileName);
@@ -154,16 +149,14 @@ Deno.serve(async (req) => {
 
       if (!ikRes.ok) {
         const errText = await ikRes.text().catch(() => `HTTP ${ikRes.status}`);
-        console.error(`[import-pipeline-photos] ImageKit upload error (photo ${i+1}):`, errText);
-        skipped++;
-        continue;
+        console.error(`[import-pipeline-photos] ImageKit upload error (photo ${index + 1}):`, errText);
+        return false;
       }
 
       const ikData = await ikRes.json();
-      const ikUrl    = ikData.url as string;
-      const fileId   = (ikData.fileId ?? '') as string;
+      const ikUrl   = ikData.url as string;
+      const fileId  = (ikData.fileId ?? '') as string;
 
-      // Persist to property_photos via RPC
       const { error: rpcErr } = await adminClient.rpc('add_property_photo', {
         p_property_id: property_id,
         p_url:         ikUrl,
@@ -175,16 +168,29 @@ Deno.serve(async (req) => {
       });
 
       if (rpcErr) {
-        console.error(`[import-pipeline-photos] add_property_photo failed (photo ${i+1}):`, rpcErr);
-        skipped++;
-        continue;
+        console.error(`[import-pipeline-photos] add_property_photo failed (photo ${index + 1}):`, rpcErr);
+        return false;
       }
 
-      transferred++;
+      return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[import-pipeline-photos] Error processing photo ${i+1}:`, msg);
-      skipped++;
+      console.error(`[import-pipeline-photos] Error processing photo ${index + 1}:`, msg);
+      return false;
+    }
+  }
+
+  // Process in parallel batches of BATCH_SIZE to avoid timeout.
+  let transferred = 0;
+  let skipped = 0;
+
+  for (let batchStart = 0; batchStart < toProcess.length; batchStart += BATCH_SIZE) {
+    const batch = toProcess.slice(batchStart, batchStart + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map((url, i) => transferPhoto(url, batchStart + i))
+    );
+    for (const ok of results) {
+      if (ok) transferred++; else skipped++;
     }
   }
 
