@@ -30,23 +30,45 @@
   }
 
   // ── Freshness label (Phase 9.2) ─────────────────────────────
-  // Returns a small chip text for cards listed within the last 7 days.
-  // Returns null otherwise (chip omitted entirely from the card markup).
-  //   < 30h    → "Just listed"
-  //   30h–168h → "N days ago" (rounded to whole days)
-  //   > 7 days → null (no chip)
-  function freshnessLabel(createdAt) {
-    if (!createdAt) return null;
-    var t = new Date(createdAt).getTime();
+  // Uses listed_at (original source listing date) — NOT created_at (scrape date).
+  // Returns a chip label for properties listed within the last 14 days.
+  // Returns null otherwise (chip omitted from the card markup).
+  //   < 30h     → "Just listed"
+  //   30h–336h  → "N days ago" (rounded to whole days)
+  //   > 14 days → null (no chip)
+  function freshnessLabel(listedAt) {
+    if (!listedAt) return null;
+    // listed_at is a date string (YYYY-MM-DD) — parse as local noon to avoid
+    // timezone-shifting the date by one day.
+    var raw = String(listedAt);
+    var t = raw.length === 10
+      ? new Date(raw + 'T12:00:00').getTime()
+      : new Date(raw).getTime();
     if (isNaN(t)) return null;
     var hours = (Date.now() - t) / 36e5;
     if (hours < 0) return null;
     if (hours < 30) return 'Just listed';
-    if (hours < 168) {
+    if (hours < 336) {
       var days = Math.max(1, Math.round(hours / 24));
       return days + (days === 1 ? ' day ago' : ' days ago');
     }
     return null;
+  }
+
+  // ── Listed date label ────────────────────────────────────────
+  // For properties older than 14 days: "Listed Jun 22" shown in card body.
+  // For fresh properties the freshness chip covers this — no duplication.
+  function listedDateLabel(listedAt) {
+    if (!listedAt) return null;
+    var raw = String(listedAt);
+    var t = raw.length === 10
+      ? new Date(raw + 'T12:00:00').getTime()
+      : new Date(raw).getTime();
+    if (isNaN(t)) return null;
+    var hours = (Date.now() - t) / 36e5;
+    if (hours < 336) return null; // handled by freshness chip
+    var d = new Date(t);
+    return 'Listed ' + d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
   }
 
   // ── Availability chip ───────────────────────────────────────
@@ -119,7 +141,12 @@
       badge = '<div class="property-card-badge badge-verified"><i class="fas fa-shield-halved"></i> Verified</div>';
     }
 
-    var freshChipHtml = '';
+    var freshLabel = freshnessLabel(p.listed_at);
+    var freshChipHtml = freshLabel
+      ? '<div class="property-card-fresh-chip"><span class="property-card-fresh-dot"></span>' + freshLabel + '</div>'
+      : '';
+
+    var listedLabel = listedDateLabel(p.listed_at);
 
     // Type chip removed from card — type is in the title and the filter bar.
 
@@ -177,6 +204,7 @@
           '<div class="property-card-addr">' +
             '<i class="fas fa-location-dot"></i>' + addrLine +
             (avail ? '<span class="property-card-addr-sep">·</span>' + avail : '') +
+            (listedLabel ? '<span class="property-card-addr-sep">·</span><span class="property-card-listed-date">' + listedLabel + '</span>' : '') +
           '</div>' +
           // 3. Specs — beds + baths only
           (specsHtml ? '<div class="property-card-specs">' + specsHtml + '</div>' : '') +
