@@ -824,6 +824,7 @@ async function loadFeaturedListings() {
       .from('properties')
       .select('*, landlords(contact_name, business_name, avatar_url, verified), property_photos(url, file_id, display_order)')
       .eq('status', 'active')
+      .order('listed_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(6);
 

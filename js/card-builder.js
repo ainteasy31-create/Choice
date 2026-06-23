@@ -29,35 +29,26 @@
     return '<span class="property-card-price-dollar">$</span>' + n.toLocaleString();
   }
 
-  // ── Freshness label (Phase 9.2) ─────────────────────────────
+  // ── Freshness chip (Phase 9.2) ──────────────────────────────
   // Uses listed_at (original source listing date) — NOT created_at (scrape date).
-  // Returns a chip label for properties listed within the last 14 days.
-  // Returns null otherwise (chip omitted from the card markup).
-  //   < 30h     → "Just listed"
-  //   30h–336h  → "N days ago" (rounded to whole days)
-  //   > 14 days → null (no chip)
+  // Shows "Just listed" chip on the photo ONLY for properties under 30 hours old.
+  // All other properties show the exact date via listedDateLabel() instead.
   function freshnessLabel(listedAt) {
     if (!listedAt) return null;
-    // listed_at is a date string (YYYY-MM-DD) — parse as local noon to avoid
-    // timezone-shifting the date by one day.
     var raw = String(listedAt);
     var t = raw.length === 10
       ? new Date(raw + 'T12:00:00').getTime()
       : new Date(raw).getTime();
     if (isNaN(t)) return null;
     var hours = (Date.now() - t) / 36e5;
-    if (hours < 0) return null;
-    if (hours < 30) return 'Just listed';
-    if (hours < 336) {
-      var days = Math.max(1, Math.round(hours / 24));
-      return days + (days === 1 ? ' day ago' : ' days ago');
-    }
+    if (hours >= 0 && hours < 30) return 'Just listed';
     return null;
   }
 
   // ── Listed date label ────────────────────────────────────────
-  // For properties older than 14 days: "Listed Jun 22" shown in card body.
-  // For fresh properties the freshness chip covers this — no duplication.
+  // Shows the exact original listing date on every card — "Listed Jun 22".
+  // Matches the date format used on Zillow / Realtor.com.
+  // Shown for ALL properties so renters always see when it first hit the market.
   function listedDateLabel(listedAt) {
     if (!listedAt) return null;
     var raw = String(listedAt);
@@ -65,8 +56,6 @@
       ? new Date(raw + 'T12:00:00').getTime()
       : new Date(raw).getTime();
     if (isNaN(t)) return null;
-    var hours = (Date.now() - t) / 36e5;
-    if (hours < 336) return null; // handled by freshness chip
     var d = new Date(t);
     return 'Listed ' + d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
   }

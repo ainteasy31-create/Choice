@@ -439,7 +439,9 @@ const Properties = {
   },
 
   async getAll(filters = {}) {
-    let q = sb().from('properties').select(PROPERTIES_SELECT_FULL).order('created_at', { ascending: false });
+    let q = sb().from('properties').select(PROPERTIES_SELECT_FULL)
+      .order('listed_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
     if (filters.status)    q = q.eq('status', filters.status);
     if (filters.landlord)  q = q.eq('landlord_id', filters.landlord);
     if (filters.bedrooms !== undefined && filters.bedrooms !== '') q = q.gte('bedrooms', filters.bedrooms);
