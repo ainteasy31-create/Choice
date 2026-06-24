@@ -741,6 +741,21 @@ def _map_listing(raw):
         "_phase":     "search",
     }
 
+    # ── source_status — map Zillow statusType to canonical value ──────────
+    _status_raw = str(raw.get("statusType") or "").upper()
+    if "FOR_RENT" in _status_raw or _status_raw in ("ACTIVE", "ACTIVE_FOR_RENT"):
+        _source_status = "available"
+    elif "PENDING" in _status_raw:
+        _source_status = "pending"
+    elif "RENTED" in _status_raw or "LEASED" in _status_raw:
+        _source_status = "rented"
+    elif "SOLD" in _status_raw or "OFF_MARKET" in _status_raw or "REMOVED" in _status_raw:
+        _source_status = "removed"
+    elif _status_raw:
+        _source_status = "available"
+    else:
+        _source_status = "available"
+
     now = _now()
 
     record = {
@@ -750,6 +765,7 @@ def _map_listing(raw):
         "source_url":            source_url,
         "source_listing_id":     zpid,
         "status":                "scraped",
+        "source_status":         _source_status,
 
         # -- Address -----------------------------------------------------------
         "title":                 title,

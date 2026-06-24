@@ -757,6 +757,21 @@ def _map_realtor_property(prop):
     if not broker_name:
         broker_name = getattr(prop, "broker_name", None) or office_name
 
+    # ── source_status — map Realtor.com listing status to canonical value ────
+    _status_raw = str(getattr(prop, "status", None) or "").upper()
+    if _status_raw in ("FOR_RENT", "ACTIVE", "FOR_LEASE", "ACTIVE_UNDER_CONTRACT"):
+        _source_status = "available"
+    elif _status_raw == "PENDING":
+        _source_status = "pending"
+    elif _status_raw in ("RENTED", "LEASED", "SOLD"):
+        _source_status = "rented"
+    elif _status_raw in ("OFF_MARKET", "WITHDRAWN", "CANCELLED", "EXPIRED", "REMOVED"):
+        _source_status = "removed"
+    elif _status_raw:
+        _source_status = "available"  # default for unknown active statuses
+    else:
+        _source_status = "available"
+
     # ── original_data (full audit record) ────────────────────────────────────
     ld = getattr(prop, "list_date", None)
     original_data = {
@@ -793,6 +808,7 @@ def _map_realtor_property(prop):
             getattr(prop, "mls_id",      None) or ""
         ),
         "status":                "scraped",
+        "source_status":         _source_status,
         "title":                 title,
         "address":               street,
         "unit_number":           unit,

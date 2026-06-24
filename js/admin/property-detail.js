@@ -438,6 +438,7 @@
       <button class="btn btn-primary btn-sm" id="pd-btn-edit">${ico('edit')} Edit &amp; Upload</button>
       <button class="btn btn-ghost btn-sm" id="pd-btn-photos">${ico('photos')} ${_photos.length ? 'All photos ('+_photos.length+')' : 'Manage photos'}</button>
       <button class="btn btn-ghost btn-sm" id="pd-btn-import-photos" title="Pull photos from the original Zillow/Realtor listing into ImageKit">${ico('dnload')} Import source photos</button>
+      <button class="btn btn-ghost btn-sm" id="pd-btn-verify" title="Confirm this listing is still active and available">${ico('check')} Mark as verified</button>
       <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">${ico('ext')} Public listing</a>
       <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft">${ico('copy')} Duplicate</button>
     </div>
@@ -457,6 +458,8 @@
       { label:'Floors',         value: p.floors || '—' },
       { label:'Available',      value: fmt(p.available_date) },
       { label:'Listed on source', value: p.listed_at ? fmt(p.listed_at) : '—' },
+      { label:'Source status',  value: p.source_status ? capitalize(p.source_status) : '—' },
+      { label:'Last verified',  value: p.last_verified_at ? fmt(p.last_verified_at) : 'Not yet verified' },
       { label:'Pets allowed',   value: p.pets_allowed ? 'Yes' : 'No' },
       { label:'Parking',        value: p.parking || 'No' },
       { label:'Laundry',        value: p.laundry_type || '—' },
@@ -744,6 +747,37 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = ico('dnload') + ' Import source photos';
+      }
+    });
+
+    // Mark as Verified — stamps last_verified_at = NOW() via property_mark_verified RPC
+    document.getElementById('pd-btn-verify')?.addEventListener('click', async () => {
+      const btn = document.getElementById('pd-btn-verify');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.innerHTML = ico('spin') + ' Verifying…';
+      try {
+        const { data, error } = await CP.sb().rpc('property_mark_verified', { p_property_id: propId });
+        if (error) throw error;
+        const res = typeof data === 'string' ? JSON.parse(data) : data;
+        if (res?.ok) {
+          _prop.last_verified_at = res.last_verified_at;
+          // Update the displayed field in place
+          const cells = document.querySelectorAll('.pd-field');
+          cells.forEach(cell => {
+            if (cell.querySelector('.pd-field-label')?.textContent === 'Last verified') {
+              cell.querySelector('.pd-field-value').textContent = fmt(res.last_verified_at);
+            }
+          });
+          S.toast('Listing marked as verified ✓', 'success');
+        } else {
+          S.toast('Verification failed: ' + (res?.error || 'unknown error'), 'error');
+        }
+      } catch(e) {
+        S.toast('Verification failed: ' + (e.message || 'unknown error'), 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = ico('check') + ' Mark as verified';
       }
     });
 
