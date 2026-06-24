@@ -27,13 +27,16 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const IMPORT_SECRET = Deno.env.get('SHORTCUT_IMPORT_SECRET') ?? '';
 
-  // Server-side bypass: service role key skips user auth.
-  const authHeader  = req.headers.get('authorization') ?? '';
-  const callerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+  // Server-side bypass: service role key OR shared import secret skips user auth.
+  const authHeader    = req.headers.get('authorization') ?? '';
+  const callerToken   = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const importSecret  = req.headers.get('x-import-secret') ?? '';
   const isServiceRole = callerToken === SERVICE_KEY;
+  const isImportSecret = IMPORT_SECRET.length > 0 && importSecret === IMPORT_SECRET;
 
-  if (!isServiceRole) {
+  if (!isServiceRole && !isImportSecret) {
     const auth = await requireAuth(req);
     if (!auth.ok) return auth.response;
 
