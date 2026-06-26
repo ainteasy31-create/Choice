@@ -8494,4 +8494,76 @@ html[data-theme="dark"] body[data-portal="public"]:not([data-page="home"]):not([
   @media (max-width: 767px) {
     .theme-toggle.mv2-theme-toggle { display: none; }
   }
-  
+}
+
+/* ══ Property List View — one row per property (listings.html) ══════════════
+   Applied when #propertyGrid has the .property-list-view class.
+   Overrides the multi-column grid + vertical card layout with a full-width
+   horizontal row: image panel fixed on the left, content fills the right.
+   Falls back to the standard vertical card layout on narrow screens.
+════════════════════════════════════════════════════════════════════════════ */
+body[data-portal="public"] .property-list-view {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+/* Override responsive multi-column rules for the list view */
+@media (min-width: 540px) {
+  body[data-portal="public"] .property-list-view { gap: 14px; }
+}
+@media (min-width: 900px) {
+  body[data-portal="public"] .property-list-view { grid-template-columns: 1fr; gap: 14px; }
+}
+/* Featured card no longer spans 2 columns — there's only 1 */
+@media (min-width: 900px) {
+  body[data-portal="public"] .property-list-view > .property-card[data-featured="1"] { grid-column: span 1; }
+}
+
+/* ── Row card: flex-row so image sits left, body fills right ── */
+body[data-portal="public"] .property-list-view > .property-card {
+  flex-direction: row;
+  align-items: stretch;
+}
+body[data-portal="public"] .property-list-view > .property-card:hover {
+  transform: translateY(-2px);
+}
+
+/* ── Image panel: fixed width left side ── */
+body[data-portal="public"] .property-list-view > .property-card .property-card-img {
+  width: 300px;
+  flex-shrink: 0;
+  aspect-ratio: unset;
+  height: auto;
+  min-height: 210px;
+  border-radius: var(--m-r-2xl) 0 0 var(--m-r-2xl);
+  align-self: stretch;
+}
+
+/* ── Body: fills remaining width, more breathing room ── */
+body[data-portal="public"] .property-list-view > .property-card .property-card-body {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 22px 18px;
+  justify-content: center;
+}
+body[data-portal="public"] .property-list-view > .property-card .property-card-title {
+  font-size: 16px;
+  -webkit-line-clamp: 2;
+}
+body[data-portal="public"] .property-list-view > .property-card .property-card-footer {
+  margin-top: auto;
+  padding-top: 12px;
+}
+body[data-portal="public"] .property-list-view > .property-card .property-card-price {
+  font-size: 20px;
+}
+
+/* ── Mobile: stack back to vertical card ── */
+@media (max-width: 599px) {
+  body[data-portal="public"] .property-list-view > .property-card { flex-direction: column; }
+  body[data-portal="public"] .property-list-view > .property-card .property-card-img {
+    width: 100%;
+    min-height: unset;
+    aspect-ratio: 3 / 2;
+    border-radius: var(--m-r-2xl) var(--m-r-2xl) 0 0;
+  }
+}

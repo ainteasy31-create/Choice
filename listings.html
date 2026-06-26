@@ -52,9 +52,13 @@
     #site-nav{min-height:64px;display:block}
     .listings-page-header{background:#fff;border-bottom:1px solid #e4e8ef;padding:28px 0 20px;margin-top:64px}
     .filter-bar{background:#fff;border-bottom:1px solid #e4e8ef}
-    .property-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-    .property-card{overflow:hidden;background:#fff;border-radius:18px}
-    .property-card-img{position:relative;aspect-ratio:3/2;width:100%;overflow:hidden;background:linear-gradient(145deg,#c8d8e8 0%,#b8cad8 50%,#a8bac8 100%)}
+    .property-grid{display:grid;grid-template-columns:1fr;gap:14px}
+    .property-card{display:flex;flex-direction:row;overflow:hidden;background:#fff;border-radius:18px}
+    .property-card-img{position:relative;width:280px;flex-shrink:0;height:210px;overflow:hidden;background:linear-gradient(145deg,#c8d8e8 0%,#b8cad8 50%,#a8bac8 100%);border-radius:18px 0 0 18px}
+    @media(max-width:599px){
+      .property-card{flex-direction:column}
+      .property-card-img{width:100%;height:auto;aspect-ratio:3/2;border-radius:18px 18px 0 0}
+    }
   </style>
 <script defer src="/config.js?v=__BUILD_VERSION__"></script>
 <script defer src="/js/supabase.min.js"></script>
@@ -269,7 +273,7 @@
 
     <!-- Grid View -->
     <div id="listPanel">
-      <div class="property-grid" id="propertyGrid">
+      <div class="property-grid property-list-view" id="propertyGrid">
         <!-- Skeleton loaders -->
         <div class="property-card property-card-skeleton">
           <div class="property-card-img skeleton-img skeleton"></div>

@@ -923,7 +923,9 @@ function renderPagination() {
 /* ─── Build card ─── */
 // Delegates to the unified card builder in /js/card-builder.js
 function buildCard(p) {
-  return buildPropertyCard(p);
+  return buildPropertyCard(p, {
+    imgSizes: '(max-width: 599px) calc(100vw - 32px), 300px',
+  });
 }
 
 /* ─── Animate Cards ─── */
