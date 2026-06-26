@@ -55,5 +55,10 @@
 /SETUP.md                   /404.html                                    404
 /SUPABASE_CHANGES.md        /404.html                                    404
 
+# Dynamic location pages — must be before the catch-all
+/listings                   /listings/index.html                         200
+/listings/                  /listings/index.html                         200
+/listings/*/*               /listings/location.html                      200
+
 # Catch-all 404
 /*                          /404.html                                    404

@@ -148,6 +148,29 @@
     }
   }
 
+  // ── New location notifications ─────────────────────────────────────────────
+  // Calls get_location_notifications() RPC; surfaces action card when any
+  // undismissed city+state combos are waiting for review.
+  async function loadLocationNotifications(queue){
+    try {
+      const { data, error } = await CP.sb().rpc('get_location_notifications');
+      if(error || !data) return;
+      const rows = Array.isArray(data) ? data : [];
+      if(rows.length > 0){
+        queue.push(actionCard({
+          icon:  'i-listings',
+          tone:  'info',
+          count: rows.length,
+          label: rows.length === 1 ? 'New location detected — review location page' : 'New locations detected — review location pages',
+          cta:   'Review',
+          href:  'location-notifications.html',
+        }));
+      }
+    } catch(e) {
+      // Non-fatal — don't break dashboard if RPC not deployed yet
+    }
+  }
+
   async function load(){
     const stamp = document.getElementById('greeting-stamp');
     const okAuth = await S.requireAdmin();
@@ -173,8 +196,11 @@
     if((c.movein_pending||0) > 0) queue.push(actionCard({ icon:'i-door',   tone:'info',    count:c.movein_pending, label:'Move-ins to confirm',                   cta:'Confirm',     href:'move-ins.html' }));
     if(failedEmails > 0) queue.push(actionCard({ icon:'i-mail', tone:'urgent', count:failedEmails, label:'Failed emails (last 48h)', cta:'Investigate', href:'email-logs.html?status=failed' }));
 
-    // Load pipeline stats in parallel; it appends its own action card to queue.
+    // Load pipeline stats; it appends its own action card to queue.
     await loadPipelineStats(queue);
+
+    // Load new location notifications; appends action card if any pending.
+    await loadLocationNotifications(queue);
 
     document.getElementById('action-queue').innerHTML = queue.length
       ? queue.join('')

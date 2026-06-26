@@ -343,6 +343,10 @@ const Properties = {
       q = q.lte('monthly_rent', parseInt(filters.max_rent));
     }
 
+    // Location filters — used by the dynamic city/state location pages
+    if (filters.city)  q = q.ilike('city',  filters.city);
+    if (filters.state) q = q.eq('state', filters.state);
+
     // Laundry type filter
     if (filters.laundry_type) q = q.eq('laundry_type', filters.laundry_type);
 
@@ -1226,8 +1230,29 @@ window.CP_esc = esc;
 //   2. Merge cp-api.js's UI methods (lqipUrl, statusBadge, paymentBadge,
 //      cpConfirm, fmt, …) into the existing CP.UI object so the public
 //      helpers (esc, propertyUrl, …) stay alive.
+// ── Locations namespace ───────────────────────────────────────────────────────
+// Wraps the get_locations, get_location_notifications, and
+// dismiss_location_notification RPCs for the hub page and admin dashboard.
+const Locations = {
+  async getAll() {
+    const { data, error } = await sb().rpc('get_locations');
+    return _ok(data || [], error);
+  },
+  async getNotifications() {
+    const { data, error } = await sb().rpc('get_location_notifications');
+    return _ok(data || [], error);
+  },
+  async dismiss(city, state) {
+    const { data, error } = await sb().rpc('dismiss_location_notification', {
+      p_city: city, p_state: state,
+    });
+    return _ok(data, error);
+  },
+};
+
 window.CP = Object.assign(window.CP || {}, {
   Applications, sb, Auth, Properties, SavedProperties, Inquiries, Landlords, EmailLogs,
+  Locations,
   buildApplyURL, incrementCounter,
   getSession, getLandlordProfile, requireAuth,
   signIn, signUp, signOut, resetPassword, updateNav,

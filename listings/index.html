@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <script>(function(){try{var t=localStorage.getItem('cp-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="/manifest.json">
+  <title>Rental Locations — Choice Properties</title>
+  <meta name="description" content="Browse rental listings by city and state. Find verified homes in Houston, Atlanta, Dallas, and more.">
+  <link rel="canonical" href="https://choice-properties-site.pages.dev/listings/">
+  <meta property="og:title" content="Rental Locations — Choice Properties">
+  <meta property="og:description" content="Browse verified rental listings by city. Filter by price, bedrooms, and more.">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,500&display=swap">
+  <link rel="stylesheet" href="/assets/fontawesome.css">
+  <link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
+  <link rel="stylesheet" href="/css/cp-marketing.css?v=__BUILD_VERSION__">
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    html{-webkit-text-size-adjust:100%}
+    body[data-portal="public"]{margin:0;font-family:"Inter",-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f7f9fc;color:#1f2937;line-height:1.6;font-size:15.5px}
+    #site-nav{min-height:64px;display:block}
+
+    /* ── Header ── */
+    .hub-header{background:#fff;border-bottom:1px solid #e4e8ef;padding:36px 0 28px;margin-top:64px}
+    .hub-header__eyebrow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#006aff;margin:0 0 8px}
+    .hub-header__title{font-size:clamp(1.8rem,4.5vw,2.6rem);font-weight:800;margin:0 0 10px;color:#111827;line-height:1.15}
+    .hub-header__title em{font-family:'Fraunces',Georgia,serif;font-style:italic;color:#006aff}
+    .hub-header__sub{font-size:15.5px;color:#4b5563;margin:0 0 24px;max-width:600px}
+    .hub-all-link{display:inline-flex;align-items:center;gap:8px;background:#f0f6ff;border:1px solid #c7dcff;border-radius:10px;padding:9px 18px;font-size:14px;font-weight:600;color:#1d4ed8;text-decoration:none}
+    .hub-all-link:hover{background:#e0edff}
+
+    /* ── Search ── */
+    .hub-search-wrap{max-width:480px;position:relative;margin-bottom:0}
+    .hub-search-input{width:100%;border:1.5px solid #d1d5db;border-radius:10px;padding:10px 16px 10px 40px;font-size:14.5px;color:#111827;outline:none;background:#fff}
+    .hub-search-input:focus{border-color:#006aff;box-shadow:0 0 0 3px rgba(0,106,255,.1)}
+    .hub-search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:14px;pointer-events:none}
+
+    /* ── Grid ── */
+    .hub-wrap{max-width:1280px;margin:0 auto;padding:32px 20px 60px}
+    .hub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+
+    /* ── Location card ── */
+    .loc-card{background:#fff;border-radius:16px;border:1px solid #e4e8ef;padding:22px 20px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:8px;transition:box-shadow 160ms ease,border-color 160ms ease,transform 160ms ease;cursor:pointer}
+    .loc-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.08);border-color:#c7dcff;transform:translateY(-2px)}
+    .loc-card__city{font-size:1.15rem;font-weight:700;color:#111827}
+    .loc-card__state{font-size:13px;font-weight:500;color:#6b7280}
+    .loc-card__count{display:inline-flex;align-items:center;gap:5px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:3px 10px;font-size:12.5px;font-weight:600;color:#0369a1;align-self:flex-start}
+    .loc-card__range{font-size:12.5px;color:#9ca3af;margin-top:2px}
+    .loc-card__arrow{margin-top:auto;padding-top:10px;font-size:12px;font-weight:600;color:#006aff;display:flex;align-items:center;gap:4px}
+
+    /* ── State group header ── */
+    .hub-state-group{margin-bottom:36px}
+    .hub-state-label{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid #e4e8ef}
+
+    /* ── Skeleton ── */
+    .hub-skeleton{background:#fff;border-radius:16px;border:1px solid #e4e8ef;padding:22px 20px;display:flex;flex-direction:column;gap:10px}
+    .sk-line{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:400% 100%;border-radius:6px;animation:skPulse 1.4s ease-in-out infinite}
+    @keyframes skPulse{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+    /* ── Empty ── */
+    .hub-empty{text-align:center;padding:80px 24px;color:#6b7280}
+    .hub-empty__icon{font-size:2.5rem;display:block;margin-bottom:16px}
+    .hub-empty__title{font-size:1.3rem;font-weight:700;color:#374151;margin:0 0 10px}
+    .hub-empty__sub{font-size:15px;margin:0 0 24px}
+    .hub-empty__cta{display:inline-block;background:#006aff;color:#fff;border-radius:10px;padding:12px 28px;font-weight:700;font-size:15px;text-decoration:none}
+    .hub-empty__cta:hover{background:#0058d6}
+
+    /* ── Totals bar ── */
+    .hub-totals{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+    .hub-total-chip{background:#fff;border:1px solid #e4e8ef;border-radius:10px;padding:7px 14px;font-size:13px;color:#374151}
+    .hub-total-chip strong{color:#111827;font-weight:700}
+  </style>
+  <script defer src="/config.js?v=__BUILD_VERSION__"></script>
+  <script defer src="/js/supabase.min.js"></script>
+  <script defer src="/js/cp-ui.js?v=__BUILD_VERSION__"></script>
+  <script type="module" src="/js/cp-api.js?v=__BUILD_VERSION__"></script>
+  <script defer src="/js/components.js?v=__BUILD_VERSION__"></script>
+</head>
+<body data-portal="public" data-page="locations-hub">
+
+<div id="site-nav"></div>
+
+<div class="hub-header">
+  <div class="container">
+    <p class="hub-header__eyebrow">Browse by location</p>
+    <h1 class="hub-header__title">Find rentals in your <em>city</em></h1>
+    <p class="hub-header__sub">Every city below has verified listings from real landlords — updated automatically as new properties are added.</p>
+    <a class="hub-all-link" href="/listings.html">
+      <i class="fas fa-th" aria-hidden="true"></i> Browse all listings
+    </a>
+  </div>
+</div>
+
+<div class="hub-wrap">
+  <div class="hub-totals" id="hubTotals" style="display:none">
+    <div class="hub-total-chip"><strong id="totalCities">—</strong> cities</div>
+    <div class="hub-total-chip"><strong id="totalListings">—</strong> active listings</div>
+  </div>
+
+  <div class="hub-search-wrap" style="margin-bottom:24px">
+    <i class="fas fa-search hub-search-icon" aria-hidden="true"></i>
+    <input type="text" class="hub-search-input" id="citySearch"
+      placeholder="Search cities…" autocomplete="off" aria-label="Search cities">
+  </div>
+
+  <div id="hubGrid" class="hub-grid">
+    <!-- Skeletons while loading -->
+    ${Array.from({length:8},()=>`<div class="hub-skeleton"><div class="sk-line" style="height:20px;width:55%"></div><div class="sk-line" style="height:14px;width:35%"></div><div class="sk-line" style="height:24px;width:45%;border-radius:12px"></div></div>`).join('')}
+  </div>
+</div>
+
+<script type="module" src="/js/locations-hub.js?v=__BUILD_VERSION__"></script>
+</body>
+</html>

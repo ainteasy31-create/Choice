@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <script>(function(){try{var t=localStorage.getItem('cp-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>New Locations — Choice Properties Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/assets/fontawesome.css">
+  <link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
+  <style>
+    .loc-notif-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:20px}
+    .loc-notif-card{background:#fff;border-radius:14px;border:1.5px solid #e4e8ef;padding:20px;display:flex;flex-direction:column;gap:12px}
+    .loc-notif-card.new{border-color:#c7dcff;background:#f8fbff}
+    .loc-notif-card__city{font-size:1.2rem;font-weight:700;color:#111827}
+    .loc-notif-card__state{font-size:13px;color:#6b7280;font-weight:500}
+    .loc-notif-card__badge{display:inline-flex;align-items:center;gap:5px;background:#dbeafe;border:1px solid #93c5fd;border-radius:10px;padding:3px 10px;font-size:12px;font-weight:600;color:#1e40af;align-self:flex-start}
+    .loc-notif-card__time{font-size:12px;color:#9ca3af}
+    .loc-notif-card__actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn-view{background:#006aff;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+    .btn-view:hover{background:#0058d6}
+    .btn-dismiss{background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+    .btn-dismiss:hover{border-color:#9ca3af;color:#374151}
+    .btn-dismiss:disabled{opacity:.5;cursor:default}
+    .loc-empty{text-align:center;padding:60px 24px;color:#6b7280}
+    .loc-empty__icon{font-size:2.5rem;margin-bottom:12px;display:block}
+    .loc-empty__title{font-size:1.1rem;font-weight:700;color:#374151;margin:0 0 8px}
+    .all-clear{display:flex;align-items:center;gap:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;color:#15803d;font-weight:600;font-size:14px}
+    .section-hint{font-size:13.5px;color:#6b7280;margin-bottom:4px}
+  </style>
+  <script defer src="/config.js?v=__BUILD_VERSION__"></script>
+  <script defer src="/js/supabase.min.js"></script>
+  <script defer src="/js/cp-ui.js?v=__BUILD_VERSION__"></script>
+  <script type="module" src="/js/cp-api.js?v=__BUILD_VERSION__"></script>
+  <script defer src="/js/cp-chrome.js?v=__BUILD_VERSION__"></script>
+  <script defer src="/js/cp-shell.js?v=__BUILD_VERSION__"></script>
+</head>
+<body data-portal="admin" data-page-title="New Locations" data-page-sub="Auto-detected">
+<div class="app">
+  <main class="app-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">New Locations <span class="badge badge-info" id="notifCount" style="display:none"></span></h1>
+        <p class="page-sub">Automatically detected when a property is added with a city+state combo not seen before. Review and dismiss each one after checking the location page.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a href="/listings/" target="_blank" class="btn btn-ghost btn-sm">
+          <i class="fas fa-external-link-alt"></i> Location Hub
+        </a>
+        <button class="btn btn-primary btn-sm" id="dismissAllBtn" style="display:none">
+          <i class="fas fa-check-double"></i> Dismiss All
+        </button>
+      </div>
+    </div>
+
+    <div id="allClearBanner" style="display:none" class="all-clear">
+      <i class="fas fa-check-circle" style="font-size:1.2rem"></i>
+      No new locations to review — all caught up!
+    </div>
+
+    <p class="section-hint" id="sectionHint" style="display:none">These cities appeared for the first time. The location page is live automatically — dismiss once you've reviewed it.</p>
+
+    <div class="loc-notif-grid" id="notifGrid"></div>
+  </main>
+</div>
+<script defer src="/js/admin/location-notifications.js?v=__BUILD_VERSION__"></script>
+</body>
+</html>
