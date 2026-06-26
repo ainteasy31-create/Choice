@@ -319,6 +319,36 @@ async function init() {
     loadListings(loc);
   });
 
+  // ── Copy shareable link button ────────────────────────────────────────────
+  const copyBtn = document.getElementById('copyLinkBtn');
+  if (copyBtn) {
+    // Build the clean base URL (no query params — just the slug path)
+    const cleanURL = window.location.origin + window.location.pathname;
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(cleanURL);
+      } catch {
+        // Fallback for non-secure contexts
+        const ta = document.createElement('textarea');
+        ta.value = cleanURL;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      // Show "Copied!" state briefly
+      copyBtn.classList.add('copied');
+      copyBtn.querySelector('.copy-icon').style.display = 'none';
+      copyBtn.querySelector('.copied-icon').style.display = '';
+      setTimeout(() => {
+        copyBtn.classList.remove('copied');
+        copyBtn.querySelector('.copy-icon').style.display = '';
+        copyBtn.querySelector('.copied-icon').style.display = 'none';
+      }, 2000);
+    });
+  }
+
   // Load data
   try {
     await waitForCP();

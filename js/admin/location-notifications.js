@@ -53,8 +53,11 @@
       ${n.property_id ? `<div style="font-size:12px;color:#9ca3af">First property: <a href="/admin/property-detail.html?id=${encodeURIComponent(n.property_id)}" style="color:#006aff;text-decoration:none;font-weight:500">View listing</a></div>` : ''}
       <div class="loc-notif-card__actions">
         <a class="btn-view" href="${href}" target="_blank" rel="noopener">
-          <i class="fas fa-external-link-alt"></i> View location page
+          <i class="fas fa-external-link-alt"></i> View
         </a>
+        <button class="btn-copy" data-url="https://choice-properties-site.pages.dev${href}" style="background:#f0f6ff;color:#1d4ed8;border:1.5px solid #c7dcff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+          <i class="fas fa-link"></i> <span class="copy-label">Copy link</span>
+        </button>
         <button class="btn-dismiss" data-city="${S.esc(n.city)}" data-state="${S.esc(n.state)}">
           Dismiss
         </button>
@@ -106,8 +109,36 @@
     S.toast('All location notifications dismissed', 'success');
   }
 
+  async function copyToClipboard(url, btn) {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    const label = btn.querySelector('.copy-label');
+    if (label) label.textContent = 'Copied!';
+    btn.style.color = '#15803d';
+    btn.style.borderColor = '#bbf7d0';
+    btn.style.background = '#f0fdf4';
+    setTimeout(() => {
+      if (label) label.textContent = 'Copy link';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+      btn.style.background = '';
+    }, 2000);
+  }
+
   function wireEvents() {
     document.getElementById('notifGrid').addEventListener('click', e => {
+      const copyBtn = e.target.closest('.btn-copy');
+      if (copyBtn) { copyToClipboard(copyBtn.dataset.url, copyBtn); return; }
+
       const btn = e.target.closest('.btn-dismiss');
       if (!btn) return;
       btn.disabled = true;

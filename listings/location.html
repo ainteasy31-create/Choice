@@ -77,6 +77,13 @@
     .loc-hub-link{display:flex;align-items:center;gap:6px;max-width:1280px;margin:0 auto;padding:16px 20px 0;font-size:13px;color:#6b7280}
     .loc-hub-link a{color:#006aff;font-weight:600;text-decoration:none}
     .loc-hub-link a:hover{text-decoration:underline}
+
+    /* ── Copy link button ── */
+    .loc-copy-btn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #d1d5db;border-radius:10px;padding:7px 16px;font-size:13px;font-weight:600;color:#374151;cursor:pointer;margin-top:12px;transition:border-color 160ms,color 160ms,background 160ms}
+    .loc-copy-btn:hover{border-color:#006aff;color:#006aff}
+    .loc-copy-btn.copied{border-color:#10b981;color:#10b981;background:#f0fdf4}
+    .loc-copy-btn .copy-icon{transition:opacity 150ms}
+    .loc-copy-btn .copied-icon{display:none}
   </style>
   <script defer src="/config.js?v=__BUILD_VERSION__"></script>
   <script defer src="/js/supabase.min.js"></script>
@@ -99,10 +106,16 @@
     <p class="loc-header__eyebrow" id="header-eyebrow">Rentals in</p>
     <h1 class="loc-header__title" id="header-title">Loading…</h1>
     <p class="loc-header__sub" id="header-sub"></p>
-    <span class="loc-header__count" id="header-count" style="display:none">
-      <i class="fas fa-home" aria-hidden="true"></i>
-      <span id="header-count-num">0</span> active listings
-    </span>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="loc-header__count" id="header-count" style="display:none">
+        <i class="fas fa-home" aria-hidden="true"></i>
+        <span id="header-count-num">0</span> active listings
+      </span>
+      <button class="loc-copy-btn" id="copyLinkBtn" title="Copy shareable link">
+        <span class="copy-icon"><i class="fas fa-link" aria-hidden="true"></i> Copy link</span>
+        <span class="copied-icon"><i class="fas fa-check" aria-hidden="true"></i> Copied!</span>
+      </button>
+    </div>
   </div>
 </div>
 
