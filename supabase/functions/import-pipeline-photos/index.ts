@@ -175,13 +175,15 @@ Deno.serve(async (req) => {
       }
 
       const { error: rpcErr } = await adminClient.rpc('add_property_photo', {
-        p_property_id: property_id,
-        p_url:         ikUrl,
-        p_file_id:     fileId,
-        p_alt_text:    null,
-        p_caption:     null,
-        p_width:       ikData.width  ?? null,
-        p_height:      ikData.height ?? null,
+        p_property_id:   property_id,
+        p_url:           ikUrl,
+        p_file_id:       fileId,
+        p_alt_text:      null,
+        p_caption:       null,
+        p_width:         ikData.width  ?? null,
+        p_height:        ikData.height ?? null,
+        p_display_order: index,
+        p_is_hero:       index === 0,
       });
 
       if (rpcErr) {
