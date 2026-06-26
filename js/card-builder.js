@@ -21,6 +21,33 @@
     return esc(s).replace(/'/g, '&#39;');
   }
 
+  // ── Slug helpers for city-page links ────────────────────────
+  function toSlug(s) {
+    return String(s || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  }
+
+  var _STATE_SLUG = {
+    AL:'alabama',AK:'alaska',AZ:'arizona',AR:'arkansas',CA:'california',
+    CO:'colorado',CT:'connecticut',DE:'delaware',FL:'florida',GA:'georgia',
+    HI:'hawaii',ID:'idaho',IL:'illinois',IN:'indiana',IA:'iowa',
+    KS:'kansas',KY:'kentucky',LA:'louisiana',ME:'maine',MD:'maryland',
+    MA:'massachusetts',MI:'michigan',MN:'minnesota',MS:'mississippi',MO:'missouri',
+    MT:'montana',NE:'nebraska',NV:'nevada',NH:'new-hampshire',NJ:'new-jersey',
+    NM:'new-mexico',NY:'new-york',NC:'north-carolina',ND:'north-dakota',OH:'ohio',
+    OK:'oklahoma',OR:'oregon',PA:'pennsylvania',RI:'rhode-island',SC:'south-carolina',
+    SD:'south-dakota',TN:'tennessee',TX:'texas',UT:'utah',VT:'vermont',
+    VA:'virginia',WA:'washington',WV:'west-virginia',WI:'wisconsin',WY:'wyoming',
+    DC:'district-of-columbia'
+  };
+
+  function cityPageUrl(city, state) {
+    if (!city || !state) return null;
+    var stateSlug = _STATE_SLUG[String(state).toUpperCase()] || toSlug(state);
+    var citySlug  = toSlug(city);
+    if (!stateSlug || !citySlug) return null;
+    return '/listings/' + stateSlug + '/' + citySlug;
+  }
+
   // ── Rent formatter ──────────────────────────────────────────
   // P2-D: Wrap $ in branded span so it renders in brand blue.
   function fmtRent(v) {
@@ -200,6 +227,11 @@
           // 4. Footer — price pinned to bottom (no divider)
           '<div class="property-card-footer">' +
             '<div class="property-card-price">' + rentHtml + rentUnit + '</div>' +
+            (cityPageUrl(p.city, p.state)
+              ? '<button class="prop-city-badge" type="button" data-city-url="' + escAttr(cityPageUrl(p.city, p.state)) + '" title="Browse all ' + esc(p.city) + ' listings" aria-label="View all listings in ' + esc(p.city) + ', ' + esc(p.state) + '">' +
+                  '<i class="fas fa-location-dot"></i> ' + esc(p.city) + ', ' + esc(p.state) +
+                '</button>'
+              : '') +
           '</div>' +
         '</a>' +
 

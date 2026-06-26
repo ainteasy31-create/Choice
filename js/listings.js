@@ -963,6 +963,14 @@ function setupGridDelegation() {
   if (!grid || grid._delegated) return;
   grid._delegated = true;
 
+  // City badge — navigate to the city-specific listing page
+  grid.addEventListener('click', e => {
+    const btn = e.target.closest('.prop-city-badge');
+    if (!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    window.location.href = btn.dataset.cityUrl;
+  });
+
   // Save (heart)
   grid.addEventListener('click', e => {
     const btn = e.target.closest('.property-card-save');

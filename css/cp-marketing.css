@@ -1178,8 +1178,20 @@ body[data-portal="public"] .property-card-listed-date {
 body[data-portal="public"] .property-card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
 body[data-portal="public"] .property-card-footer {
   margin-top: auto; padding-top: 8px;
-  display: flex; align-items: center;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
 }
+/* City-page badge — appears in footer, links to /listings/state/city */
+body[data-portal="public"] .prop-city-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: transparent; border: 1px solid #e5e7eb; border-radius: 100px;
+  padding: 3px 10px; font-size: 11px; font-weight: 600; color: #6b7280;
+  cursor: pointer; white-space: nowrap; line-height: 1.4;
+  transition: border-color 140ms, color 140ms, background 140ms;
+}
+body[data-portal="public"] .prop-city-badge:hover {
+  border-color: #006aff; color: #006aff; background: rgba(0,106,255,0.05);
+}
+body[data-portal="public"] .prop-city-badge i { font-size: 10px; }
 body[data-portal="public"] .property-card-price {
   font-family: var(--m-font-base); font-size: 18px; font-weight: 800;
   color: var(--m-ink); line-height: 1; letter-spacing: -0.01em;
