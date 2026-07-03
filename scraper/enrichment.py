@@ -45,18 +45,29 @@ _BOILERPLATE_PATTERNS = [
     r"search for Property ID\s+\d+[^.]*\.",
     r"FOLLOW these STEPS to END YOUR SEARCH[\s\S]*?(?=\n\n|\Z)",
     r"Showing\s+ID[:\s]+\d+[^.]*\.",
-    # Tour / contact CTAs (Choice Properties is "apply first, tour later")
-    r"Schedule (?:a|your) (?:free )?(?:showing|tour|viewing|walk-through)[^.!?]*[.!?]",
-    r"Tour (?:today|now|this|the|available)[^.!?]*[.!?]",
-    r"Contact\s+(?:us|the agent|the landlord|your|our)[^.]*for (?:more|a) (?:info|showing|tour)[^.]*\.",
+    # ── Tour / showing / contact CTAs ──────────────────────────────────────────
+    # Choice Properties policy: apply first, tour later. Strip ALL tour/contact
+    # CTAs from scraped descriptions and replace with an apply-now CTA.
+    r"Schedule (?:a|your|an) (?:free |private |self-guided )?(?:showing|tour|viewing|walk-?through|appointment|visit)[^.!?]*[.!?]",
+    r"Tour (?:today|now|this|the|available|it)[^.!?]*[.!?]",
+    r"(?:Book|Request|Arrange) (?:a|your|an) (?:private |self-guided |free )?(?:tour|showing|viewing|appointment|visit)[^.!?]*[.!?]",
+    r"(?:In-person|Virtual|Self-guided) (?:tours?|showings?|viewings?) (?:available|scheduled|offered|by appointment)[^.!?]*[.!?]",
+    r"(?:Available|Ready|Open) for (?:immediate |private )?(?:viewing|showing|tours?)[^.!?]*[.!?]",
+    r"Contact\s+(?:us|the agent|the landlord|your|our|the owner|property management)[^.]*for (?:more|a) (?:info|showing|tour|viewing|details?)[^.!?]*[.!?]",
+    r"Contact\s+(?:us|me|the (?:owner|landlord|agent|manager|management))[^.]*(?:to (?:schedule|arrange|view|see)|for (?:a|more))[^.!?]*[.!?]",
+    r"(?:To|For) (?:schedule|arrange|book|request) (?:a|an|your)[^.!?]*(?:viewing|showing|tour|appointment|visit)[^.!?]*[.!?]",
+    r"(?:Interested|Inquire|For (?:more )?(?:info|details?|information))[^.]*(?:contact|call|email|text|reach out|message)[^.!?]*[.!?]",
+    r"For more (?:information|details?|info)[^.]*(?:contact|call|email|visit|reach)[^.!?]*[.!?]",
     r"For more information.*?call[^.]*\.",
-    r"Call (?:today|now|us|for)[^.!?]*[.!?]",
+    r"Call (?:today|now|us|for|to schedule)[^.!?]*[.!?]",
+    r"(?:Email|Text|Message|Reach out to?) (?:us|me|the (?:owner|landlord|agent))[^.!?]*[.!?]",
     r"Visit our website for more properties[^.]*\.",
     r"Don['']t miss (?:this|out)[^!.]*[!.]",
     r"This (?:won['']t|will not) last[^!.]*[!.]",
     r"Apply Now[^\n]*",
     r"Apply (?:today|now|online)[^!.]*[!.]",
     r"Move-in (?:today|now|immediately) -- [^.]*\.",
+    r"(?:contact|call|email) (?:for|to) (?:schedule|set up|arrange) (?:a |an )?(?:tour|showing|viewing)[^.!?]*[.!?]",
     # Screening language (platform handles this transparently)
     r"[Cc]redit score\s+(?:of\s+)?\d+\+?\s*(?:or (?:above|higher|more))?[^.]*\.",
     r"[Mm]ust (?:earn|make|have income of)\s+[\d.]+x?\s*(?:the\s+)?rent[^.]*\.",
@@ -224,6 +235,163 @@ def watermark_reason(record):
         if brand in combined:
             return brand
     return None
+
+
+# =============================================================================
+# 3b. Branded photo filter — remove individual photos showing company branding
+# =============================================================================
+#
+# Two-tier strategy (no vision AI required):
+#   Tier 1 — URL pattern matching: many corporate/agent branded photos carry
+#             the company name or a recognisable path segment in their CDN URL.
+#   Tier 2 — Domain-level blocking: photos served from known real-estate-agent
+#             CDNs that never host raw property shots.
+#
+# If a photo passes both checks it is kept.  If ALL photos are removed this
+# way the record is NOT dropped — the pipeline still has the listing text and
+# can be published without photos, or a staff member can add photos manually.
+# Whole-listing removal for brand-pervasive listings is already handled by
+# is_watermarked() at step 1.
+
+_BRANDED_PHOTO_URL_PATTERNS = [
+    # ── Known corporate real-estate brand names in URLs ──────────────────────
+    r"firstkeyhomes?",
+    r"invitationhomes?",
+    r"progressresidential",
+    r"triconresidential",
+    r"mainstreet(?:renewal|homes?)",
+    r"amhresidential",
+    r"coldwellbanker",
+    r"century21",
+    r"kellerwilliams",
+    r"(?:re[_/-]?max|remax)",
+    r"berkshirehathaway",
+    r"compassrealty",
+    r"exprealty",
+    r"howardhanna",
+    r"weichert",
+    r"sothebysrealty",
+    # ── Agent / brokerage photo paths (headshots, team shots, logos) ─────────
+    r"/agent[_-](?:photo|image|headshot|portrait|pic)",
+    r"/broker[_-](?:photo|image|headshot)",
+    r"/headshot",
+    r"/team[_-]photo",
+    r"/staff[_-]photo",
+    r"/office[_-](?:exterior|photo|image|building)",
+    r"/company[_-](?:logo|photo|image|brand)",
+    r"/brand[_-](?:logo|photo|image)",
+    r"/agent_avatar",
+    r"/realtor[_-](?:photo|image|headshot)",
+    r"[?&]source=agent",
+    r"[?&]type=agent",
+    r"/logo\.",
+    r"/watermark",
+    # ── Domains that serve only agent / listing-service branding ─────────────
+    r"agent\.realtor\.com/",
+    r"headshots\.realtor\.com/",
+    r"photos\.cbkw\.com/",  # Coldwell Banker KW
+]
+
+_BRANDED_PHOTO_RE = [re.compile(p, re.IGNORECASE) for p in _BRANDED_PHOTO_URL_PATTERNS]
+
+
+def filter_branded_photos(photo_urls):
+    """
+    Given a list of photo URLs, remove any that appear to show company
+    branding, agent headshots, or office photos rather than the property.
+    URLs that match any _BRANDED_PHOTO_RE pattern are removed.
+    Returns the filtered list (may be empty — caller decides what to do).
+    """
+    if not photo_urls:
+        return photo_urls
+
+    filtered = []
+    for url in photo_urls:
+        if not url:
+            continue
+        branded = any(pat.search(url) for pat in _BRANDED_PHOTO_RE)
+        if not branded:
+            filtered.append(url)
+
+    return filtered
+
+
+def filter_record_photos(record):
+    """
+    Apply filter_branded_photos to the original_image_urls field of a record.
+    Modifies record in-place and returns it.
+    Logs how many photos were removed if any.
+    """
+    raw = record.get("original_image_urls")
+    if not raw:
+        return record
+
+    try:
+        urls = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(urls, list):
+            return record
+        filtered = filter_branded_photos(urls)
+        removed = len(urls) - len(filtered)
+        if removed:
+            logger.debug(
+                "filter_record_photos: removed %d branded photo(s) from %s",
+                removed,
+                (record.get("address") or record.get("source_listing_id") or "?"),
+            )
+        record["original_image_urls"] = json.dumps(filtered)
+    except Exception:
+        pass
+
+    return record
+
+
+# =============================================================================
+# 3c. Apply Now CTA — append a Choice Properties call-to-action to every
+#     description so every listing ends with an invitation to apply.
+# =============================================================================
+
+_APPLY_CTAS = [
+    "Ready to make this your new home? Submit your rental application today at Choice Properties.",
+    "Love what you see? Apply now through Choice Properties and take the next step toward your new home.",
+    "This home is ready for you. Submit your application now at Choice Properties.",
+    "Interested? Apply today through Choice Properties — applications are reviewed promptly.",
+    "Don't wait on a great home. Apply now at Choice Properties and secure this listing today.",
+    "Your next home is waiting. Submit your application at Choice Properties to get started.",
+    "Like what you see? Apply now — Choice Properties makes the rental process simple and straightforward.",
+]
+
+# Detect if a CTA-like phrase is already present so we do not double-add.
+_CTA_ALREADY_RE = re.compile(
+    r"apply\s+now|submit\s+(?:your\s+)?application|apply\s+today|apply\s+online"
+    r"|choice\s+properties.*apply",
+    re.IGNORECASE,
+)
+
+
+def append_apply_cta(description):
+    """
+    Append a Choice Properties 'apply now' call-to-action to the end of the
+    description, unless one is already present.
+
+    Uses a stable selection (based on description length) so re-enriching the
+    same record produces the same CTA — no randomness required.
+    """
+    if not description:
+        return description
+
+    # Already has a CTA — skip
+    if _CTA_ALREADY_RE.search(description):
+        return description
+
+    # Pick CTA deterministically (stable across re-runs of same description)
+    idx = len(description) % len(_APPLY_CTAS)
+    cta = _APPLY_CTAS[idx]
+
+    description = description.rstrip()
+    if description and description[-1] not in ".!?":
+        description += "."
+
+    return description + "\n\n" + cta
 
 
 # =============================================================================
@@ -839,13 +1007,15 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
     Run the full enrichment pipeline over a list of pipeline records.
 
     Steps (in order):
-      1. Watermark filter    -- drop competitor-branded listings
-      2. Description clean   -- strip boilerplate from every description
-      3. Corporate fee strip -- remove management company fee blocks
-      4. HVAC normalize      -- parse raw MLS heating/cooling blobs separately
-      5. Rule-based enrich   -- infer laundry, parking, pets, title, deposit, fee
-      6. Regex detail fetch  -- fetch page HTML for low-score records (optional)
-      7. Re-score            -- recalculate data_quality_score after enrichment
+      1. Watermark filter       -- drop competitor-branded listings (entire record)
+      2. Description clean      -- strip boilerplate, tour/contact CTAs
+      3. Corporate fee strip    -- remove management company fee blocks
+      3b. Photo brand filter    -- strip individual branded/agent photos from image list
+      4. HVAC normalize         -- parse raw MLS heating/cooling blobs separately
+      5. Rule-based enrich      -- infer laundry, parking, pets, title, deposit, fee
+      6. Regex detail fetch     -- fetch page HTML for low-score records (optional)
+      6b. Apply Now CTA         -- append Choice Properties apply-now CTA to description
+      7. Re-score               -- recalculate data_quality_score after enrichment
 
     Returns:
       (enriched_records, count_watermarked)
@@ -853,10 +1023,12 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
     import json as _json
 
     count_watermarked = 0
+    count_photos_filtered = 0
     clean_records = []
 
     for rec in records:
-        # Step 1: watermark filter
+        # Step 1: watermark filter — drop the entire listing if all branding
+        # signals indicate a competitor-managed property
         if is_watermarked(rec):
             count_watermarked += 1
             if verbose:
@@ -865,13 +1037,28 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
                 print("  [watermark] Dropped: " + addr.strip() + " (matched: " + brand + ")")
             continue
 
-        # Step 2: clean description
+        # Step 2: clean description — strip tour/contact CTAs and boilerplate
         if rec.get("description"):
             rec["description"] = clean_description(rec["description"])
 
         # Step 3: strip corporate fee blocks
         if rec.get("description"):
             rec["description"] = strip_corporate_fees(rec["description"])
+
+        # Step 3b: filter branded/agent photos from the image list.
+        # Unlike step 1 this does NOT drop the whole listing — it only
+        # removes individual photos that show company branding, agent
+        # headshots, or office shots.  The listing is kept even if all
+        # photos are removed (rare edge case handled in the pipeline UI).
+        before_raw = rec.get("original_image_urls") or "[]"
+        filter_record_photos(rec)
+        after_raw = rec.get("original_image_urls") or "[]"
+        try:
+            b_count = len(_json.loads(before_raw)) if isinstance(before_raw, str) else len(before_raw)
+            a_count = len(_json.loads(after_raw))  if isinstance(after_raw,  str) else len(after_raw)
+            count_photos_filtered += max(0, b_count - a_count)
+        except Exception:
+            pass
 
         # Step 4: normalize heating/cooling from raw MLS blobs
         normalize_hvac(rec)
@@ -887,14 +1074,22 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
                 if verbose:
                     logger.debug("regex_extract_missing error: %s", str(exc)[:80])
 
+        # Step 6b: append Choice Properties apply-now CTA so every description
+        # ends with an invitation to submit an application.
+        if rec.get("description"):
+            rec["description"] = append_apply_cta(rec["description"])
+
         clean_records.append(rec)
 
     # Step 7: re-score after enrichment
     if clean_records:
         _rescore(clean_records)
 
-    if verbose and count_watermarked:
-        print("  [enrichment] " + str(count_watermarked) + " watermarked listing(s) dropped")
+    if verbose:
+        if count_watermarked:
+            print("  [enrichment] " + str(count_watermarked) + " fully-branded listing(s) dropped")
+        if count_photos_filtered:
+            print("  [enrichment] " + str(count_photos_filtered) + " branded photo(s) removed from kept listings")
 
     return clean_records, count_watermarked
 
