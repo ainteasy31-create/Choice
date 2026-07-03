@@ -65,10 +65,14 @@ scraper/venv/bin/python scraper/scraper.py \
 These rules are enforced automatically by `enrichment.py`. They are documented
 here so any future code changes maintain the same standards.
 
-### 1. Photo — drop entire listing if all photos are watermarked
-If every photo in a listing is branded by a competitor (e.g. FirstKey Homes,
-Invitation Homes, Progress Residential, coldwell banker, keller williams, etc.)
-the **entire listing is dropped** and never enters the pipeline.
+### 1. Listing — drop entire listing if branded by a competitor
+If a listing's text metadata (agent name, broker name, description, showing
+instructions, or the raw MLS data blob) contains a known competitor brand
+(e.g. FirstKey Homes, Invitation Homes, Progress Residential, Coldwell Banker,
+Keller Williams, RE/MAX, etc.) the **entire listing is dropped** and never
+enters the pipeline. This is a text/metadata heuristic — not a per-photo
+analysis — so it catches corporate-managed properties reliably before any
+photos are fetched.
 → Enforced by `is_watermarked()` in `enrichment.py`.
 
 ### 2. Photo — remove branded individual photos, keep the rest

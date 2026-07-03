@@ -360,18 +360,27 @@ _APPLY_CTAS = [
     "Like what you see? Apply now — Choice Properties makes the rental process simple and straightforward.",
 ]
 
-# Detect if a CTA-like phrase is already present so we do not double-add.
+# Detect if a CTA-like phrase already appears at the TAIL of the description
+# (last ~300 chars) so we don't double-add while still appending when "apply"
+# language appears only in the body of the text (e.g. "you can apply here on
+# TurboTenant" that survived cleaning, or amenity text mentioning "applicable").
 _CTA_ALREADY_RE = re.compile(
     r"apply\s+now|submit\s+(?:your\s+)?application|apply\s+today|apply\s+online"
     r"|choice\s+properties.*apply",
     re.IGNORECASE,
 )
 
+_CTA_TAIL_CHARS = 300   # how many characters from the end to scan
+
 
 def append_apply_cta(description):
     """
     Append a Choice Properties 'apply now' call-to-action to the end of the
-    description, unless one is already present.
+    description, unless one is already present AT THE END.
+
+    Scans only the final _CTA_TAIL_CHARS characters so incidental 'apply'
+    language that appears earlier in the body (e.g. surviving portal copy or
+    amenity text) does not suppress CTA insertion.
 
     Uses a stable selection (based on description length) so re-enriching the
     same record produces the same CTA — no randomness required.
@@ -379,8 +388,9 @@ def append_apply_cta(description):
     if not description:
         return description
 
-    # Already has a CTA — skip
-    if _CTA_ALREADY_RE.search(description):
+    # Only skip if a CTA is already present in the TAIL of the description.
+    tail = description[-_CTA_TAIL_CHARS:]
+    if _CTA_ALREADY_RE.search(tail):
         return description
 
     # Pick CTA deterministically (stable across re-runs of same description)
