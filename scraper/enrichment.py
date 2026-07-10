@@ -4,13 +4,23 @@ Choice Properties -- Enrichment Pipeline (v2)
 =============================================
 Post-processing applied to every scraped record before DB insert:
 
-  1. clean_description      -- strip TurboTenant / agent boilerplate + screening language
+  1. clean_description                     -- strip TurboTenant / agent boilerplate + screening language
+  1b. strip_external_application_instructions -- remove references to applying via a third-party portal
+  1c. replace_owner_manager_references     -- remove property manager / owner / leasing-agent name references
+  1d. strip_third_party_branding           -- remove brokerage / MLS / other-platform branding
   2. strip_corporate_fees   -- remove management company fee blocks from descriptions
   3. is_watermarked         -- detect competitor-branded listings (drop before staging)
   4. normalize_hvac         -- parse raw MLS blobs into separate heating vs cooling fields
   5. rule_based_enrich      -- infer missing fields: laundry, parking, pets, title, deposit
   6. regex_extract_missing  -- fetch listing page and regex-extract missing fields
                                (Realtor/non-Zillow only; skips records scored >= 75)
+  6a. enforce_price_consistency -- rewrite any stale rent figure in the description to match
+                                   the final published monthly_rent
+
+These are permanent rules applied to every scraped listing. Temporary,
+batch-specific pricing/deposit adjustments (e.g. a one-off rent cap for a
+particular scrape run) belong in a standalone script, not here — see
+scraper/apply_batch_pricing.py.
 
 Usage (from scraper.py):
   from enrichment import apply_enrichment_pipeline
@@ -147,6 +157,135 @@ def strip_corporate_fees(text):
         text = pat.sub("", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+# =============================================================================
+# 1b. External application instructions — remove references to applying
+#     through any third-party portal or listing site.
+# =============================================================================
+
+_EXTERNAL_APPLICATION_PATTERNS = [
+    r"[Aa]pply (?:through|via|on|at)\s+(?:TurboTenant|Zillow|Apartments\.com|Apartment List|RentSpree|RentCafe|Cozy|AppFolio|Rently|ShowMojo)[^.!?]*[.!?]",
+    r"(?:TurboTenant|RentSpree|RentCafe|Cozy|AppFolio|Rently|ShowMojo)\s+application[^.!?]*[.!?]",
+    r"[Aa]pplications?\s+(?:are\s+)?(?:only\s+)?(?:accepted|received|processed|submitted)\s+(?:through|via|on)\s+[A-Z][\w. ]*[.!?]",
+    r"[Ss]earch\s+(?:for\s+)?[Pp]roperty\s*ID\s*#?\s*\d+[^.!?]*[.!?]",
+    r"[Ll]isting\s*ID\s*#?\s*\d+[^.!?]*[.!?]",
+    r"[Uu]se\s+(?:listing|property)\s+(?:ID|code)\s*#?\s*[\w-]+[^.!?]*[.!?]",
+    r"[Vv]isit\s+(?:Zillow|Apartments\.com|Apartment List|Realtor\.com|Trulia|Hotpads)[^.!?]*[.!?]",
+    r"[Cc]lick\s+(?:the\s+)?[\"']?[Aa]pply[\"']?\s+(?:button|link)[^.!?]*[.!?]",
+]
+_EXTERNAL_APPLICATION_RE = [re.compile(p) for p in _EXTERNAL_APPLICATION_PATTERNS]
+
+
+def strip_external_application_instructions(text):
+    """Remove any instructions to apply through a third-party portal/site."""
+    if not text:
+        return text
+    for pat in _EXTERNAL_APPLICATION_RE:
+        text = pat.sub("", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+# =============================================================================
+# 1c. Property manager / owner / third-party brand references — replace with
+#     "Choice Properties" (owner/manager mentions) or remove outright
+#     (brokerage / MLS / other-platform branding).
+# =============================================================================
+
+_OWNER_MANAGER_PATTERNS = [
+    r"[Cc]ontact\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:to|for|at)[^.!?]*[.!?]",
+    r"[Mm]anaged\s+by\s+[A-Z][\w.&' -]+[.!?]",
+    r"[Pp]roperty\s+manager[:\s]+[A-Z][\w.&' -]+[.!?]?",
+    r"[Ll]easing\s+agent[:\s]+[A-Z][\w.&' -]+[.!?]?",
+    r"[Oo]wner[:\s]+[A-Z][\w.&' -]+[.!?]?",
+    r"[Cc]all\s+or\s+text\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(?:at|for)[^.!?]*[.!?]",
+]
+_OWNER_MANAGER_RE = [re.compile(p) for p in _OWNER_MANAGER_PATTERNS]
+
+_THIRD_PARTY_BRAND_PATTERNS = [
+    r"[Ll]isted\s+by\s+[A-Z][\w.&' -]+[.!?]?",
+    r"[Cc]ourtesy\s+of\s+[A-Z][\w.&' -]+[.!?]?",
+    r"MLS\s*#?\s*[\w-]+",
+    r"[Bb]rokered\s+by\s+[A-Z][\w.&' -]+[.!?]?",
+    r"[Pp]resented\s+by\s+[A-Z][\w.&' -]+[.!?]?",
+]
+_THIRD_PARTY_BRAND_RE = [re.compile(p) for p in _THIRD_PARTY_BRAND_PATTERNS]
+
+# Brand names from the existing watermark list double as brokerage/company
+# names to strip outright when they appear inline in a description that is
+# otherwise being kept (e.g. "Also listed with Keller Williams"). Built lazily
+# since _WATERMARKED_BRANDS is defined further down in this module.
+_INLINE_BRAND_RE = None
+
+
+def _inline_brand_re():
+    global _INLINE_BRAND_RE
+    if _INLINE_BRAND_RE is None:
+        _INLINE_BRAND_RE = re.compile(
+            r"\b(?:" + "|".join(re.escape(b) for b in _WATERMARKED_BRANDS if len(b) > 3) + r")\b",
+            re.IGNORECASE,
+        )
+    return _INLINE_BRAND_RE
+
+
+def replace_owner_manager_references(text):
+    """
+    Remove property-manager/owner/leasing-agent name references. Choice
+    Properties is the public-facing representative for every listing, so we
+    strip the personal reference rather than substitute a sentence back in
+    (avoids inventing contact instructions we don't actually offer).
+    """
+    if not text:
+        return text
+    for pat in _OWNER_MANAGER_RE:
+        text = pat.sub("", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def strip_third_party_branding(text):
+    """Remove brokerage / MLS / other-platform branding from descriptions."""
+    if not text:
+        return text
+    for pat in _THIRD_PARTY_BRAND_RE:
+        text = pat.sub("", text)
+    text = _inline_brand_re().sub("", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
+
+
+# =============================================================================
+# 1d. Price consistency — a description must never quote a rent figure that
+#     differs from the property's final published monthly_rent.
+# =============================================================================
+
+_PRICE_MENTION_RE = re.compile(r"\$\s?[\d,]+(?:\.\d{2})?\s*(?:/\s*(?:mo|month)|per\s+month|monthly)?", re.IGNORECASE)
+
+
+def enforce_price_consistency(text, published_rent):
+    """
+    Replace any dollar figure in the description that looks like a rent
+    quote with the final published rent, so the description never
+    contradicts the price shown on the listing (e.g. after a price
+    adjustment). Only touches amounts followed/preceded by rent-ish context
+    ("/mo", "per month", "rent of $X") to avoid mangling unrelated dollar
+    figures such as deposits or fees mentioned elsewhere.
+    """
+    if not text or not published_rent:
+        return text
+
+    rent_str = "${:,.0f}/month".format(published_rent)
+
+    def _sub(match):
+        snippet = match.group(0)
+        # Only replace if this mention has explicit monthly-rent context.
+        if re.search(r"/\s*(?:mo|month)|per\s+month|monthly", snippet, re.IGNORECASE):
+            return rent_str
+        return snippet
+
+    return _PRICE_MENTION_RE.sub(_sub, text)
 
 
 # =============================================================================
@@ -1051,6 +1190,19 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
         if rec.get("description"):
             rec["description"] = clean_description(rec["description"])
 
+        # Step 2b: strip external application instructions (TurboTenant,
+        # Zillow/Apartments.com applications, property-ID application refs)
+        if rec.get("description"):
+            rec["description"] = strip_external_application_instructions(rec["description"])
+
+        # Step 2c: remove property manager / owner / leasing-agent references
+        if rec.get("description"):
+            rec["description"] = replace_owner_manager_references(rec["description"])
+
+        # Step 2d: strip third-party brokerage / MLS / other-platform branding
+        if rec.get("description"):
+            rec["description"] = strip_third_party_branding(rec["description"])
+
         # Step 3: strip corporate fee blocks
         if rec.get("description"):
             rec["description"] = strip_corporate_fees(rec["description"])
@@ -1083,6 +1235,12 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
             except Exception as exc:
                 if verbose:
                     logger.debug("regex_extract_missing error: %s", str(exc)[:80])
+
+        # Step 6a: enforce price consistency — the description must never
+        # quote a rent figure that differs from the final published rent
+        # (catches stale prices left over from a pre-publish price adjustment).
+        if rec.get("description") and rec.get("monthly_rent"):
+            rec["description"] = enforce_price_consistency(rec["description"], rec["monthly_rent"])
 
         # Step 6b: append Choice Properties apply-now CTA so every description
         # ends with an invitation to submit an application.
