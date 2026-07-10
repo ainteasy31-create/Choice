@@ -3,6 +3,11 @@
 ## Project Overview
 Nationwide rental property marketplace and management platform. Static HTML/CSS/JS site deployed exclusively to **Cloudflare Pages**. Replit is used for code editing and database management only — do not run production servers here.
 
+## Running in Replit (preview only)
+- The `Start application` workflow runs `node serve.js` directly on port 5000 — a plain static file server, bypassing the repo's `npm install`/`preinstall` guard (`scripts/enforce-cloudflare-only.js`), which intentionally blocks `npm` commands on Replit since this site is meant to build/deploy only on Cloudflare Pages.
+- This preview serves the static HTML/CSS/JS as-is. Supabase-backed features (listings data, auth, applications) need a generated `js/config.js`, which `generate-config.js` builds from env vars (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `IMAGEKIT_URL`, `IMAGEKIT_PUBLIC_KEY`, `SITE_URL`, etc.) — that file doesn't exist yet, so pages needing live data will show placeholders/errors until those secrets are provided and `node generate-config.js` is run.
+- Real deployment/build still happens via Cloudflare Pages on push to `main`, per the existing docs below.
+
 ## Architecture
 - **Frontend:** Vanilla HTML/CSS/JS (no framework)
 - **Backend:** Supabase (PostgreSQL + SECURITY DEFINER RPCs + Edge Functions via Deno/TypeScript)
