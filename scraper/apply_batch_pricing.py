@@ -9,14 +9,16 @@ when a specific batch calls for a temporary rent cap.
 
 Rules applied (per the batch instructions):
   * Only touches listings with an ORIGINAL rent between --rent-min and
-    --rent-max (default $1,600-$1,900).
+    --rent-max (default $1,600-$2,000).
   * If original rent <= --cap ($1,800): publish at the original rent
     (no change).
-  * If original rent is between --cap and --rent-max: reduce the published
-    rent by --reduction ($150).
-  * Never publish above --cap. Any listing that would still be above --cap
-    after the reduction is skipped (flagged for manual review) rather than
-    silently published over the cap.
+  * If original rent is between --cap ($1,800) and $1,900: reduce the
+    published rent by --reduction ($150).
+  * Special case: if original rent is exactly $2,000, reduce by --reduction
+    ($150) and publish as $1,850.
+  * Never publish above --cap after reduction. Any listing that would still
+    be above --cap after the reduction is skipped (flagged for manual review)
+    rather than silently published over the cap.
   * If the rent was adjusted, the security deposit is set to match the new
     published rent.
 
@@ -35,7 +37,7 @@ Usage:
 
   # Custom thresholds:
   python3 scraper/apply_batch_pricing.py --location "Dallas, TX" \\
-      --rent-min 1600 --rent-max 1900 --cap 1800 --reduction 150
+      --rent-min 1600 --rent-max 2000 --cap 1800 --reduction 150
 
 Environment variables (.env auto-loaded, same as scraper.py):
   SUPABASE_URL
@@ -70,6 +72,15 @@ def compute_adjusted_rent(original_rent, rent_min, rent_max, cap, reduction):
     """
     Returns (published_rent, adjusted) or (None, None) if the listing is out
     of scope / must be skipped.
+
+    Rules (matching the current batch instructions):
+      * rent < rent_min or rent > rent_max  -> out of scope (None, None)
+      * rent <= cap ($1,800)                -> publish as-is (no change)
+      * cap < rent <= $1,900               -> reduce by reduction ($150)
+      * rent == $2,000 (exactly)           -> reduce by reduction ($150)
+                                              publish as $1,850
+      * any other in-range rent that would -> skip (None, None)
+        still exceed cap after reduction
     """
     if original_rent is None:
         return None, None
@@ -120,7 +131,7 @@ def main():
     ap.add_argument("--location", help="City/state to filter staged pipeline records (e.g. 'Dallas, TX')")
     ap.add_argument("--status", default="scraped", help="Pipeline status to filter on (default: scraped)")
     ap.add_argument("--rent-min", type=float, default=1600)
-    ap.add_argument("--rent-max", type=float, default=1900)
+    ap.add_argument("--rent-max", type=float, default=2000)
     ap.add_argument("--cap", type=float, default=1800)
     ap.add_argument("--reduction", type=float, default=150)
     ap.add_argument("--dry-run", action="store_true")
