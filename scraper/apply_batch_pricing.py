@@ -73,14 +73,23 @@ def compute_adjusted_rent(original_rent, rent_min, rent_max, cap, reduction):
     Returns (published_rent, adjusted) or (None, None) if the listing is out
     of scope / must be skipped.
 
-    Rules (matching the current batch instructions):
-      * rent < rent_min or rent > rent_max  -> out of scope (None, None)
-      * rent <= cap ($1,800)                -> publish as-is (no change)
-      * cap < rent <= $1,900               -> reduce by reduction ($150)
-      * rent == $2,000 (exactly)           -> reduce by reduction ($150)
-                                              publish as $1,850
-      * any other in-range rent that would -> skip (None, None)
-        still exceed cap after reduction
+    Rules (in priority order):
+      1. rent < rent_min or rent > rent_max  -> out of scope (None, None)
+      2. rent <= cap ($1,800)                -> publish as-is (False)
+      3. rent == rent_max (exactly $2,000)   -> special case: always reduce by
+                                                reduction and publish ($1,850).
+                                                This is an explicit exception to
+                                                the cap enforcement below.
+      4. cap < rent <= $1,900               -> reduce by reduction ($150);
+                                                reject if result still > cap
+      5. any remaining in-range rent that   -> skip (None, None)
+         would exceed cap after reduction
+
+    Why rule 3 before rule 4/5:
+      $2,000 - $150 = $1,850 > cap ($1,800), so the generic cap check would
+      incorrectly skip $2,000 listings. The batch instructions explicitly state
+      "if original rent is exactly $2,000, reduce it by $150 and publish at
+      $1,850" — this is a named exception, not a violation of the cap.
     """
     if original_rent is None:
         return None, None
@@ -90,9 +99,14 @@ def compute_adjusted_rent(original_rent, rent_min, rent_max, cap, reduction):
     if original_rent <= cap:
         return original_rent, False
 
+    # Explicit exception: exactly $2,000 (rent_max) -> reduce and publish.
+    if original_rent == rent_max:
+        return original_rent - reduction, True
+
+    # Generic case: cap < rent < rent_max (e.g. $1,801–$1,900).
     adjusted = original_rent - reduction
     if adjusted > cap:
-        # Reduction wasn't enough -- refuse to publish above the cap.
+        # Reduction insufficient to bring rent within cap — skip.
         return None, None
     return adjusted, True
 
