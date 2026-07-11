@@ -68,47 +68,62 @@ HEADERS = {
 }
 
 
-def compute_adjusted_rent(original_rent, rent_min, rent_max, cap, reduction):
+def compute_adjusted_rent(original_rent, rent_min, rent_max, cap, reduction,
+                          reduce_max=1900):
     """
     Returns (published_rent, adjusted) or (None, None) if the listing is out
     of scope / must be skipped.
 
-    Rules (in priority order):
-      1. rent < rent_min or rent > rent_max  -> out of scope (None, None)
-      2. rent <= cap ($1,800)                -> publish as-is (False)
-      3. rent == rent_max (exactly $2,000)   -> special case: always reduce by
-                                                reduction and publish ($1,850).
-                                                This is an explicit exception to
-                                                the cap enforcement below.
-      4. cap < rent <= $1,900               -> reduce by reduction ($150);
-                                                reject if result still > cap
-      5. any remaining in-range rent that   -> skip (None, None)
-         would exceed cap after reduction
+    Parameters
+    ----------
+    original_rent : float
+    rent_min      : float  lower bound of scrape range (default 1600)
+    rent_max      : float  upper bound of scrape range (default 2000)
+    cap           : float  publish-at-most ceiling for generic reductions (default 1800)
+    reduction     : float  amount to subtract when original_rent > cap (default 150)
+    reduce_max    : float  highest rent eligible for generic auto-reduction (default 1900)
+                           Rents between reduce_max+1 and rent_max-1 are SKIPPED unless
+                           they match the explicit rent_max exception below.
 
-    Why rule 3 before rule 4/5:
-      $2,000 - $150 = $1,850 > cap ($1,800), so the generic cap check would
-      incorrectly skip $2,000 listings. The batch instructions explicitly state
-      "if original rent is exactly $2,000, reduce it by $150 and publish at
-      $1,850" — this is a named exception, not a violation of the cap.
+    Rules (evaluated in this order):
+      1. rent < rent_min or rent > rent_max -> out of scope (None, None)
+      2. rent <= cap                        -> publish as-is
+      3. rent == rent_max (exactly $2,000)  -> named exception: reduce by
+                                               reduction and publish ($1,850)
+                                               even though result exceeds cap.
+      4. cap < rent <= reduce_max           -> reduce by reduction; skip if
+                                               result still > cap
+      5. reduce_max < rent < rent_max       -> skip (not covered by any rule)
+
+    Why rule 3 before rule 4:
+      The batch instructions explicitly name $2,000 as a special case: "if
+      the original rent is exactly $2,000, reduce it by $150 and publish it
+      as $1,850."  $1,850 > cap ($1,800), so without this explicit carve-out
+      the generic skip path would incorrectly reject it.
     """
     if original_rent is None:
         return None, None
     if original_rent < rent_min or original_rent > rent_max:
         return None, None  # out of scope for this batch
 
+    # Rule 2: at or below cap — publish unchanged.
     if original_rent <= cap:
         return original_rent, False
 
-    # Explicit exception: exactly $2,000 (rent_max) -> reduce and publish.
+    # Rule 3: explicit named exception for exactly rent_max ($2,000).
     if original_rent == rent_max:
         return original_rent - reduction, True
 
-    # Generic case: cap < rent < rent_max (e.g. $1,801–$1,900).
-    adjusted = original_rent - reduction
-    if adjusted > cap:
-        # Reduction insufficient to bring rent within cap — skip.
-        return None, None
-    return adjusted, True
+    # Rule 4: auto-reduce band (cap < rent <= reduce_max, e.g. $1,801–$1,900).
+    if original_rent <= reduce_max:
+        adjusted = original_rent - reduction
+        if adjusted > cap:
+            # Reduction insufficient — skip rather than publish above cap.
+            return None, None
+        return adjusted, True
+
+    # Rule 5: gap between reduce_max and rent_max ($1,901–$1,999) — skip.
+    return None, None
 
 
 def fetch_pipeline_records(location, status="scraped"):
@@ -144,10 +159,14 @@ def main():
     ap = argparse.ArgumentParser(description="TEMPORARY batch pricing adjustment (not a permanent rule).")
     ap.add_argument("--location", help="City/state to filter staged pipeline records (e.g. 'Dallas, TX')")
     ap.add_argument("--status", default="scraped", help="Pipeline status to filter on (default: scraped)")
-    ap.add_argument("--rent-min", type=float, default=1600)
-    ap.add_argument("--rent-max", type=float, default=2000)
-    ap.add_argument("--cap", type=float, default=1800)
-    ap.add_argument("--reduction", type=float, default=150)
+    ap.add_argument("--rent-min",   type=float, default=1600)
+    ap.add_argument("--rent-max",   type=float, default=2000)
+    ap.add_argument("--cap",        type=float, default=1800)
+    ap.add_argument("--reduction",  type=float, default=150)
+    ap.add_argument("--reduce-max", type=float, default=1900,
+                    help="Upper bound for generic auto-reduction (default 1900). "
+                         "Rents above this and below rent-max are skipped unless "
+                         "they equal rent-max (the explicit named exception).")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -163,7 +182,8 @@ def main():
     for rec in records:
         original_rent = rec.get("monthly_rent")
         published_rent, adjusted = compute_adjusted_rent(
-            original_rent, args.rent_min, args.rent_max, args.cap, args.reduction
+            original_rent, args.rent_min, args.rent_max, args.cap, args.reduction,
+            reduce_max=args.reduce_max,
         )
         addr = (rec.get("address") or "") + ", " + (rec.get("city") or "")
 
