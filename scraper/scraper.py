@@ -879,6 +879,17 @@ def _map_realtor_property(prop):
     }
     record["data_quality_score"] = _quality_score(record)
     record["missing_fields"]     = _jdumps(_missing_fields(record))
+
+    # listed_at fallback: compute from days_on_mls if list_date was unavailable
+    if not record.get("listed_at"):
+        _dom_mls = _safe_int(getattr(prop, "days_on_mls", None))
+        if _dom_mls is not None:
+            try:
+                from datetime import date as _date_r, timedelta as _td_r
+                record["listed_at"] = (_date_r.today() - _td_r(days=_dom_mls)).isoformat()
+            except Exception:
+                pass
+
     return record
 
 
@@ -1388,6 +1399,84 @@ def _stage_records(records, location, source_label, args, started_at):
         _log_run(location, source_label, total_scraped, 0, 0, None, started_at,
                  count_dup, 0, count_watermarked)
         return 0, count_dup, 0, 0
+
+    # ── ImageKit image upload (permanent scraper behavior) ────────────────────
+    # Upload every listing image to ImageKit CDN before staging. This runs for
+    # every scraping job automatically — Zillow/Realtor CDN URLs are temporary;
+    # ImageKit URLs are permanent. Never publish listings with source-CDN images
+    # when ImageKit is configured.
+    _ik_full = _ik_partial = _ik_no_img = 0
+    try:
+        import sys as _iksys
+        import os as _ikos
+        _iksys.path.insert(0, _ikos.path.dirname(_ikos.path.abspath(__file__)))
+        from imagekit_upload import upload_images as _ik_upload, is_configured as _ik_ok
+        if _ik_ok():
+            print(f"\n📸  [{source_label}] Uploading images to ImageKit ({len(records)} listings)...")
+            for _rec in records:
+                _src_urls = []
+                try:
+                    _src_urls = json.loads(_rec.get("original_image_urls") or "[]")
+                except (ValueError, TypeError):
+                    pass
+                if not _src_urls:
+                    _ik_no_img += 1
+                    continue
+                _ik_urls, _ik_failed = _ik_upload(_src_urls, _rec["id"], verify=True, verbose=False)
+                # Store ImageKit URLs as the permanent CDN copies (in original order)
+                _rec["local_image_paths"] = json.dumps(_ik_urls)
+                # Record upload validation result in original_data for admin review
+                try:
+                    _od = json.loads(_rec.get("original_data") or "{}")
+                except (ValueError, TypeError):
+                    _od = {}
+                _od["imagekit_uploaded"] = len(_ik_urls)
+                _od["imagekit_failed"]   = _ik_failed
+                _od["imagekit_ready"]    = (_ik_failed == 0 and len(_ik_urls) > 0)
+                _rec["original_data"] = json.dumps(_od, default=str)
+                if _ik_failed > 0:
+                    _ik_partial += 1
+                    _addr = " ".join(filter(None, [_rec.get("address"), _rec.get("city")])) or _rec.get("id", "?")
+                    print(f"  ⚠  [IK] {_addr}: {_ik_failed} image(s) failed — review before publishing")
+                else:
+                    _ik_full += 1
+            print(f"   [IK] {_ik_full} fully uploaded, {_ik_partial} partial, {_ik_no_img} no images")
+        else:
+            print(
+                f"   [IK] ImageKit upload skipped — "
+                "set IMAGEKIT_PRIVATE_KEY + IMAGEKIT_URL_ENDPOINT in .env to enable"
+            )
+    except ImportError:
+        print("   [IK] imagekit_upload module not found — skipping image upload")
+    except Exception as _ik_err:
+        print(f"   [IK] Image upload step error (staging continues): {_ik_err}")
+    # ── End ImageKit upload ────────────────────────────────────────────────────
+
+    # ── Pre-staging validation log ─────────────────────────────────────────────
+    # Log records missing listed_at or with image issues so admin can review
+    # before approving publication. Records are always staged — the admin
+    # pipeline is the final gate before any listing goes live.
+    _val_warn = 0
+    for _rec in records:
+        _issues = []
+        if not _rec.get("listed_at"):
+            _issues.append("no original listing date captured")
+        try:
+            _n_src = len(json.loads(_rec.get("original_image_urls") or "[]"))
+            _n_ik  = len(json.loads(_rec.get("local_image_paths") or "[]"))
+        except (ValueError, TypeError):
+            _n_src = _n_ik = 0
+        if _n_src > 0 and _n_ik == 0:
+            _issues.append(f"0/{_n_src} images uploaded to ImageKit")
+        elif _n_src > 0 and _n_ik < _n_src:
+            _issues.append(f"{_n_ik}/{_n_src} images on ImageKit ({_n_src - _n_ik} failed)")
+        if _issues:
+            _val_warn += 1
+            _a = " ".join(filter(None, [_rec.get("address"), _rec.get("city")])) or _rec.get("id", "?")
+            print(f"  ⚠  [validation] {_a}: " + "; ".join(_issues))
+    if _val_warn:
+        print(f"  ⚠  [{source_label}] {_val_warn} record(s) have validation warnings — review before publishing")
+    # ── End pre-staging validation ─────────────────────────────────────────────
 
     batches       = [records[i:i+BATCH_SIZE] for i in range(0, len(records), BATCH_SIZE)]
     total_batches = len(batches)

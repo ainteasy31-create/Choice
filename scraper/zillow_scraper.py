@@ -731,6 +731,30 @@ def _map_listing(raw):
     agent  = hi.get("agentName") or raw.get("agentName") or raw.get("brokerName")
     broker = hi.get("brokerName") or raw.get("brokerName")
 
+    # -- listed_at: capture original listing date from source ------------------
+    # Never use the scrape date as the listing date. Prefer direct date fields;
+    # fall back to computing from daysOnMarket if no direct date is available.
+    _listed_at = None
+    _date_raw = (
+        hi.get("listingDateTimeOnZillow") or
+        hi.get("datePosted") or
+        raw.get("listingDateTimeOnZillow") or
+        raw.get("datePosted")
+    )
+    if _date_raw:
+        _listed_at = _parse_date(str(_date_raw))
+    if _listed_at is None:
+        _dom_search = _safe_int(
+            raw.get("daysOnMarket") or hi.get("daysOnMarket") or
+            hi.get("daysOnZillow") or raw.get("daysOnZillow")
+        )
+        if _dom_search is not None:
+            try:
+                from datetime import date as _date_cls, timedelta as _td_cls
+                _listed_at = (_date_cls.today() - _td_cls(days=_dom_search)).isoformat()
+            except Exception:
+                pass
+
     original_data = {
         "zpid":       zpid,
         "detailUrl":  source_url,
@@ -812,6 +836,7 @@ def _map_listing(raw):
         "description":           desc,
         "showing_instructions":  None,
         "available_date":        None,
+        "listed_at":             _listed_at,
         "minimum_lease_months":  None,
         "lease_terms":           "[]",
 
@@ -1308,6 +1333,19 @@ def _enrich_from_detail(record, prop):
     od["_phase"]       = "detail"
     od["zpid"]         = record.get("source_listing_id") or od.get("zpid")
     od["daysOnMarket"] = prop.get("daysOnZillow") or prop.get("daysOnMarket")
+
+    # -- listed_at: prefer direct date fields; fall back to computed daysOnMarket
+    # Direct fields are more accurate than subtracting days from today's date.
+    # Never overwrite a listed_at already set in Phase 1 search.
+    if record.get("listed_at") is None:
+        _direct_date = (
+            _parse_date(prop.get("listingDateTimeOnZillow")) or
+            _parse_date(prop.get("datePostedString")) or
+            _parse_date(rf.get("onMarketDate")) or
+            _parse_date(rf.get("listingContractDate"))
+        )
+        if _direct_date:
+            record["listed_at"] = _direct_date
     # Compute listed_at from daysOnMarket (today - N days = original listing date)
     _dom = od["daysOnMarket"]
     if _dom is not None and record.get("listed_at") is None:
