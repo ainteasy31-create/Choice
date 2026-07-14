@@ -19,6 +19,8 @@
 
   let _prop      = null;
   let _photos    = [];  // sorted property_photos objects {id,url,display_order,watermark_status}
+  let _apps      = [];  // cached applications for immediate re-render after save
+  let _inqs      = [];  // cached inquiries for immediate re-render after save
   let _lightboxOpen = false;
   let _lbIdx     = 0;
 
@@ -53,6 +55,7 @@
     clock:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em;color:var(--brand)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     spin:    `<span class="pd-spin" aria-hidden="true"></span>`,
     dot:     `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style="flex-shrink:0;vertical-align:.05em"><circle cx="5" cy="5" r="4" fill="currentColor" opacity=".45"/></svg>`,
+    trash:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
   };
   function ico(n){ return _SV[n] || ''; }
 
@@ -395,6 +398,8 @@
   // ── Full page render ─────────────────────────────────────────────────────────
   function render(p, apps, inqs) {
     _prop   = p;
+    _apps   = apps || [];
+    _inqs   = inqs || [];
     _photos = Array.isArray(p.property_photos)
       ? p.property_photos.slice().sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
       : [];
@@ -441,6 +446,7 @@
       <button class="btn btn-ghost btn-sm" id="pd-btn-verify" title="Confirm this listing is still active and available">${ico('check')} Mark as verified</button>
       <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">${ico('ext')} Public listing</a>
       <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft">${ico('copy')} Duplicate</button>
+      <button class="btn btn-sm" id="pd-btn-delete" style="background:rgba(239,68,68,.1);color:#ef4444;border:1.5px solid rgba(239,68,68,.3);margin-left:auto" title="Permanently delete this property">${ico('trash')} Delete</button>
     </div>
     ${_lastSavedAt ? `<div id="pd-lastsaved" class="pd-lastsaved">Last saved ${_lastSavedAt}</div>` : ''}
     ${metricsHtml}`;
@@ -872,6 +878,50 @@
         }]).catch(() => {});
       } catch (_) {}
       setTimeout(() => { location.href = '/admin/property-detail.html?id=' + encodeURIComponent(nd.id) + '&edit=1'; }, 700);
+    });
+
+    // ── Delete property ───────────────────────────────────────────────────────
+    document.getElementById('pd-btn-delete')?.addEventListener('click', async () => {
+      const confirmed = await S.confirm({
+        title:   'Delete this property?',
+        message: `"${p.title || 'Untitled'}" and all its photos will be permanently removed. This cannot be undone.`,
+        ok:      'Delete permanently',
+        cancel:  'Cancel',
+        danger:  true,
+      });
+      if (!confirmed) return;
+
+      const btn = document.getElementById('pd-btn-delete');
+      if (btn) { btn.disabled = true; btn.innerHTML = ico('spin') + ' Deleting…'; }
+
+      // Remove photos first (FK constraint), then the property row
+      const { error: photoErr } = await CP.sb().from('property_photos').delete().eq('property_id', propId);
+      if (photoErr) {
+        S.toast('Could not delete photos: ' + photoErr.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = ico('trash') + ' Delete'; }
+        return;
+      }
+
+      const { error: propErr } = await CP.sb().from('properties').delete().eq('id', propId);
+      if (propErr) {
+        S.toast('Delete failed: ' + propErr.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = ico('trash') + ' Delete'; }
+        return;
+      }
+
+      // Audit log (non-blocking)
+      CP.Auth.getSession().then(({ data }) => {
+        CP.sb().from('admin_actions').insert([{
+          user_id:     data?.session?.user?.id || null,
+          action:      'property.delete',
+          target_type: 'property',
+          target_id:   String(propId),
+          metadata:    { title: p.title || null, address: p.address || null, city: p.city || null, status: p.status || null }
+        }]).catch(() => {});
+      }).catch(() => {});
+
+      S.toast('Property deleted.', 'success');
+      setTimeout(() => { location.href = '/admin/listings.html'; }, 800);
     });
 
     // Inquiry message expand (click row → modal dialog)
@@ -1657,6 +1707,10 @@
       const toggle = document.getElementById('pd-status-toggle');
       if (toggle) { toggle.outerHTML = renderStatusBar(patch.status); bindStatusToggle(); }
     }
+
+    // ── Immediately reflect saved values in the page (no full reload needed) ──
+    Object.assign(_prop, patch);
+    render(_prop, _apps, _inqs);
 
     closePanel();
 
