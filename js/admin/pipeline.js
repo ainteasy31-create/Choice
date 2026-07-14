@@ -935,7 +935,8 @@
       if(se){ S.toast('Could not save changes before publishing: ' + se.message, 'error'); return; }
     }
 
-    const l = _current || {};
+    // Merge unsaved patch into _current so validation sees the just-saved values.
+    const l = Object.assign({}, _current || {}, patch);
 
     // ── Pre-publish validation gate ──────────────────────────────────────────
     // Must run before any RPC call. Mirrors validate_for_publish() in enrichment.py.

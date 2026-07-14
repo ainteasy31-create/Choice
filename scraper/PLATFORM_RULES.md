@@ -8,20 +8,32 @@ administrator decision.**
 
 ## 1. Image Requirements (Highest Priority)
 
-Every property **must** have all images uploaded to ImageKit before it can be
-published.
+Every property **must** have source images present before it can be published.
+Photos are transferred to ImageKit by `import-pipeline-photos` immediately
+after publish — the pre-publish gate is that at least one source URL exists in
+`original_image_urls`.
 
-- Download every original image from the source listing at the highest quality
-  available.
+### Two-tier image rule
+
+| Scenario | Gate |
+|---|---|
+| **First publish** (no `choice_property_id` yet) | `original_image_urls` must be a non-empty JSON array. ImageKit transfer runs automatically post-publish via `import-pipeline-photos`. |
+| **Re-publish** (already has `choice_property_id`) | `property_photos` table must have ≥ 1 row for this property (photos already on ImageKit). |
+
+This rule is enforced in three places — all must remain consistent:
+1. **`pipeline_publish` PostgreSQL RPC** — checks `original_image_urls` server-side, blocks with a clear error
+2. **`js/admin/pipeline.js` `validateForPublish()`** — client-side gate before the RPC call
+3. **`scraper/enrichment.py` `validate_for_publish()`** — scraper-side gate
+
+### Additional image standards
+- Download every original image at the highest quality available from the source.
 - Upload every image to the Choice Properties ImageKit account.
-- **Never** store external/hotlinked image URLs in the database.
-- **Never** publish a property if ImageKit upload has not completed successfully.
+- **Never** store external/hotlinked image URLs as the final `property_photos.url`.
 - If ImageKit is unavailable or any upload fails:
   - Keep the property in the pipeline with status `pending_images`.
   - Log the reason for the failure.
-  - Retry automatically when ImageKit becomes available.
+  - Retry when ImageKit becomes available.
 - Preserve the original image order; use the first image as the featured image.
-- Verify every ImageKit URL loads successfully after upload.
 
 ---
 
