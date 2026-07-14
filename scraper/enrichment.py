@@ -8,6 +8,7 @@ Post-processing applied to every scraped record before DB insert:
   1b. strip_external_application_instructions -- remove references to applying via a third-party portal
   1c. replace_owner_manager_references     -- remove property manager / owner / leasing-agent name references
   1d. strip_third_party_branding           -- remove brokerage / MLS / other-platform branding
+  1e. normalize_application_fee_in_description -- replace any non-$50 fee or "free application" language
   2. strip_corporate_fees   -- remove management company fee blocks from descriptions
   3. is_watermarked         -- detect competitor-branded listings (drop before staging)
   4. normalize_hvac         -- parse raw MLS blobs into separate heating vs cooling fields
@@ -286,6 +287,177 @@ def enforce_price_consistency(text, published_rent):
         return snippet
 
     return _PRICE_MENTION_RE.sub(_sub, text)
+
+
+# =============================================================================
+# 1e. Application fee normalization in descriptions
+#     Choice Properties charges a flat $50 application fee.
+#     Any description that mentions a different fee amount — or states the
+#     application is free — must be corrected before the listing goes live.
+# =============================================================================
+
+# Matches explicit fee amounts: $35, $40.00, "fee of 75", "fee: 60", etc.
+_APP_FEE_AMOUNT_RE = re.compile(
+    r"""
+    (?:
+        # Pattern A: "$XX" or "$XX.00" optionally followed by fee context
+        \$\s*0*(\d{1,4}(?:\.\d{2})?)\s*
+        (?:(?:application|app|rental|non[- ]?refundable)[\s\w]*fee)?
+    |
+        # Pattern B: "application fee" label then an amount (with or without $)
+        (?:application|app)\s+fee[:\s]+\$?\s*0*(\d{1,4}(?:\.\d{2})?)
+    |
+        # Pattern C: "fee of/is XX dollars" narrative forms
+        (?:fee\s+(?:of|is|:)\s+\$?\s*0*(\d{1,4}(?:\.\d{2})?)
+        |0*(\d{1,4})\s+dollars?\s+(?:application|app)\s+fee)
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Matches any wording that indicates the application is free
+_FREE_APP_RE = re.compile(
+    r"""
+    (?:
+        free\s+(?:to\s+)?apply(?:\s+today)?               # free to apply, free apply
+    |   apply\s+for\s+free                                # apply for free
+    |   no\s+(?:application\s+|app\s+)?fee               # no application fee, no app fee, no fee
+    |   \$\s*0\.?0*\s+(?:application\s+|app\s+)?fee      # $0 application fee, $0.00 fee
+    |   zero\s+(?:application\s+|app\s+)?fee              # zero application fee
+    |   complimentary\s+application                       # complimentary application
+    |   application\s+(?:is\s+)?free                      # application is free, application free
+    |   fee[- ]?free\s+application                        # fee-free application
+    |   free\s+application                                # free application
+    )
+    [^.!?\n]*                                             # rest of the sentence
+    [.!?\n]?                                              # optional sentence terminator
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Sentence-level patterns that explicitly state fee amounts in context
+_FEE_SENTENCE_RE = re.compile(
+    r"[^.!?\n]*"
+    r"(?:application|app|rental)\s+fee[^.!?\n]*"
+    r"[.!?\n]",
+    re.IGNORECASE,
+)
+
+_NORMALIZED_FEE_STATEMENT = "Application Fee: $50."
+
+
+def normalize_application_fee_in_description(text):
+    """
+    Enforce Choice Properties' $50 application fee throughout a listing
+    description.
+
+    Two passes:
+      1. Free-application language  -- any wording that implies $0 or "free"
+         is replaced with "Application Fee: $50."
+      2. Other fee amounts          -- sentences that reference a specific fee
+         amount other than $50 are rewritten to "Application Fee: $50."
+
+    Only the description text is changed; structured fields (application_fee)
+    are handled separately by rule_based_enrich.
+    """
+    if not text:
+        return text
+
+    # Pass 1: replace free-application wording
+    text = _FREE_APP_RE.sub(_NORMALIZED_FEE_STATEMENT + " ", text)
+
+    # Pass 2: find remaining explicit fee-sentence mentions and normalize them.
+    # We look for sentences that talk about an "application fee" and contain
+    # a dollar amount that is not $50 / 50.
+    def _fix_fee_sentence(m):
+        sentence = m.group(0)
+        # Extract any dollar amount from the sentence
+        amounts = re.findall(r"\$?\s*(\d+(?:\.\d{2})?)", sentence)
+        for amt_str in amounts:
+            try:
+                amt = float(amt_str.replace(",", ""))
+            except ValueError:
+                continue
+            # If the amount is not $50, replace the whole sentence
+            if abs(amt - 50) > 0.01:
+                return _NORMALIZED_FEE_STATEMENT + " "
+        return sentence
+
+    text = _FEE_SENTENCE_RE.sub(_fix_fee_sentence, text)
+
+    # Collapse any double spaces or triple newlines left by substitutions
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+# =============================================================================
+# Pre-publish validation gate
+#     Call validate_for_publish(record) before any pipeline_publish action.
+#     Returns (True, []) on success or (False, [reason1, reason2, ...]).
+#     These checks mirror the mandatory publishing requirements defined in
+#     scraper/PLATFORM_RULES.md.
+# =============================================================================
+
+def validate_for_publish(record):
+    """
+    Gate check executed before a pipeline record is promoted to a live listing.
+
+    Returns:
+        (ok: bool, failures: list[str])
+
+    A record must pass ALL checks to receive ok=True. Any failure keeps the
+    record in the pipeline at 'pending_review' status and must be logged.
+    """
+    failures = []
+    desc = record.get("description") or ""
+
+    # 1. Images must be present
+    raw_urls = record.get("original_image_urls") or "[]"
+    try:
+        urls = raw_urls if isinstance(raw_urls, list) else __import__("json").loads(raw_urls)
+    except Exception:
+        urls = []
+    if not urls:
+        failures.append("No images uploaded to ImageKit")
+
+    # 2. Description must not imply a free application
+    if _FREE_APP_RE.search(desc):
+        failures.append("Description contains free-application language")
+
+    # 3. Description must not reference an application fee other than $50
+    amounts = re.findall(r"(?:application|app)\s+fee[:\s]+\$?\s*(\d+(?:\.\d{2})?)", desc, re.IGNORECASE)
+    for amt_str in amounts:
+        try:
+            if abs(float(amt_str) - 50) > 0.01:
+                failures.append("Description references a non-$50 application fee: $" + amt_str)
+        except ValueError:
+            pass
+
+    # 4. Description must not contain tour/showing/contact CTAs
+    _TOUR_CHECK = re.compile(
+        r"schedule\s+a\s+(?:tour|showing|viewing)"
+        r"|book\s+a\s+(?:tour|showing)"
+        r"|open\s+house"
+        r"|contact\s+(?:us|the\s+agent|the\s+landlord|owner)",
+        re.IGNORECASE,
+    )
+    if _TOUR_CHECK.search(desc):
+        failures.append("Description contains tour/showing/contact CTA language")
+
+    # 5. Description must not reference external application portals
+    _PORTAL_CHECK = re.compile(
+        r"turbotenant|zillow\s+application|apartments\.com|apply\s+on\s+\w+",
+        re.IGNORECASE,
+    )
+    if _PORTAL_CHECK.search(desc):
+        failures.append("Description references an external application portal")
+
+    # 6. Rent must be set
+    if not record.get("monthly_rent"):
+        failures.append("monthly_rent is missing")
+
+    return (len(failures) == 0, failures)
 
 
 # =============================================================================
@@ -1241,6 +1413,13 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
         # (catches stale prices left over from a pre-publish price adjustment).
         if rec.get("description") and rec.get("monthly_rent"):
             rec["description"] = enforce_price_consistency(rec["description"], rec["monthly_rent"])
+
+        # Step 6aa: normalize application fee language in the description.
+        # Replace any mention of a free application, $0 fee, or a fee amount
+        # other than $50 with the canonical "Application Fee: $50." statement.
+        # This is a mandatory platform rule — Choice Properties charges $50.
+        if rec.get("description"):
+            rec["description"] = normalize_application_fee_in_description(rec["description"])
 
         # Step 6b: append Choice Properties apply-now CTA so every description
         # ends with an invitation to submit an application.
