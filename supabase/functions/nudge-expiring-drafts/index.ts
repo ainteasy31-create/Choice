@@ -215,7 +215,7 @@ Deno.serve(async (req: Request) => {
       }
 
       sent++;
-      console.log('nudge-expiring-drafts: sent nudge to', draft.email, '(draft:', draft.id, 'hoursLeft:', hoursLeft, ')');
+      console.log('nudge-expiring-drafts: sent nudge (draft:', draft.id, 'hoursLeft:', hoursLeft, ')');
     } catch (err) {
       failed++;
       const msg = err instanceof Error ? err.message : String(err);

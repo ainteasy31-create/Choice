@@ -267,7 +267,7 @@ def send_email(plain_text, subject):
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             resp = json.loads(r.read())
-            print(f"✅ Email sent → {NOTIFY_EMAIL}  (id: {resp.get('id','?')})")
+            print(f"✅ Email sent (id: {resp.get('id','?')})")
     except urllib.error.HTTPError as e:
         print(f"⚠️  Email failed (HTTP {e.code}): {e.read().decode()[:200]}")
     except Exception as e:
