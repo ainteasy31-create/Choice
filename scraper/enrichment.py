@@ -443,9 +443,16 @@ def validate_for_publish(record, transferred_photo_count=None):
     if _FREE_APP_RE.search(desc):
         failures.append("Description contains free-application language")
 
-    # 3. Description must not reference an application fee other than $50
-    amounts = re.findall(r"(?:application|app)\s+fee[:\s]+\$?\s*(\d+(?:\.\d{2})?)", desc, re.IGNORECASE)
-    for amt_str in amounts:
+    # 3. Description must not reference an application fee other than $50.
+    # Two patterns are checked:
+    #   a. Trailing-dollar: "application fee: $35" or "application fee 40"
+    #   b. Leading-dollar:  "$35 application fee" or "a $40 app fee"
+    _fee_amounts = []
+    for m in re.finditer(r"(?:application|app)\s+fee[:\s]+\$?\s*(\d+(?:\.\d{2})?)", desc, re.IGNORECASE):
+        _fee_amounts.append(m.group(1))
+    for m in re.finditer(r"\$\s*(\d+(?:\.\d{2})?)\s+(?:application|app)\s+fee", desc, re.IGNORECASE):
+        _fee_amounts.append(m.group(1))
+    for amt_str in _fee_amounts:
         try:
             if abs(float(amt_str) - 50) > 0.01:
                 failures.append("Description references a non-$50 application fee: $" + amt_str)

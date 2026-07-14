@@ -76,10 +76,15 @@
     }
 
     // 4. Non-$50 application fee amount in description
-    const feeMatches = desc.match(/(?:application|app)\s+fee[:\s]+\$?\s*(\d+(?:\.\d{2})?)/gi) || [];
-    feeMatches.forEach(function(m) {
-      const digits = m.match(/(\d+(?:\.\d{2})?)$/);
-      const amt = digits ? parseFloat(digits[1]) : 50;
+    // Two patterns: trailing-dollar ("application fee: $35") and
+    //               leading-dollar  ("$35 application fee").
+    const _feeAmounts = [];
+    const _feePat1 = /(?:application|app)\s+fee[:\s]+\$?\s*(\d+(?:\.\d{2})?)/gi;
+    const _feePat2 = /\$\s*(\d+(?:\.\d{2})?)\s+(?:application|app)\s+fee/gi;
+    let _fm;
+    while ((_fm = _feePat1.exec(desc)) !== null) { _feeAmounts.push(parseFloat(_fm[1])); }
+    while ((_fm = _feePat2.exec(desc)) !== null) { _feeAmounts.push(parseFloat(_fm[1])); }
+    _feeAmounts.forEach(function(amt) {
       if (Math.abs(amt - 50) > 0.01) {
         failures.push('Description references a non-$50 application fee ($' + amt + ')');
       }
