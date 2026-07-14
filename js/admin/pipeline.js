@@ -283,6 +283,7 @@
           ${qsBadge(score)}
           ${srcImp === 'admin-url' ? `<span class="qs-badge qs-high" title="Imported via admin URL import">🖥 Desktop</span>` : ''}
           ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none;pointer-events:auto" target="_blank" onclick="event.stopPropagation()">Live ↗</a>` : ''}
+          ${isPublished && l.photo_import_status === 'failed' ? `<span class="qs-badge qs-low" title="${S.esc(l.last_photo_import_error || 'Photo transfer to ImageKit failed')} — listing stays hidden from the public site until photos are added">⏳ Pending images</span>` : ''}
           ${l.source_status && l.source_status !== 'available' ? `<span class="qs-badge ${l.source_status === 'pending' ? 'qs-mid' : 'qs-low'}" title="Source site status: ${S.esc(l.source_status)}">${l.source_status === 'pending' ? '⏳ Pending' : l.source_status === 'rented' ? '🔒 Rented' : '⚠ ' + S.esc(l.source_status)}</span>` : ''}
         </div>
       </div>
@@ -300,6 +301,7 @@
       <div class="pl-card-ft" onclick="event.stopPropagation()">
         ${!isArchived ? `<button class="btn btn-sm btn-ghost pl-arc-btn" data-id="${S.esc(l.id)}" title="Archive">Archive</button>` : '<span class="pill pill-muted" style="font-size:.68rem">Archived</span>'}
         ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-primary pl-pub-btn" data-id="${S.esc(l.id)}" title="Publish to site">Publish →</button>` : ''}
+        ${isPublished && l.photo_import_status === 'failed' && l.choice_property_id ? `<button class="btn btn-sm btn-outline pl-retry-photos-btn" data-id="${S.esc(l.id)}" data-prop-id="${S.esc(l.choice_property_id)}" title="Retry transferring photos to ImageKit">Retry photos</button>` : ''}
         ${isPublished && l.choice_property_id ? `<a class="btn btn-sm btn-ghost" href="/admin/property-detail.html?id=${S.esc(l.choice_property_id)}" target="_blank" onclick="event.stopPropagation()">Edit ↗</a>` : ''}
       </div>
     </div>`;
@@ -1118,6 +1120,19 @@
     // Archive buttons on cards
     document.querySelectorAll('.pl-arc-btn').forEach(btn => {
       btn.onclick = e => { e.stopPropagation(); doArchive(btn.dataset.id); };
+    });
+
+    // Retry photos buttons on cards (photo_import_status === 'failed')
+    document.querySelectorAll('.pl-retry-photos-btn').forEach(btn => {
+      btn.onclick = async e => {
+        e.stopPropagation();
+        btn.disabled = true;
+        btn.textContent = 'Retrying…';
+        await doTransferPhotos(btn.dataset.id, btn.dataset.propId);
+        btn.disabled = false;
+        btn.textContent = 'Retry photos';
+        load(false).catch(()=>{});
+      };
     });
 
     // Selection checkboxes

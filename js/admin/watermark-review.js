@@ -570,6 +570,26 @@
 
     await load();
 
+    // ─── Real-time updates ──────────────────────────────────────────────────
+    // Reflect edits/deletes/inserts made elsewhere (another admin tab, the
+    // property editor, a re-publish) without requiring a manual refresh.
+    let _rtReloadTimer = null;
+    function scheduleReload(){
+      // Debounce: bulk operations can fire many change events in quick
+      // succession (e.g. deleting 10 selected properties).
+      clearTimeout(_rtReloadTimer);
+      _rtReloadTimer = setTimeout(() => { load().catch(()=>{}); }, 400);
+    }
+    try {
+      CP.sb()
+        .channel('watermark-review-properties')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, scheduleReload)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'property_photos' }, scheduleReload)
+        .subscribe();
+    } catch(e){
+      console.warn('[watermark-review] realtime subscription failed — falling back to manual refresh', e);
+    }
+
     // If launched from property-detail with ?property_id=, scroll to and highlight that property
     const _focusPropId = new URLSearchParams(location.search).get('property_id');
     if (_focusPropId) {

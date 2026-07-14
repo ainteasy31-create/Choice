@@ -2606,5 +2606,42 @@
       const cleanUrl = location.pathname + '?id=' + encodeURIComponent(propId);
       history.replaceState(null, '', cleanUrl);
     }
+
+    // ─── Real-time updates ──────────────────────────────────────────────────
+    // Reflect edits/deletes made to THIS property from elsewhere (another
+    // admin tab, a bulk action, a re-publish) without requiring a refresh.
+    // Deliberately non-disruptive for updates (a toast, not a forced
+    // re-render) so it never clobbers an in-progress edit in this tab.
+    try {
+      CP.sb()
+        .channel('property-detail-' + propId)
+        .on('postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'properties', filter: 'id=eq.' + propId },
+          () => {
+            S.toast('This property was deleted in another tab.', 'error');
+            setTimeout(() => { location.href = '/admin/pipeline.html'; }, 1500);
+          })
+        .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'properties', filter: 'id=eq.' + propId },
+          () => {
+            S.toast('This property was updated elsewhere — refresh to see the latest changes.', 'info');
+          })
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'property_photos', filter: 'property_id=eq.' + propId },
+          async () => {
+            const fresh = await CP.sb().from('property_photos')
+              .select('id,url,display_order,watermark_status,file_id')
+              .eq('property_id', propId).order('display_order');
+            if (!fresh.error && fresh.data) {
+              _photos = fresh.data.slice().sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+              refreshGalleryInPlace();
+              const photosBtn = document.getElementById('pd-btn-photos');
+              if (photosBtn) photosBtn.textContent = _photos.length ? 'All photos (' + _photos.length + ')' : 'Manage photos';
+            }
+          })
+        .subscribe();
+    } catch (e) {
+      console.warn('[property-detail] realtime subscription failed — falling back to manual refresh', e);
+    }
   });
 })();

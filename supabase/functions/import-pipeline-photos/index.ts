@@ -72,11 +72,16 @@ Deno.serve(async (req) => {
   const query = adminClient
     .schema('pipeline')
     .from('pipeline_properties')
-    .select('original_image_urls');
+    .select('id, original_image_urls');
 
   const { data: pipeline, error: pErr } = pipeline_id
     ? await query.eq('id', pipeline_id).single()
     : await query.eq('choice_property_id', property_id).maybeSingle();
+
+  // Resolve the pipeline row id regardless of which lookup path matched, so
+  // photo_import_status can be recorded even when called with only property_id
+  // (e.g. the admin "Import source photos" retry button).
+  const resolvedPipelineId: string | null = pipeline?.id ?? pipeline_id ?? null;
 
   if (pErr) {
     return jsonResponse({ success: false, error: 'Pipeline lookup failed: ' + pErr.message }, 500, {}, req);
@@ -211,6 +216,44 @@ Deno.serve(async (req) => {
     for (const ok of results) {
       if (ok) transferred++; else skipped++;
     }
+  }
+
+  // ── Publish gate: auto-activate on success, log + stay hidden on failure ──
+  // properties.status starts as 'draft' (hidden from the public site, which
+  // only lists status='active'). Never flip status on a partial/total failure
+  // — the listing must stay invisible until at least one photo is confirmed
+  // on ImageKit, per the platform's "never publish without ImageKit images" rule.
+  if (transferred > 0) {
+    await adminClient
+      .from('properties')
+      .update({ status: 'active' })
+      .eq('id', property_id)
+      .eq('status', 'draft'); // don't clobber a status an admin already changed
+
+    if (resolvedPipelineId) {
+      await adminClient
+        .schema('pipeline')
+        .from('pipeline_properties')
+        .update({
+          photo_import_status: 'ok',
+          last_photo_import_error: null,
+          last_photo_import_at: new Date().toISOString(),
+        })
+        .eq('id', resolvedPipelineId);
+    }
+  } else if (resolvedPipelineId) {
+    const reason = toProcess.length
+      ? `All ${toProcess.length} source photo(s) failed to transfer (fetch/upload/thumbnail-reject errors — see function logs).`
+      : 'No source photos available to transfer.';
+    await adminClient
+      .schema('pipeline')
+      .from('pipeline_properties')
+      .update({
+        photo_import_status: 'failed',
+        last_photo_import_error: reason,
+        last_photo_import_at: new Date().toISOString(),
+      })
+      .eq('id', resolvedPipelineId);
   }
 
   return jsonResponse({ success: true, transferred, skipped }, 200, {}, req);
