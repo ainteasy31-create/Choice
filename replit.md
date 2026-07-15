@@ -162,8 +162,13 @@ The `--use-api` flag bundles server-side (skips Docker). `SUPABASE_ACCESS_TOKEN`
 |------|---------|
 | `scraper.py` | Main CLI — orchestrates Realtor.com + Zillow, batch inserts, dedup, logging |
 | `zillow_scraper.py` | Zillow `__NEXT_DATA__` HTML parser module (called by `scraper.py`) |
+| `dallas_ga_batch.py` | Dallas, GA market batch — scrape → filter → tiered pricing → publish → import photos → post-scraping report |
+| `stl_batch.py` | St. Louis, MO market batch (same pattern as dallas_ga_batch.py) |
+| `enrichment.py` | Post-processing pipeline: description cleanup, watermark detection, fee normalization |
+| `imagekit_upload.py` | Direct ImageKit upload module (used by scraper; edge function handles browser uploads) |
+| `PLATFORM_RULES.md` | Permanent rules enforced on every listing (images, descriptions, $50 app fee, etc.) |
+| `SEARCH_PREFERENCES.md` | Active market configs with scraper commands |
 | `requirements.txt` | `pip install homeharvest requests python-dotenv` |
-| `README.md` | Full scraper usage guide |
 | `cities.txt` *(optional)* | One location per line for `--locations-file` bulk runs |
 
 ### Database
