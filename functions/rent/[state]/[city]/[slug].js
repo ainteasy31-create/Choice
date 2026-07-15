@@ -144,7 +144,7 @@ export async function onRequestGet({ env, params, request }) {
   const slug = params.slug || '';
   const match = slug.match(ID_RE);
   if (!match) return notFound();
-  const propertyId = match[1].toUpperCase();
+  const propertyId = match[1].toLowerCase();
 
   // 2. Fetch property + photos in parallel
   const [propRes, photosRes] = await Promise.all([
