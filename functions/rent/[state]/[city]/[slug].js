@@ -23,7 +23,7 @@
 // function returns.
 // ============================================================
 
-const ID_RE = /(prop-[a-z0-9]{8})\/?$/i;
+const ID_RE = /(prop-[a-z0-9]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
 
 function escHtml(s) {
   return String(s ?? '')
