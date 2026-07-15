@@ -55,5 +55,8 @@
 /SETUP.md                   /404.html                                    404
 /SUPABASE_CHANGES.md        /404.html                                    404
 
+# Property detail pages (UUID-based routes served by property.html SPA)
+/property/*                 /property.html                               200
+
 # Catch-all 404
 /*                          /404.html                                    404
