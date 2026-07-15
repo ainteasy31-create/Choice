@@ -9,7 +9,7 @@ Property types  : Houses (SINGLE_FAMILY), Townhouses (TOWNHOMES)
 Bedrooms        : 3 exactly
 Bathrooms       : 2+
 Rent range      : $1,250–$1,500 / month (scraped)
-Price rule      : tiered proportional reduction; published rent ≤ $1,250
+Price rule      : tiered proportional reduction; published rent ≤ $1,500
                   security deposit = published rent
 Image rule      : photos imported via Supabase import-pipeline-photos edge function
 Description     : remove tours/showings, external apps, third-party branding, old prices
@@ -17,12 +17,11 @@ Goal            : publish 15 listings that pass all validation checks
 Site URL        : https://choice-properties-site.pages.dev
 
 Pricing tiers (this batch only):
-  $1,250              → publish as-is ($1,250)
-  $1,251–$1,299       → proportional reduction → $1,200–$1,250
-  $1,300–$1,349       → proportional reduction → $1,175–$1,225
-  $1,350–$1,399       → proportional reduction → $1,150–$1,200
-  $1,400–$1,449       → proportional reduction → $1,150–$1,200
-  $1,450–$1,500       → proportional reduction → $1,200–$1,250 (cap $1,250)
+  $1,500–$1,599       → proportional reduction → $1,350–$1,400
+  $1,600–$1,699       → proportional reduction → $1,375–$1,425
+  $1,700–$1,799       → proportional reduction → $1,400–$1,450
+  $1,800–$1,899       → proportional reduction → $1,425–$1,475
+  $1,900–$2,000       → proportional reduction → $1,450–$1,500 (cap $1,500)
 
 Usage (from workspace root):
   python3 scraper/dallas_ga_batch.py
@@ -97,9 +96,9 @@ FALLBACK_CITIES = {
 ALLOWED_TYPES = {"SINGLE_FAMILY", "TOWNHOMES"}   # NO APARTMENT, CONDO, MULTI_FAMILY
 BEDS_EXACT    = 3
 BATHS_MIN     = 2.0
-RENT_MIN      = 1250
-RENT_MAX      = 1500
-RENT_CAP      = 1250   # maximum published monthly rent
+RENT_MIN      = 1500
+RENT_MAX      = 2000
+RENT_CAP      = 1500   # maximum published monthly rent
 
 # ── Guards ────────────────────────────────────────────────────────────────────
 try:
@@ -209,12 +208,11 @@ def compute_dallas_rent(original_rent, seen_rents=None):
     Apply Dallas GA batch tiered pricing rules.
 
     Tiers:
-      $1,250              → $1,250 (publish as-is)
-      $1,251–$1,299       → proportional → $1,200–$1,250
-      $1,300–$1,349       → proportional → $1,175–$1,225
-      $1,350–$1,399       → proportional → $1,150–$1,200
-      $1,400–$1,449       → proportional → $1,150–$1,200
-      $1,450–$1,500       → proportional → $1,200–$1,250 (cap $1,250)
+      $1,500–$1,599  → proportional → $1,350–$1,400
+      $1,600–$1,699  → proportional → $1,375–$1,425
+      $1,700–$1,799  → proportional → $1,400–$1,450
+      $1,800–$1,899  → proportional → $1,425–$1,475
+      $1,900–$2,000  → proportional → $1,450–$1,500 (cap $1,500)
 
     Uniqueness: if `seen_rents` is provided (a set), shift the result by ±$5
     to avoid duplicate published rents where a natural variation is possible.
@@ -227,28 +225,26 @@ def compute_dallas_rent(original_rent, seen_rents=None):
     if rent < RENT_MIN or rent > RENT_MAX:
         return None, None
 
-    if rent <= 1250:
-        published = 1250.0
-    elif rent <= 1299:
-        # $1,251–$1,299 → $1,200–$1,250
-        ratio = (rent - 1251) / (1299 - 1251)
-        published = 1200.0 + ratio * (1250 - 1200)
-    elif rent <= 1349:
-        # $1,300–$1,349 → $1,175–$1,225
-        ratio = (rent - 1300) / (1349 - 1300)
-        published = 1175.0 + ratio * (1225 - 1175)
-    elif rent <= 1399:
-        # $1,350–$1,399 → $1,150–$1,200
-        ratio = (rent - 1350) / (1399 - 1350)
-        published = 1150.0 + ratio * (1200 - 1150)
-    elif rent <= 1449:
-        # $1,400–$1,449 → $1,150–$1,200
-        ratio = (rent - 1400) / (1449 - 1400)
-        published = 1150.0 + ratio * (1200 - 1150)
+    if rent <= 1599:
+        # $1,500–$1,599 → $1,350–$1,400
+        ratio = (rent - 1500) / (1599 - 1500)
+        published = 1350.0 + ratio * (1400 - 1350)
+    elif rent <= 1699:
+        # $1,600–$1,699 → $1,375–$1,425
+        ratio = (rent - 1600) / (1699 - 1600)
+        published = 1375.0 + ratio * (1425 - 1375)
+    elif rent <= 1799:
+        # $1,700–$1,799 → $1,400–$1,450
+        ratio = (rent - 1700) / (1799 - 1700)
+        published = 1400.0 + ratio * (1450 - 1400)
+    elif rent <= 1899:
+        # $1,800–$1,899 → $1,425–$1,475
+        ratio = (rent - 1800) / (1899 - 1800)
+        published = 1425.0 + ratio * (1475 - 1425)
     else:
-        # $1,450–$1,500 → $1,200–$1,250 (cap $1,250)
-        ratio = (rent - 1450) / (1500 - 1450)
-        published = 1200.0 + ratio * (1250 - 1200)
+        # $1,900–$2,000 → $1,450–$1,500 (cap $1,500)
+        ratio = (rent - 1900) / (2000 - 1900)
+        published = 1450.0 + ratio * (1500 - 1450)
 
     # Round to nearest $5 for natural-looking prices
     published = round(published / 5) * 5
@@ -261,7 +257,7 @@ def compute_dallas_rent(original_rent, seen_rents=None):
             candidate = published + nudge
             if candidate > RENT_CAP:
                 continue
-            if candidate < 1150:
+            if candidate < 1300:
                 continue
             if candidate not in seen_rents:
                 published = candidate
