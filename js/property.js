@@ -41,8 +41,10 @@ const isPreview = params.get('preview') === 'true';
 
 // Resolve the property id from either:
 //   1) the legacy ?id=PROP-XXXXXXXX query string, or
-//   2) the trailing prop-xxxxxxxx token of the canonical slug URL
-//      `/rent/<state>/<city>/<beds>-<type>-prop-xxxxxxxx/`
+//   2) the trailing token of the canonical slug URL — either:
+//      - old format: prop-xxxxxxxx  (short alphanumeric)
+//      - new format: full UUID      (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+//      e.g. `/rent/<state>/<city>/<beds>-<type>-<uuid>/`
 //      (rendered by functions/rent/[state]/[city]/[slug].js).
 // Matching the same regex the edge function uses keeps the two
 // in lock-step. Without this fallback, every click on a card on
@@ -51,8 +53,8 @@ const isPreview = params.get('preview') === 'true';
 function resolvePropertyId() {
   const fromQuery = (params.get('id') || '').trim();
   if (fromQuery) return fromQuery;
-  const m = window.location.pathname.match(/(prop-[a-z0-9]{8})\/?$/i);
-  return m ? m[1].toUpperCase() : '';
+  const m = window.location.pathname.match(/(prop-[a-z0-9]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
+  return m ? m[1].toLowerCase() : '';
 }
 const propertyId = resolvePropertyId();
 
