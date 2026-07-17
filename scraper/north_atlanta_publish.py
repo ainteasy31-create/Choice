@@ -2,52 +2,71 @@
 """
 North Metro Atlanta — Batch Publish Script
 ==========================================
-Applies batch pricing rules, updates descriptions, publishes 7 qualifying
-pipeline records, activates listings, and triggers ImageKit photo import.
+Correct ordering (per platform rules):
+  1. Update pipeline record (pricing + description)
+  2. Publish via pipeline_publish RPC  →  property status = 'draft'
+  3. Import photos to ImageKit         →  REQUIRED; abort listing if zero photos transferred
+  4. Activate (draft → active)         →  only after confirmed photo transfer
+  5. Verify final photo count > 0
+
+If photo import fails for a listing, it stays as 'draft' and is excluded from the
+published report. The listing is never reported as successfully published unless
+every step completes.
 
 ZIP targets: 30157, 30132, 30144, 30101, 30102
 Rent range:  $1,500–$1,900 scraped → published at $1,500–$1,600
 """
 
+import base64
+import json
 import os
 import sys
-import json
 import time
+
 import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from scraper import _load_dotenv  # reuse .env loader
+from scraper import _load_dotenv
 _load_dotenv()
 
 SUPABASE_URL     = "https://tlfmwetmhthpyrytrcfo.supabase.co"
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+IK_PRIVATE_KEY   = os.environ.get("IMAGEKIT_PRIVATE_KEY", "")
+IK_ENDPOINT      = os.environ.get("IMAGEKIT_URL_ENDPOINT", "").rstrip("/")
 
 if not SERVICE_ROLE_KEY:
     sys.exit("❌  SUPABASE_SERVICE_ROLE_KEY not set")
+if not IK_PRIVATE_KEY:
+    sys.exit("❌  IMAGEKIT_PRIVATE_KEY not set — required for photo import before activation")
+if not IK_ENDPOINT:
+    sys.exit("❌  IMAGEKIT_URL_ENDPOINT not set — required for photo import before activation")
 
-# ── Headers ────────────────────────────────────────────────────────────────────
-H_PL = {          # pipeline schema headers
-    "apikey":           SERVICE_ROLE_KEY,
-    "Authorization":    "Bearer " + SERVICE_ROLE_KEY,
-    "Content-Type":     "application/json",
-    "Accept-Profile":   "pipeline",
-    "Content-Profile":  "pipeline",
-    "Prefer":           "return=representation",
+H_PL = {
+    "apikey":          SERVICE_ROLE_KEY,
+    "Authorization":   "Bearer " + SERVICE_ROLE_KEY,
+    "Content-Type":    "application/json",
+    "Accept-Profile":  "pipeline",
+    "Content-Profile": "pipeline",
+    "Prefer":          "return=representation",
 }
-H_PUB = {         # public schema headers (for properties / photos / RPC)
-    "apikey":           SERVICE_ROLE_KEY,
-    "Authorization":    "Bearer " + SERVICE_ROLE_KEY,
-    "Content-Type":     "application/json",
-    "Prefer":           "return=representation",
+H_PUB = {
+    "apikey":        SERVICE_ROLE_KEY,
+    "Authorization": "Bearer " + SERVICE_ROLE_KEY,
+    "Content-Type":  "application/json",
+    "Prefer":        "return=representation",
 }
 
-# ── Pricing table (per spec) ───────────────────────────────────────────────────
-#   $1,501–$1,600 → publish as-is
-#   $1,601–$1,700 → reduce $75–$100     → target $1,500–$1,625 (cap $1,600)
-#   $1,701–$1,800 → reduce $125–$175    → target $1,525–$1,675 (cap $1,600)
-#   $1,801–$1,900 → dynamic reduction   → land $1,500–$1,600
-#
-# We use per-property adjustments for natural variation across the batch.
+# Photo import settings
+MAX_PHOTOS       = 20
+DOWNLOAD_TIMEOUT = 25
+UPLOAD_TIMEOUT   = 45
+MAX_RETRIES      = 3
+RETRY_BACKOFF    = 2.0
+
+# ── Pricing plan (per batch spec) ─────────────────────────────────────────────
+#  $1,601–$1,700  → reduce $75–$100
+#  $1,701–$1,800  → reduce $125–$175
+#  $1,801–$1,900  → dynamic reduction to land $1,500–$1,600
 PRICE_PLAN = {
     "PP-A15CF80C": {"adj_rent": 1590, "note": "orig $1715, reduced $125"},
     "PP-ED2FF130": {"adj_rent": 1575, "note": "orig $1750, reduced $175"},
@@ -58,7 +77,6 @@ PRICE_PLAN = {
     "PP-C0077582": {"adj_rent": 1550, "note": "orig $1900, reduced $350"},
 }
 
-# ── Enriched descriptions (professionally rewritten, per spec) ─────────────────
 DESCRIPTIONS = {
 
 "PP-A15CF80C": """\
@@ -228,7 +246,130 @@ Application Fee: $50. Security deposit equal to one month's rent.\
 """,
 }
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+
+# ── Photo helpers ──────────────────────────────────────────────────────────────
+
+def _get_source_urls(pipeline_id):
+    r = requests.get(
+        SUPABASE_URL + "/rest/v1/pipeline_properties",
+        headers={**H_PL},
+        params={"select": "original_image_urls", "id": "eq." + pipeline_id},
+    )
+    rows = r.json()
+    if not rows:
+        return []
+    return json.loads(rows[0].get("original_image_urls") or "[]")
+
+
+def _download(url):
+    hdrs = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        ),
+        "Accept":  "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": "https://www.realtor.com/",
+    }
+    try:
+        resp = requests.get(url, headers=hdrs, timeout=DOWNLOAD_TIMEOUT)
+        if resp.status_code == 200:
+            return resp.content, resp.headers.get("Content-Type", "image/jpeg")
+    except Exception:
+        pass
+    return None, None
+
+
+def _upload_ik(img_bytes, filename, folder):
+    b64 = base64.b64encode(img_bytes).decode()
+    for attempt in range(MAX_RETRIES):
+        try:
+            resp = requests.post(
+                "https://upload.imagekit.io/api/v1/files/upload",
+                auth=(IK_PRIVATE_KEY, ""),
+                data={"file": b64, "fileName": filename, "folder": folder},
+                timeout=UPLOAD_TIMEOUT,
+            )
+            if resp.status_code in (200, 201):
+                d = resp.json()
+                return d.get("url"), d.get("fileId", "")
+        except Exception:
+            pass
+        if attempt < MAX_RETRIES - 1:
+            time.sleep(RETRY_BACKOFF * (attempt + 1))
+    return None, None
+
+
+def _insert_photo(property_id, ik_url, file_id, order, is_hero):
+    r = requests.post(
+        SUPABASE_URL + "/rest/v1/property_photos",
+        headers=H_PUB,
+        json={
+            "property_id":      property_id,
+            "url":              ik_url,
+            "file_id":          file_id,
+            "display_order":    order,
+            "is_hero":          is_hero,
+            "watermark_status": "pending",
+            "alt_text":         "",
+        },
+    )
+    return r.status_code in (200, 201)
+
+
+def import_photos(pipeline_id, property_id):
+    """
+    Download source images → upload to ImageKit → insert into property_photos.
+    Returns (transferred_count, skipped_count).
+    Raises RuntimeError if zero photos are successfully transferred.
+    """
+    src_urls = _get_source_urls(pipeline_id)
+    if not src_urls:
+        raise RuntimeError("No source image URLs found in pipeline record")
+
+    urls = src_urls[:MAX_PHOTOS]
+    folder = "properties/" + property_id.replace("-", "")
+    transferred = 0
+    skipped = 0
+
+    for idx, url in enumerate(urls):
+        is_hero = (idx == 0)
+        ext = "jpg"
+        lower = url.lower().split("?")[0]
+        if ".png" in lower:
+            ext = "png"
+        elif ".webp" in lower:
+            ext = "webp"
+        filename = f"photo_{idx+1:03d}.{ext}"
+
+        img_bytes, _ = _download(url)
+        if not img_bytes:
+            skipped += 1
+            print(f"       ⚠   [{idx+1}/{len(urls)}] download failed")
+            continue
+
+        ik_url, file_id = _upload_ik(img_bytes, filename, folder)
+        if not ik_url:
+            skipped += 1
+            print(f"       ⚠   [{idx+1}/{len(urls)}] ImageKit upload failed")
+            continue
+
+        if _insert_photo(property_id, ik_url, file_id, idx, is_hero):
+            transferred += 1
+            tag = " [HERO]" if is_hero else ""
+            print(f"       ✅  [{idx+1}/{len(urls)}]{tag} uploaded")
+        else:
+            skipped += 1
+            print(f"       ⚠   [{idx+1}/{len(urls)}] DB insert failed")
+
+        time.sleep(0.15)
+
+    if transferred == 0:
+        raise RuntimeError(f"Zero photos transferred — skipped={skipped}, total_src={len(src_urls)}")
+
+    return transferred, skipped
+
+
+# ── DB helpers ─────────────────────────────────────────────────────────────────
 
 def patch_pipeline(pipeline_id, patch):
     r = requests.patch(
@@ -238,158 +379,160 @@ def patch_pipeline(pipeline_id, patch):
         json=patch,
     )
     if r.status_code not in (200, 204):
-        raise RuntimeError(f"PATCH pipeline {pipeline_id} failed {r.status_code}: {r.text[:300]}")
-    return r.json() if r.text else {}
+        raise RuntimeError(f"PATCH pipeline failed {r.status_code}: {r.text[:300]}")
 
 
-def publish_via_rpc(pipeline_id):
-    """Call pipeline_publish RPC. Returns choice_property_id on success."""
+def publish_rpc(pipeline_id):
+    """Returns choice_property_id (status='draft') on success."""
     r = requests.post(
         SUPABASE_URL + "/rest/v1/rpc/pipeline_publish",
         headers=H_PUB,
         json={"p_id": pipeline_id, "p_landlord_id": None},
     )
     if r.status_code not in (200, 201):
-        raise RuntimeError(f"RPC failed {r.status_code}: {r.text[:500]}")
+        raise RuntimeError(f"RPC {r.status_code}: {r.text[:400]}")
     result = r.json()
     if not result.get("ok"):
-        raise RuntimeError(f"RPC returned ok=false: {result.get('error')}")
+        raise RuntimeError(f"RPC ok=false: {result.get('error')}")
     return result["choice_property_id"]
 
 
-def activate_property(prop_id):
-    """Set property status to active and mark it as featured."""
+def verify_photo_count(property_id):
+    """Return the number of photos in property_photos for this property."""
+    r = requests.get(
+        SUPABASE_URL + "/rest/v1/property_photos",
+        headers=H_PUB,
+        params={"select": "id", "property_id": "eq." + property_id},
+    )
+    return len(r.json()) if isinstance(r.json(), list) else 0
+
+
+def activate_property(property_id):
+    """Set status active — called ONLY after photo import is confirmed."""
     r = requests.patch(
         SUPABASE_URL + "/rest/v1/properties",
         headers=H_PUB,
-        params={"id": "eq." + prop_id},
+        params={"id": "eq." + property_id},
         json={"status": "active"},
     )
     if r.status_code not in (200, 204):
-        raise RuntimeError(f"Activate {prop_id} failed {r.status_code}: {r.text[:300]}")
+        raise RuntimeError(f"Activate failed {r.status_code}: {r.text[:300]}")
 
 
-def trigger_photo_import(prop_id, pipeline_id):
-    """Call import-pipeline-photos Edge Function to transfer source photos to ImageKit."""
-    r = requests.post(
-        SUPABASE_URL + "/functions/v1/import-pipeline-photos",
-        headers={
-            "apikey":        SERVICE_ROLE_KEY,
-            "Authorization": "Bearer " + SERVICE_ROLE_KEY,
-            "Content-Type":  "application/json",
-        },
-        json={"property_id": prop_id, "pipeline_id": pipeline_id},
-        timeout=120,
-    )
-    if r.status_code not in (200, 201):
-        return False, f"HTTP {r.status_code}: {r.text[:200]}"
-    data = r.json()
-    if not data.get("success"):
-        return False, data.get("error", "unknown error")
-    return True, f"transferred={data.get('transferred',0)} skipped={data.get('skipped',0)}"
-
-
-def get_property_url(prop_id):
-    r = requests.get(
-        SUPABASE_URL + "/rest/v1/properties",
-        headers=H_PUB,
-        params={"select": "id,address,city,zip", "id": "eq." + prop_id},
-    )
-    data = r.json()
-    if data:
-        p = data[0]
-        # URL format used on the live site
-        slug = (p["address"] + " " + p["city"] + " " + p["zip"]).lower()
-        slug = slug.replace(",", "").replace("  ", " ").replace(" ", "-")
-        return f"https://choice-properties-site.pages.dev/property.html?id={prop_id}"
-    return f"https://choice-properties-site.pages.dev/property.html?id={prop_id}"
+def property_url(property_id):
+    return f"https://choice-properties-site.pages.dev/property.html?id={property_id}"
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
     print("\n" + "=" * 60)
-    print("  North Metro Atlanta — Batch Publish")
-    print("  ZIPs: 30157, 30132, 30144, 30101, 30102")
+    print("  North Metro Atlanta — Batch Publish (corrected ordering)")
+    print("  Activation only after confirmed photo import")
     print("=" * 60)
 
-    published_report = []
+    published = []
+    failed    = []
 
     for pipeline_id, plan in PRICE_PLAN.items():
         adj_rent = plan["adj_rent"]
         note     = plan["note"]
         desc     = DESCRIPTIONS[pipeline_id]
+        choice_id = None
 
         print(f"\n{'─'*55}")
-        print(f"  Pipeline: {pipeline_id}")
-        print(f"  Pricing:  {note}  →  published ${adj_rent:,}/mo")
+        print(f"  {pipeline_id}  ({note}  → ${adj_rent:,}/mo)")
 
-        # ── Step 1: Update pipeline record with adjusted price + new description ──
-        print(f"  [1/4] Updating pipeline record...")
+        # Step 1 — Update pipeline record
+        print(f"  [1/5] Updating pipeline (price + description)...")
         try:
             patch_pipeline(pipeline_id, {
                 "monthly_rent":     adj_rent,
-                "security_deposit": adj_rent,   # spec: deposit = published rent when adjusted
+                "security_deposit": adj_rent,
                 "application_fee":  50,
                 "description":      desc,
                 "edited_fields":    json.dumps(["monthly_rent", "security_deposit",
                                                 "application_fee", "description"]),
             })
-            print(f"       ✅  Pipeline updated")
+            print(f"       ✅  Updated")
         except Exception as e:
-            print(f"       ❌  Failed: {e}")
+            print(f"       ❌  {e}")
+            failed.append((pipeline_id, f"Step 1: {e}"))
             continue
 
         time.sleep(0.3)
 
-        # ── Step 2: Publish via RPC ──────────────────────────────────────────────
-        print(f"  [2/4] Publishing via pipeline_publish RPC...")
+        # Step 2 — Publish (→ draft)
+        print(f"  [2/5] Publishing via pipeline_publish RPC (status=draft)...")
         try:
-            choice_id = publish_via_rpc(pipeline_id)
-            print(f"       ✅  Published → {choice_id}")
+            choice_id = publish_rpc(pipeline_id)
+            print(f"       ✅  draft → {choice_id}")
         except Exception as e:
-            print(f"       ❌  Publish failed: {e}")
+            print(f"       ❌  {e}")
+            failed.append((pipeline_id, f"Step 2: {e}"))
             continue
 
         time.sleep(0.3)
 
-        # ── Step 3: Activate (draft → active) ───────────────────────────────────
-        print(f"  [3/4] Activating listing...")
+        # Step 3 — Import photos (REQUIRED before activation)
+        print(f"  [3/5] Importing photos to ImageKit (required for activation)...")
+        try:
+            transferred, skipped = import_photos(pipeline_id, choice_id)
+            print(f"       ✅  {transferred} photos transferred, {skipped} skipped")
+        except Exception as e:
+            print(f"       ❌  Photo import failed: {e}")
+            print(f"       ⛔  Listing stays draft — NOT activating")
+            failed.append((pipeline_id, f"Step 3 photo import: {e}"))
+            continue
+
+        time.sleep(0.3)
+
+        # Step 4 — Verify photo count in DB
+        print(f"  [4/5] Verifying photo count in database...")
+        count = verify_photo_count(choice_id)
+        if count == 0:
+            print(f"       ❌  Zero photos confirmed in DB — aborting activation")
+            failed.append((pipeline_id, "Step 4: zero photos in DB after import"))
+            continue
+        print(f"       ✅  {count} photos confirmed in property_photos")
+
+        # Step 5 — Activate (only now, with photos confirmed)
+        print(f"  [5/5] Activating listing (photos confirmed)...")
         try:
             activate_property(choice_id)
-            print(f"       ✅  Status set to active")
+            print(f"       ✅  Active")
         except Exception as e:
-            print(f"       ❌  Activate failed: {e}")
-            # Non-fatal — property is published but needs manual activation
+            print(f"       ❌  {e}")
+            failed.append((pipeline_id, f"Step 5 activate: {e}"))
+            continue
 
-        time.sleep(0.3)
-
-        # ── Step 4: Trigger ImageKit photo import ────────────────────────────────
-        print(f"  [4/4] Importing photos to ImageKit...")
-        ok, msg = trigger_photo_import(choice_id, pipeline_id)
-        if ok:
-            print(f"       ✅  Photos imported: {msg}")
-        else:
-            print(f"       ⚠   Photo import issue: {msg}")
-
-        url = get_property_url(choice_id)
-        published_report.append({
+        published.append({
             "pipeline_id": pipeline_id,
             "choice_id":   choice_id,
-            "url":         url,
+            "url":         property_url(choice_id),
+            "photos":      count,
         })
 
-    # ── Final report ─────────────────────────────────────────────────────────
+    # ── Final report ──────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
-    print("  PUBLISHED LISTINGS REPORT")
+    print(f"  RESULT: {len(published)} published, {len(failed)} failed")
     print("=" * 60)
-    for i, p in enumerate(published_report, 1):
-        print(f"\n{i}. Pipeline: {p['pipeline_id']}")
-        print(f"   Property: {p['choice_id']}")
-        print(f"   URL:      {p['url']}")
 
-    print(f"\n✅  Total published: {len(published_report)}")
-    return published_report
+    if published:
+        print("\n  Successfully published (all with photos):")
+        for i, p in enumerate(published, 1):
+            print(f"\n  {i}. Pipeline: {p['pipeline_id']}")
+            print(f"     Property: {p['choice_id']}")
+            print(f"     Photos:   {p['photos']}")
+            print(f"     URL:      {p['url']}")
+
+    if failed:
+        print("\n  Failed (left as draft or not published):")
+        for pid, reason in failed:
+            print(f"  • {pid}: {reason}")
+
+    if not published:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
