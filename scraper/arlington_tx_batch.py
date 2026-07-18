@@ -95,9 +95,11 @@ def compute_arlington_rent(
     if rent <= 1400:
         published = rent
     elif rent <= 1500:
-        # FIX M5: was (rent - 1401) / (1500 - 1401) — caused $100 cliff at $1,400→$1,401
+        # FIX M5: Tier 2 maps $1,400 scraped → $1,400 published (matching tier 1 top),
+        # then smoothly descends to $1,300 at $1,500 scraped — zero cliff at the boundary.
+        # Old formula mapped $1,401 → $1,300 (a $99 cliff from $1,400 → $1,400).
         ratio     = (rent - 1400) / (1500 - 1400)
-        published = RENT_FLOOR + ratio * (RENT_CAP - RENT_FLOOR)
+        published = 1400 - ratio * (1400 - 1300)   # descends 1400→1300 as rent goes 1400→1500
     else:
         ratio     = (rent - 1500) / (1600 - 1500)
         published = RENT_FLOOR + ratio * (RENT_CAP - RENT_FLOOR)
