@@ -1825,14 +1825,14 @@ def _map_from_detail_only(prop, source_url=None, zpid=None):
         _src_status = "pending"
     elif "RENTED" in _raw_status or "LEASED" in _raw_status:
         _src_status = "rented"
-    elif "SOLD" in _raw_status or "OFF_MARKET" in _raw_status or "REMOVED" in _raw_status:
-        _src_status = "removed"
-    elif _raw_status:
-        # Unknown non-empty status -- treat as available and let the pipeline decide
+    elif not _raw_status:
+        # No status field on the detail page at all -- default to available.
+        # This path is hit when scraping known for-rent URLs directly.
         _src_status = "available"
     else:
-        # No status on detail page -- default to available (for-rent search URLs)
-        _src_status = "available"
+        # Any other non-empty status (FOR_SALE, SOLD, OFF_MARKET, REMOVED, etc.)
+        # is treated as removed. Safer to reject unknowns than to publish them.
+        _src_status = "removed"
 
     # Blank record -- all fields defaulted, then _enrich_from_detail fills them in
     record = {
