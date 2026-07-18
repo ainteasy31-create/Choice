@@ -678,7 +678,7 @@
     document.getElementById('pd-fab').onclick = () => { if (_prop) openEditPanel(_prop); };
 
     // Update page subtitle
-    const sub = document.querySelector('[data-page-sub]');
+    const sub = document.getElementById('page-sub');
     if (sub) sub.textContent = p.title || 'Property detail';
 
     // ── Bind interactions ──
