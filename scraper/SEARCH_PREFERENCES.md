@@ -7,6 +7,43 @@ rules. Run the scraper with the commands listed under each market.
 
 ## Active Markets
 
+### Market 3 — Dallas, GA (West Paulding County / West Cobb / I-75 Corridor)
+
+| Criteria | Value |
+|---|---|
+| Locations | Dallas, GA · Hiram, GA · Powder Springs, GA · Acworth, GA + Kennesaw, Marietta, Austell, Smyrna, Villa Rica (fallback) |
+| Property types | Houses (SINGLE_FAMILY), Townhouses (TOWNHOMES) — NO apartments, condos, duplexes |
+| Bedrooms | 3 exactly |
+| Bathrooms | 2+ |
+| Scraped rent range | $1,250–$1,500 / month |
+| Published rent cap | $1,250 / month (tiered proportional reduction — see batch script) |
+| Security deposit | Equal to published rent |
+| Goal | 15 published listings per batch |
+
+**Tiered pricing (this market):**
+
+| Original rent | Published rent range |
+|---|---|
+| $1,250 | $1,250 (as-is) |
+| $1,251–$1,299 | $1,200–$1,250 (proportional) |
+| $1,300–$1,349 | $1,175–$1,225 (proportional) |
+| $1,350–$1,399 | $1,150–$1,200 (proportional) |
+| $1,400–$1,449 | $1,150–$1,200 (proportional) |
+| $1,450–$1,500 | $1,200–$1,250, cap $1,250 (proportional) |
+
+**Batch script (runs the full scrape → filter → price → publish → photo import pipeline):**
+```bash
+cd /home/runner/workspace
+python3 scraper/dallas_ga_batch.py
+# Options:
+#   --dry-run          preview without writing to DB
+#   --target 15        number of listings to publish (default 15)
+#   --past-days 90     lookback window (default 90)
+#   --min-score 30     minimum data quality score (default 30)
+```
+
+---
+
 ### Market 1 — Milwaukee / Menomonee Falls, WI
 
 | Criteria | Value |
@@ -97,6 +134,21 @@ one is not already present.
 ### 5. Photo — never publish properties where all photos carry initials/watermarks
 Same as rule 1, restated for clarity: if every photo has an agent initial, a
 brokerage watermark, or a competitor logo overlaid, skip the listing entirely.
+
+### 6. Photo — minimum 6 photos required per listing
+Any listing with fewer than 6 source photos is dropped during filter and
+rejected by the pre-publish validation gate. Sparse galleries (1–5 photos)
+look poor on the property detail page and reduce conversion.
+→ Enforced in `filter_records()` and `validate()` in every batch script,
+  and in `validate_for_publish()` in `enrichment.py`.
+
+### 7. Photo quality — Realtor CDN images are upgraded to maximum resolution
+When scraping from Realtor.com, photo URLs are upgraded to `w-2016,q-95`
+(the CDN's maximum quality tier) rather than stripped to the bare URL.
+This avoids the default CDN resolution (often 1024px) and ensures every
+scraped photo arrives at 2016px wide / 95% quality before ImageKit
+re-encodes it.
+→ Enforced by `_upgrade_photo_url()` in `scraper.py`.
 
 ---
 

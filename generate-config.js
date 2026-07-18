@@ -207,10 +207,10 @@ CONFIG.img = function(url, preset) {
     return fallback;
   }
   const transforms = {
-    card:       'tr:w-600,q-80,f-webp',
-    card_2x:    'tr:w-1200,q-80,f-webp',
-    gallery:    'tr:w-1200,q-90,f-webp',
-    gallery_2x: 'tr:w-2400,q-85,f-webp',
+    card:       'tr:w-900,q-85,f-webp',    // covers 2-col featured cards on 1x displays
+    card_2x:    'tr:w-1800,q-85,f-webp',   // retina featured cards
+    gallery:    'tr:w-1400,q-93,f-webp',   // larger hero covers 1x widescreen fully
+    gallery_2x: 'tr:w-2800,q-88,f-webp',
     strip:      'tr:w-80,h-60,c-maintain_ratio,q-70,f-webp',
     thumb:      'tr:w-120,h-120,c-maintain_ratio,q-75,f-webp',
     lightbox:   'tr:q-95,f-webp',

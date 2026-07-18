@@ -29,6 +29,82 @@
   function fmtBeds(l){ return [l.bedrooms != null ? l.bedrooms + ' bd' : null, l.bathrooms != null ? l.bathrooms + ' ba' : null].filter(Boolean).join(' · ') || '—'; }
   function fmtSqft(l){ return l.square_footage ? l.square_footage.toLocaleString() + ' sqft' : ''; }
   function parseJSON(s){ try{ return s ? JSON.parse(s) : null; }catch(_){ return null; } }
+
+  // ── Pre-publish validation gate ──────────────────────────────────────────────
+  // Mirrors validate_for_publish() in scraper/enrichment.py.
+  // Must pass before any pipeline record is promoted to a live listing.
+  // Returns { ok: boolean, failures: string[] }.
+  //
+  // Image check:
+  //   - If the listing already has a choice_property_id (re-published before),
+  //     fetch real photo count from property_photos (confirmed ImageKit uploads).
+  //   - Otherwise check original_image_urls — source photos must exist so
+  //     import-pipeline-photos can transfer them immediately post-publish.
+  async function validateForPublish(listing) {
+    const failures = [];
+    const desc = listing.description || '';
+
+    // 1. Image check
+    if (listing.choice_property_id) {
+      // Already published once — count confirmed ImageKit photos.
+      // Use select without head:true so count is accurate.
+      const { data: existingPhotos } = await CP.sb()
+        .from('property_photos')
+        .select('id')
+        .eq('property_id', listing.choice_property_id);
+      const transferred = existingPhotos ? existingPhotos.length : 0;
+      if (transferred === 0) {
+        failures.push('No images have been transferred to ImageKit yet — use "Import source photos" first');
+      }
+    } else {
+      // First publish — source photos must exist (transferred post-publish by import-pipeline-photos)
+      const sourceUrls = parseJSON(listing.original_image_urls) || [];
+      if (sourceUrls.length === 0) {
+        failures.push('No source images available — add at least one photo before publishing');
+      }
+    }
+
+    // 2. Rent must be set
+    if (!listing.monthly_rent) {
+      failures.push('Monthly rent is not set');
+    }
+
+    // 3. Free-application language in description
+    const freeAppRe = /free\s+(?:to\s+)?apply|apply\s+for\s+free|no\s+(?:application\s+|app\s+)?fee|\$\s*0\.?0*\s+(?:application\s+|app\s+)?fee|zero\s+(?:application\s+)?fee|complimentary\s+application|application\s+(?:is\s+)?free|fee[- ]?free\s+application|free\s+application/i;
+    if (freeAppRe.test(desc)) {
+      failures.push('Description contains free-application language (must say "Application Fee: $50")');
+    }
+
+    // 4. Non-$50 application fee amount in description
+    // Two patterns: trailing-dollar ("application fee: $35") and
+    //               leading-dollar  ("$35 application fee").
+    const _feeAmounts = [];
+    const _feePat1 = /(?:application|app)\s+fee[:\s]+\$?\s*(\d+(?:\.\d{2})?)/gi;
+    const _feePat2 = /\$\s*(\d+(?:\.\d{2})?)\s+(?:application|app)\s+fee/gi;
+    let _fm;
+    while ((_fm = _feePat1.exec(desc)) !== null) { _feeAmounts.push(parseFloat(_fm[1])); }
+    while ((_fm = _feePat2.exec(desc)) !== null) { _feeAmounts.push(parseFloat(_fm[1])); }
+    _feeAmounts.forEach(function(amt) {
+      if (Math.abs(amt - 50) > 0.01) {
+        failures.push('Description references a non-$50 application fee ($' + amt + ')');
+      }
+    });
+
+    // 5. Tour / showing / contact CTA language
+    const tourRe = /schedule\s+a\s+(?:tour|showing|viewing)|book\s+a\s+(?:tour|showing)|open\s+house|contact\s+(?:us|the\s+agent|the\s+landlord|owner)/i;
+    if (tourRe.test(desc)) {
+      failures.push('Description contains tour/showing/contact CTA language');
+    }
+
+    // 6. External portal application instructions
+    const portalRe = /turbotenant|zillow\s+application|apartments\.com|apply\s+on\s+\w+|listing\s*id\s*#?\s*\d+/i;
+    if (portalRe.test(desc)) {
+      failures.push('Description references an external application portal');
+    }
+
+    return { ok: failures.length === 0, failures };
+  }
+
   function qsClass(score){ if(score == null) return ''; return score >= 80 ? 'qs-high' : score >= 60 ? 'qs-mid' : 'qs-low'; }
   function qsBadge(score){
     if(score == null) return '';
@@ -207,6 +283,7 @@
           ${qsBadge(score)}
           ${srcImp === 'admin-url' ? `<span class="qs-badge qs-high" title="Imported via admin URL import">🖥 Desktop</span>` : ''}
           ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none;pointer-events:auto" target="_blank" onclick="event.stopPropagation()">Live ↗</a>` : ''}
+          ${isPublished && l.photo_import_status === 'failed' ? `<span class="qs-badge qs-low" title="${S.esc(l.last_photo_import_error || 'Photo transfer to ImageKit failed')} — listing stays hidden from the public site until photos are added">⏳ Pending images</span>` : ''}
           ${l.source_status && l.source_status !== 'available' ? `<span class="qs-badge ${l.source_status === 'pending' ? 'qs-mid' : 'qs-low'}" title="Source site status: ${S.esc(l.source_status)}">${l.source_status === 'pending' ? '⏳ Pending' : l.source_status === 'rented' ? '🔒 Rented' : '⚠ ' + S.esc(l.source_status)}</span>` : ''}
         </div>
       </div>
@@ -224,6 +301,7 @@
       <div class="pl-card-ft" onclick="event.stopPropagation()">
         ${!isArchived ? `<button class="btn btn-sm btn-ghost pl-arc-btn" data-id="${S.esc(l.id)}" title="Archive">Archive</button>` : '<span class="pill pill-muted" style="font-size:.68rem">Archived</span>'}
         ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-primary pl-pub-btn" data-id="${S.esc(l.id)}" title="Publish to site">Publish →</button>` : ''}
+        ${isPublished && l.photo_import_status === 'failed' && l.choice_property_id ? `<button class="btn btn-sm btn-outline pl-retry-photos-btn" data-id="${S.esc(l.id)}" data-prop-id="${S.esc(l.choice_property_id)}" title="Retry transferring photos to ImageKit">Retry photos</button>` : ''}
         ${isPublished && l.choice_property_id ? `<a class="btn btn-sm btn-ghost" href="/admin/property-detail.html?id=${S.esc(l.choice_property_id)}" target="_blank" onclick="event.stopPropagation()">Edit ↗</a>` : ''}
       </div>
     </div>`;
@@ -864,7 +942,20 @@
       if(se){ S.toast('Could not save changes before publishing: ' + se.message, 'error'); return; }
     }
 
-    const l = _current || {};
+    // Merge unsaved patch into _current so validation sees the just-saved values.
+    const l = Object.assign({}, _current || {}, patch);
+
+    // ── Pre-publish validation gate ──────────────────────────────────────────
+    // Must run before any RPC call. Mirrors validate_for_publish() in enrichment.py.
+    const validation = await validateForPublish(l);
+    if (!validation.ok) {
+      S.toast(
+        'Cannot publish — fix these issues first:\n• ' + validation.failures.join('\n• '),
+        'error'
+      );
+      return;
+    }
+
     const desc = [l.address, l.city, l.state].filter(Boolean).join(', ');
     const ok = await S.confirm(
       'Publish "' + desc + '" as a draft?',
@@ -923,9 +1014,21 @@
 
     let succeeded = 0;
     let failed = 0;
+    let blocked = 0;
 
     for(const id of publishable){
       try {
+        const listing = _pageData.find(x => x.id === id);
+        if (!listing) { failed++; continue; }
+
+        // Pre-publish validation gate — skip invalid records in bulk mode
+        const validation = await validateForPublish(listing);
+        if (!validation.ok) {
+          console.warn('[pipeline] bulk publish blocked for', id, validation.failures);
+          blocked++;
+          continue;
+        }
+
         const { data, error } = await CP.sb().rpc('pipeline_publish', { p_id: id, p_landlord_id: null });
         if(error) throw error;
         const res = typeof data === 'string' ? JSON.parse(data) : data;
@@ -943,10 +1046,14 @@
     updateBulkBar();
     fetchCounts().catch(()=>{});
 
-    if(succeeded > 0 && failed === 0){
+    if(succeeded > 0 && failed === 0 && blocked === 0){
       S.toast(`${succeeded} listing${succeeded !== 1 ? 's' : ''} published as drafts ✓`, 'success');
+    } else if(succeeded > 0 && blocked > 0){
+      S.toast(`${succeeded} published, ${blocked} blocked (fix photos/descriptions first)`, 'info');
     } else if(succeeded > 0){
       S.toast(`${succeeded} published, ${failed} failed`, 'info');
+    } else if(blocked > 0){
+      S.toast(`All ${blocked} listing${blocked !== 1 ? 's' : ''} blocked by validation — fix photos and descriptions`, 'error');
     } else {
       S.toast('Bulk publish failed — try again or publish individually', 'error');
     }
@@ -1013,6 +1120,19 @@
     // Archive buttons on cards
     document.querySelectorAll('.pl-arc-btn').forEach(btn => {
       btn.onclick = e => { e.stopPropagation(); doArchive(btn.dataset.id); };
+    });
+
+    // Retry photos buttons on cards (photo_import_status === 'failed')
+    document.querySelectorAll('.pl-retry-photos-btn').forEach(btn => {
+      btn.onclick = async e => {
+        e.stopPropagation();
+        btn.disabled = true;
+        btn.textContent = 'Retrying…';
+        await doTransferPhotos(btn.dataset.id, btn.dataset.propId);
+        btn.disabled = false;
+        btn.textContent = 'Retry photos';
+        load(false).catch(()=>{});
+      };
     });
 
     // Selection checkboxes

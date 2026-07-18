@@ -41,8 +41,10 @@ const isPreview = params.get('preview') === 'true';
 
 // Resolve the property id from either:
 //   1) the legacy ?id=PROP-XXXXXXXX query string, or
-//   2) the trailing prop-xxxxxxxx token of the canonical slug URL
-//      `/rent/<state>/<city>/<beds>-<type>-prop-xxxxxxxx/`
+//   2) the trailing token of the canonical slug URL — either:
+//      - old format: prop-xxxxxxxx  (short alphanumeric)
+//      - new format: full UUID      (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+//      e.g. `/rent/<state>/<city>/<beds>-<type>-<uuid>/`
 //      (rendered by functions/rent/[state]/[city]/[slug].js).
 // Matching the same regex the edge function uses keeps the two
 // in lock-step. Without this fallback, every click on a card on
@@ -51,8 +53,8 @@ const isPreview = params.get('preview') === 'true';
 function resolvePropertyId() {
   const fromQuery = (params.get('id') || '').trim();
   if (fromQuery) return fromQuery;
-  const m = window.location.pathname.match(/(prop-[a-z0-9]{8})\/?$/i);
-  return m ? m[1].toUpperCase() : '';
+  const m = window.location.pathname.match(/(prop-[a-z0-9]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
+  return m ? m[1].toLowerCase() : '';
 }
 const propertyId = resolvePropertyId();
 
@@ -1361,6 +1363,18 @@ function initAdminPropertyPanel(prop) {
       .adw-photo-arrows{position:absolute;bottom:4px;right:4px;display:flex;gap:2px;z-index:2}
       .adw-photo-arr{background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:3px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;padding:0}
       .adw-photo-arr:hover{background:rgba(0,106,255,.85)}
+      .adw-upload-zone{border:2px dashed #cbd5e1;border-radius:10px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color 150ms,background 150ms;margin-top:10px;background:#f8fafc}
+      .adw-upload-zone:hover,.adw-upload-zone.drag-over{border-color:#006aff;background:#eff6ff}
+      .adw-upload-zone-icon{font-size:22px;color:#94a3b8;pointer-events:none}
+      .adw-upload-zone-text{font-size:12px;color:#64748b;margin:5px 0 0;pointer-events:none;line-height:1.5}
+      .adw-pending-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:6px;margin-top:8px}
+      .adw-pending-item{position:relative;aspect-ratio:4/3;border-radius:6px;overflow:hidden;border:2px solid #e2e8f0;background:#1e293b}
+      .adw-pending-item img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.38;pointer-events:none}
+      .adw-pending-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px}
+      .adw-upload-prog{display:none;background:#f1f5f9;border-radius:8px;padding:10px 12px;margin-top:8px;border:1px solid #e2e8f0}
+      .adw-upload-prog-bar-wrap{height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin:5px 0 3px}
+      .adw-upload-prog-bar{height:100%;background:#006aff;width:0;transition:width 250ms;border-radius:3px}
+      .adw-upload-prog-row{font-size:11px;color:#475569;display:flex;justify-content:space-between}
       .adw-footer{display:flex;gap:8px;padding:14px 20px;border-top:2px solid #e2e8f0;flex-shrink:0;background:#f8fafc;align-items:center}
       .adw-save-btn{background:#006aff;color:#fff;border:none;border-radius:8px;padding:10px 0;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;flex:1}
       .adw-save-btn:disabled{opacity:.6;cursor:not-allowed}
@@ -1738,12 +1752,18 @@ function buildAdminEditDrawer(prop) {
       </div>
 
       <div class="adw-section">
-        <div class="adw-section-title"><i class="fas fa-images"></i> Photos (${_photos.length})</div>
+        <div class="adw-section-title"><i class="fas fa-images"></i> Photos (<span id="adwPhotoCount">${_photos.length}</span>)</div>
         <div class="adw-photo-grid" id="adwPhotoGrid">${renderPhotoGrid()}</div>
-        <p style="font-size:11px;color:#94a3b8;margin:10px 0 0">
-          Use arrows to reorder. To upload new photos, use
-          <a href="/admin/property-detail.html?id=${esc(prop.id)}" target="_blank" rel="noopener" style="color:#006aff">Full Edit ↗</a>
-        </p>
+        <div class="adw-upload-zone" id="adwUploadZone" role="button" tabindex="0" aria-label="Upload photos">
+          <div class="adw-upload-zone-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+          <div class="adw-upload-zone-text">Drop photos here or <strong>click to browse</strong><br><span style="font-size:10.5px;color:#94a3b8">JPG, PNG, WebP · max 10 MB each</span></div>
+          <input type="file" id="adwFileInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple style="display:none">
+        </div>
+        <div class="adw-pending-grid" id="adwPendingGrid"></div>
+        <div class="adw-upload-prog" id="adwUploadProg">
+          <div class="adw-upload-prog-row"><span id="adwUploadText">Uploading…</span><span id="adwUploadPct">0%</span></div>
+          <div class="adw-upload-prog-bar-wrap"><div class="adw-upload-prog-bar" id="adwUploadBar"></div></div>
+        </div>
       </div>
 
       <div class="adw-section">
@@ -1807,6 +1827,8 @@ function buildAdminEditDrawer(prop) {
 
   function refreshPhotos() {
     if (photoGrid) photoGrid.innerHTML = renderPhotoGrid();
+    const countEl = document.getElementById('adwPhotoCount');
+    if (countEl) countEl.textContent = _photos.length;
     bindPhotos();
     markDirty();
   }
@@ -1834,6 +1856,131 @@ function buildAdminEditDrawer(prop) {
     });
   }
   bindPhotos();
+
+  // ── Photo upload helpers ──────────────────────────────────────────────────
+  const _pendingMap = new Map();
+  let _uploading = false;
+
+  async function _adwCompress(file, maxPx = 2048, quality = 0.92) {
+    let bmp;
+    try { bmp = await createImageBitmap(file); } catch {
+      if (file.size > 4 * 1024 * 1024) throw new Error(`"${file.name}" is too large (${(file.size / 1048576).toFixed(1)} MB). Use a smaller image.`);
+      return file;
+    }
+    const scale = Math.min(1, maxPx / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.round(bmp.width  * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close?.();
+    return new Promise((res, rej) =>
+      canvas.toBlob(b => b ? res(b) : rej(new Error('Compression failed')), 'image/jpeg', quality)
+    );
+  }
+
+  function _adwToBase64(blob) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = () => res(r.result);
+      r.onerror = () => rej(new Error('Failed to read file'));
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function _adwUploadPhoto(file, onProgress) {
+    if (!window.CONFIG?.SUPABASE_URL || !window.CONFIG?.SUPABASE_ANON_KEY)
+      throw new Error('Upload service not configured');
+    const { data: { session } } = await window.CP.sb().auth.getSession();
+    if (!session?.access_token) throw new Error('Session expired — please log back in');
+    onProgress?.(5);
+    const compressed = await _adwCompress(file);
+    onProgress?.(20);
+    const base64 = await _adwToBase64(compressed);
+    onProgress?.(35);
+    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const folder   = `/properties/${prop.id}`;
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) onProgress?.(40 + Math.round((e.loaded / e.total) * 45));
+      };
+      xhr.onload = () => {
+        onProgress?.(100);
+        let d; try { d = JSON.parse(xhr.responseText); } catch { d = {}; }
+        if (d.success) resolve({ url: d.url, fileId: d.fileId ?? null });
+        else reject(new Error(d.error || `Upload failed (HTTP ${xhr.status})`));
+      };
+      xhr.onerror   = () => reject(new Error('Network error — check connection'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.timeout   = 55_000;
+      xhr.open('POST', `${window.CONFIG.SUPABASE_URL}/functions/v1/imagekit-upload`);
+      xhr.setRequestHeader('apikey',        window.CONFIG.SUPABASE_ANON_KEY);
+      xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+      xhr.setRequestHeader('Content-Type',  'application/json');
+      xhr.send(JSON.stringify({ fileData: base64, fileName: safeName, folder }));
+    });
+  }
+
+  function _adwAddPending(file) {
+    if (['image/heic', 'image/heif'].includes(file.type.toLowerCase()) || /\.heic$/i.test(file.name)) {
+      if (typeof showToast === 'function') showToast(`"${file.name}" is HEIC. Convert to JPG first.`, 'error'); return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      if (typeof showToast === 'function') showToast(`"${file.name}" exceeds the 10 MB limit.`, 'error'); return;
+    }
+    for (const f of _pendingMap.values()) { if (f.name === file.name && f.size === file.size) return; }
+    const sid  = `adwp${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    _pendingMap.set(sid, file);
+
+    const item = document.createElement('div');
+    item.className = 'adw-pending-item';
+    item.dataset.pendingId = sid;
+    const shortName = file.name.length > 18 ? file.name.slice(0, 15) + '…' : file.name;
+    item.innerHTML = `<div class="adw-pending-overlay" id="adw-ovl-${sid}">
+      <i class="fas fa-clock" style="color:rgba(255,255,255,.8);font-size:13px"></i>
+      <span style="color:#fff;font-size:.62rem;text-align:center;word-break:break-word;max-width:76px">${esc(shortName)}</span>
+      <button data-rm-pending="${sid}" type="button" style="padding:1px 6px;border-radius:3px;font-size:.6rem;background:rgba(220,38,38,.85);color:#fff;border:none;cursor:pointer;margin-top:1px">✕ Remove</button>
+    </div>`;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = document.createElement('img'); img.src = ev.target.result; img.alt = '';
+      item.insertBefore(img, item.firstChild);
+    };
+    reader.readAsDataURL(file);
+    document.getElementById('adwPendingGrid')?.appendChild(item);
+    markDirty();
+  }
+
+  // Pending grid — remove a queued file
+  document.getElementById('adwPendingGrid')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-rm-pending]');
+    if (!btn || _uploading) return;
+    const sid = btn.dataset.rmPending;
+    _pendingMap.delete(sid);
+    document.querySelector(`[data-pending-id="${sid}"]`)?.remove();
+  });
+
+  // File input
+  const adwFileInput = document.getElementById('adwFileInput');
+  adwFileInput?.addEventListener('change', e => {
+    [...e.target.files].forEach(_adwAddPending);
+    adwFileInput.value = '';
+  });
+
+  // Upload zone — click to browse
+  const adwUploadZone = document.getElementById('adwUploadZone');
+  adwUploadZone?.addEventListener('click', e => {
+    if (!e.target.closest('[data-rm-pending]')) adwFileInput?.click();
+  });
+  adwUploadZone?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); adwFileInput?.click(); }
+  });
+  adwUploadZone?.addEventListener('dragover',  e => { e.preventDefault(); adwUploadZone.classList.add('drag-over'); });
+  adwUploadZone?.addEventListener('dragleave', () => adwUploadZone.classList.remove('drag-over'));
+  adwUploadZone?.addEventListener('drop', e => {
+    e.preventDefault(); adwUploadZone.classList.remove('drag-over');
+    [...e.dataTransfer.files].forEach(_adwAddPending);
+  });
 
   // ── Save ──
   document.getElementById('adwSaveBtn').addEventListener('click', async () => {
@@ -1879,22 +2026,99 @@ function buildAdminEditDrawer(prop) {
     };
 
     try {
-      // Save core fields
+      // 1. Save core property fields
       const res = await window.CP.Properties.update(prop.id, payload);
       if (!res.ok) throw new Error(res.error || 'Property update failed');
 
-      // Delete queued photos
+      // 2. Delete queued photos
       for (const photoId of _deletedIds) {
         await window.CP.sb().from('property_photos').delete().eq('id', photoId);
       }
       _deletedIds.clear();
 
-      // Persist photo order
+      // 3. Persist photo order
       await Promise.all(_photos.map((ph, i) =>
         window.CP.sb().from('property_photos').update({ display_order: i }).eq('id', ph.id)
       ));
 
-      // Audit log
+      // 4. Upload pending new photos
+      if (_pendingMap.size > 0) {
+        _uploading = true;
+        const uploadProg = document.getElementById('adwUploadProg');
+        const uploadBar  = document.getElementById('adwUploadBar');
+        const uploadText = document.getElementById('adwUploadText');
+        const uploadPct  = document.getElementById('adwUploadPct');
+        if (uploadProg) uploadProg.style.display = '';
+
+        const entries    = [..._pendingMap.entries()];
+        const total      = entries.length;
+        let   successCnt = 0;
+
+        for (let idx = 0; idx < total; idx++) {
+          const [sid, file] = entries[idx];
+          const ovlEl  = document.getElementById(`adw-ovl-${sid}`);
+          const itemEl = document.querySelector(`[data-pending-id="${sid}"]`);
+          sb.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Uploading ${idx + 1}/${total}…`;
+          if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:#60a5fa;font-size:13px"></i>';
+
+          const pctBase = Math.round((idx / total) * 100);
+          if (uploadBar)  uploadBar.style.width  = pctBase + '%';
+          if (uploadPct)  uploadPct.textContent  = pctBase + '%';
+          if (uploadText) uploadText.textContent = `Uploading ${idx + 1} of ${total}…`;
+
+          try {
+            const result = await _adwUploadPhoto(file, (pct) => {
+              const overall = Math.round(((idx + pct / 100) / total) * 100);
+              if (uploadBar) uploadBar.style.width = overall + '%';
+              if (uploadPct) uploadPct.textContent = overall + '%';
+            });
+            const { error: insErr } = await window.CP.sb()
+              .rpc('add_property_photo', {
+                p_property_id:  prop.id,
+                p_url:          result.url,
+                p_file_id:      result.fileId || null,
+                p_display_order: null,
+                p_is_hero:      false,
+              });
+            if (insErr) throw new Error(insErr.message);
+            successCnt++;
+            _pendingMap.delete(sid);
+            if (ovlEl)  ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80;font-size:15px"></i>';
+            if (itemEl) itemEl.style.borderColor = 'rgba(34,197,94,.7)';
+          } catch (err) {
+            const msg = String(err?.message || err).slice(0, 70);
+            if (ovlEl)  ovlEl.innerHTML = `<i class="fas fa-times-circle" style="color:#f87171;font-size:13px"></i><span style="color:#f87171;font-size:.6rem;text-align:center;word-break:break-word;max-width:76px">${esc(msg)}</span>`;
+            if (itemEl) itemEl.style.borderColor = 'rgba(239,68,68,.6)';
+          }
+          if (idx < total - 1) await new Promise(r => setTimeout(r, 400));
+        }
+
+        if (uploadBar)  uploadBar.style.width  = '100%';
+        if (uploadPct)  uploadPct.textContent  = '100%';
+        _uploading = false;
+
+        if (successCnt > 0) {
+          if (typeof showToast === 'function') showToast(`${successCnt} photo${successCnt > 1 ? 's' : ''} uploaded!`, 'success');
+          // Audit log for uploads (non-blocking)
+          try {
+            const session = await window.CP.Auth.getSession();
+            if (session?.user?.id) {
+              await window.CP.sb().from('admin_actions').insert({
+                action: 'property.photo_upload', target_type: 'property',
+                target_id: prop.id, metadata: { count: successCnt },
+                user_id: session.user.id,
+              });
+            }
+          } catch(e) {}
+        } else {
+          if (typeof showToast === 'function') showToast('Photo uploads failed — see errors above.', 'error');
+        }
+
+        // Fade out progress bar after a moment
+        setTimeout(() => { if (uploadProg) uploadProg.style.display = 'none'; }, 1500);
+      }
+
+      // 5. Audit log for property edit
       try {
         const session = await window.CP.Auth.getSession();
         if (session?.user?.id) {
@@ -1906,7 +2130,7 @@ function buildAdminEditDrawer(prop) {
         }
       } catch(e) {}
 
-      // Sync in-memory prop + visible UI
+      // 6. Sync in-memory prop + visible UI
       Object.assign(prop, payload);
       const bannerTitle = document.getElementById('adminBannerTitle');
       if (bannerTitle && payload.title) { bannerTitle.textContent = payload.title; bannerTitle.title = payload.title; }
@@ -1918,9 +2142,10 @@ function buildAdminEditDrawer(prop) {
       _dirty = false;
       dirtyBar?.classList.remove('show');
       if (typeof showToast === 'function') showToast('Property saved!', 'success');
-      setTimeout(closeDrawer, 400);
+      setTimeout(closeDrawer, 600);
 
     } catch(e) {
+      _uploading = false;
       if (typeof showToast === 'function') showToast('Save failed: ' + e.message, 'error');
     } finally {
       sb.disabled = false;

@@ -53,6 +53,7 @@
     clock:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em;color:var(--brand)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     spin:    `<span class="pd-spin" aria-hidden="true"></span>`,
     dot:     `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style="flex-shrink:0;vertical-align:.05em"><circle cx="5" cy="5" r="4" fill="currentColor" opacity=".45"/></svg>`,
+    trash:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;vertical-align:-.1em"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
   };
   function ico(n){ return _SV[n] || ''; }
 
@@ -66,6 +67,53 @@
   const HEATING_OPTIONS    = ['','Central','Forced Air','Baseboard','Radiant','Heat Pump','Wall Unit','None'];
   const COOLING_OPTIONS    = ['','Central AC','Window Units','Mini-Split','None'];
   const PARKING_TYPE_OPTIONS = ['','None','Street Parking','Garage (Included)','Garage (Fee)','Carport','Parking Lot','Assigned Space'];
+
+  // ── Form-state snapshot helpers (edit-panel undo/redo) ─────────────────────
+  function _captureFormState(form) {
+    const state = {};
+    form.querySelectorAll('[name]').forEach(el => {
+      if (el.type === 'checkbox') return;
+      state[el.name] = el.value;
+    });
+    ['amenities', 'appliances', 'flooring', 'utilities_included'].forEach(tag => {
+      state['__tags__' + tag] = [...form.querySelectorAll(`[data-tag="${tag}"]:checked`)].map(cb => cb.value);
+    });
+    return state;
+  }
+
+  function _restoreFormState(form, state) {
+    form.querySelectorAll('[name]').forEach(el => {
+      if (el.type === 'checkbox') return;
+      if (state[el.name] !== undefined) el.value = state[el.name];
+    });
+    ['amenities', 'appliances', 'flooring', 'utilities_included'].forEach(tag => {
+      const vals = new Set(state['__tags__' + tag] || []);
+      form.querySelectorAll(`[data-tag="${tag}"]`).forEach(cb => { cb.checked = vals.has(cb.value); });
+    });
+    const desc = form.elements.description;
+    const counter = document.getElementById('pd-desc-counter');
+    if (desc && counter) {
+      counter.textContent = desc.value.length + ' / 5000';
+      counter.classList.toggle('over', desc.value.length > 4800);
+    }
+  }
+
+  // ── Photo-order snapshot helpers (photo-manager undo/redo) ─────────────────
+  function _pmCaptureOrder(grid) {
+    return [...grid.querySelectorAll('.pd-pm-item')].map(el => el.dataset.photoId);
+  }
+
+  function _pmRestoreOrder(grid, order) {
+    const map = {};
+    grid.querySelectorAll('.pd-pm-item').forEach(el => { map[el.dataset.photoId] = el; });
+    order.forEach(id => { const el = map[id]; if (el) grid.appendChild(el); });
+    refreshOrderBadges();
+    grid.querySelectorAll('.pd-pm-cover-btn').forEach((cb, idx) => {
+      cb.classList.toggle('is-cover', idx === 0);
+      cb.textContent = idx === 0 ? '★ Cover' : 'Set cover';
+      cb.title = idx === 0 ? 'Cover photo' : 'Set as cover';
+    });
+  }
 
   function _tagPicker(name, options, current) {
     const currentSet = new Set((Array.isArray(current) ? current : []).map(s => s.trim()));
@@ -92,10 +140,14 @@
 
   let _editOriginal = null;
   let _formDirty = false;
-  let _autosaveTimer = null;
   let _landlordCache = null;
   let _lastSavedAt = null;
   let _editPendingPhotos = new Map(); // files queued in edit panel, upload on save
+
+  // ── Undo/redo state ─────────────────────────────────────────────────────────
+  let _editHistory      = [];   // array of form-state snapshots
+  let _editHistoryIdx   = -1;
+  let _editUndoDebounce = null;
 
   // ── Status toggle ────────────────────────────────────────────────────────────
   const STATUS_OPTIONS = [
@@ -441,6 +493,7 @@
       <button class="btn btn-ghost btn-sm" id="pd-btn-verify" title="Confirm this listing is still active and available">${ico('check')} Mark as verified</button>
       <a class="btn btn-ghost btn-sm" href="/property.html?id=${esc(p.id)}" target="_blank" rel="noopener">${ico('ext')} Public listing</a>
       <button class="btn btn-ghost btn-sm" id="pd-btn-duplicate" title="Clone this listing as a new draft">${ico('copy')} Duplicate</button>
+      <button class="btn btn-danger btn-sm" id="pd-btn-delete-property" title="Permanently delete this property and all its photos" style="margin-left:auto">${ico('trash')} Delete property</button>
     </div>
     ${_lastSavedAt ? `<div id="pd-lastsaved" class="pd-lastsaved">Last saved ${_lastSavedAt}</div>` : ''}
     ${metricsHtml}`;
@@ -676,7 +729,7 @@
     document.getElementById('pd-fab').onclick = () => { if (_prop) openEditPanel(_prop); };
 
     // Update page subtitle
-    const sub = document.querySelector('[data-page-sub]');
+    const sub = document.getElementById('page-sub');
     if (sub) sub.textContent = p.title || 'Property detail';
 
     // ── Bind interactions ──
@@ -706,13 +759,16 @@
       const btn = document.getElementById('pd-btn-import-photos');
       if (!btn) return;
 
-      // Guard: warn if photos already exist (re-import would add duplicates)
+      // Guard: confirm if photos already exist (re-import adds on top)
       if (_photos.length > 0) {
-        S.toast(
-          `Already has ${_photos.length} photo${_photos.length !== 1 ? 's' : ''}. ` +
-          `Delete existing photos first to re-import from source.`, 'info'
-        );
-        return;
+        const proceed = await S.confirm({
+          title:   'Photos already exist',
+          message: `This property already has ${_photos.length} photo${_photos.length !== 1 ? 's' : ''}. Re-importing will add the source photos on top of the existing ones. Continue?`,
+          ok:      'Import anyway',
+          cancel:  'Cancel',
+          danger:  false,
+        });
+        if (!proceed) return;
       }
 
       btn.disabled = true;
@@ -874,6 +930,54 @@
       setTimeout(() => { location.href = '/admin/property-detail.html?id=' + encodeURIComponent(nd.id) + '&edit=1'; }, 700);
     });
 
+    // ── Delete property button ────────────────────────────────────────────────
+    document.getElementById('pd-btn-delete-property')?.addEventListener('click', async () => {
+      const title = p.title || 'Untitled';
+      const ok = await S.confirm({
+        title:   'Permanently delete this property?',
+        message: `"${title}" and all its photos will be deleted immediately.\n\nThis cannot be undone.`,
+        ok:      'Delete property',
+        cancel:  'Cancel',
+        danger:  true,
+      });
+      if (!ok) return;
+
+      const btn = document.getElementById('pd-btn-delete-property');
+      if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+
+      try {
+        // 1. Delete all photos from DB (ImageKit files are orphaned — acceptable trade-off;
+        //    they expire or can be cleaned via ImageKit dashboard)
+        await CP.sb().from('property_photos').delete().eq('property_id', propId);
+
+        // 2. Delete the property record itself
+        const { error: delErr } = await CP.sb().from('properties').delete().eq('id', propId);
+        if (delErr) {
+          S.toast('Delete failed: ' + delErr.message, 'error');
+          if (btn) { btn.disabled = false; btn.innerHTML = ico('trash') + ' Delete property'; }
+          return;
+        }
+
+        // 3. Audit log (non-blocking)
+        try {
+          const { data: { session: _delSess } } = await CP.Auth.getSession();
+          CP.sb().from('admin_actions').insert([{
+            user_id:     _delSess?.user?.id || null,
+            action:      'property.hard_delete',
+            target_type: 'property',
+            target_id:   String(propId),
+            metadata:    { title, deleted_at: new Date().toISOString() }
+          }]).catch(() => {});
+        } catch (_) {}
+
+        S.toast('"' + title + '" deleted successfully.', 'success');
+        setTimeout(() => { location.href = '/admin/listings.html'; }, 1200);
+      } catch (err) {
+        S.toast('Unexpected error: ' + (err.message || err), 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = ico('trash') + ' Delete property'; }
+      }
+    });
+
     // Inquiry message expand (click row → modal dialog)
     document.querySelectorAll('.pd-inq-row').forEach(row => {
       row.addEventListener('click', () => {
@@ -970,7 +1074,7 @@
                 <span class="pd-edit-hint">Changes here override the inline status toggle</span>
                 <select class="pd-edit-input" name="status">
                   ${['active','rented','inactive','maintenance','draft','paused','archived'].map(v =>
-                    `<option value="${v}"${p.status===v?' selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`
+                    `<option value="${v}"${(_prop?.status||p.status)===v?' selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`
                   ).join('')}
                 </select>
               </label>
@@ -1201,21 +1305,17 @@
         </div>
         <div class="pd-edit-footer">
           <button class="btn btn-ghost" id="pd-edit-cancel">Cancel</button>
-          <button class="btn btn-primary" id="pd-edit-save">
-            ${ico('check')} Save changes
-          </button>
+          <div style="display:flex;gap:6px;margin-left:auto;align-items:center">
+            <button class="btn btn-ghost btn-sm" id="pd-edit-undo" disabled title="Undo last change">↩ Undo</button>
+            <button class="btn btn-ghost btn-sm" id="pd-edit-redo" disabled title="Redo">Redo ↪</button>
+            <button class="btn btn-primary" id="pd-edit-save">
+              ${ico('check')} Save
+            </button>
+          </div>
         </div>
       </div>`;
 
     document.body.appendChild(panel);
-
-    // Insert autosave toast badge if not present
-    if (!document.getElementById('pd-autosave-badge')) {
-      const badge = document.createElement('div');
-      badge.id = 'pd-autosave-badge';
-      badge.textContent = 'Draft auto-saved';
-      document.body.appendChild(badge);
-    }
 
     requestAnimationFrame(() => panel.classList.add('open'));
 
@@ -1232,8 +1332,7 @@
       if (dy > 100) {
         panel.classList.remove('open');
         setTimeout(() => { if (panel.parentNode) panel.parentNode.removeChild(panel); }, 300);
-        // stopAutosave inline — no separate function needed
-        clearInterval(_autosaveTimer); _autosaveTimer = null; _formDirty = false;
+        _formDirty = false;
       }
     }, { passive: true });
 
@@ -1253,9 +1352,63 @@
       }
     }
 
-    // Mark dirty on any input change
-    panel.querySelector('#pd-edit-form')?.addEventListener('input', _markDirty);
-    panel.querySelector('#pd-edit-form')?.addEventListener('change', _markDirty);
+    function _syncEditUndoRedo() {
+      const u = document.getElementById('pd-edit-undo');
+      const r = document.getElementById('pd-edit-redo');
+      if (u) u.disabled = _editHistoryIdx <= 0;
+      if (r) r.disabled = _editHistoryIdx >= _editHistory.length - 1;
+    }
+
+    function _pushEditHistory() {
+      const form = document.getElementById('pd-edit-form');
+      if (!form) return;
+      _editHistory = _editHistory.slice(0, _editHistoryIdx + 1);
+      _editHistory.push(_captureFormState(form));
+      if (_editHistory.length > 100) _editHistory.shift(); else _editHistoryIdx++;
+      _syncEditUndoRedo();
+    }
+
+    // Initialise history with current (pre-edit) state
+    _editHistory = [];
+    _editHistoryIdx = -1;
+    const _initForm = document.getElementById('pd-edit-form');
+    if (_initForm) {
+      _editHistory = [_captureFormState(_initForm)];
+      _editHistoryIdx = 0;
+    }
+    _syncEditUndoRedo();
+
+    // Track changes for dirty flag + history (debounced 600 ms)
+    panel.querySelector('#pd-edit-form')?.addEventListener('input', () => {
+      _markDirty();
+      clearTimeout(_editUndoDebounce);
+      _editUndoDebounce = setTimeout(_pushEditHistory, 600);
+    });
+    panel.querySelector('#pd-edit-form')?.addEventListener('change', () => {
+      _markDirty();
+      clearTimeout(_editUndoDebounce);
+      _editUndoDebounce = setTimeout(_pushEditHistory, 600);
+    });
+
+    document.getElementById('pd-edit-undo')?.addEventListener('click', () => {
+      if (_editHistoryIdx <= 0) return;
+      clearTimeout(_editUndoDebounce);
+      _editHistoryIdx--;
+      const form = document.getElementById('pd-edit-form');
+      if (form) _restoreFormState(form, _editHistory[_editHistoryIdx]);
+      _syncEditUndoRedo();
+      _markDirty();
+    });
+
+    document.getElementById('pd-edit-redo')?.addEventListener('click', () => {
+      if (_editHistoryIdx >= _editHistory.length - 1) return;
+      clearTimeout(_editUndoDebounce);
+      _editHistoryIdx++;
+      const form = document.getElementById('pd-edit-form');
+      if (form) _restoreFormState(form, _editHistory[_editHistoryIdx]);
+      _syncEditUndoRedo();
+      _markDirty();
+    });
 
     // ── Description character counter ──
     const descTA = document.getElementById('pd-desc-textarea');
@@ -1268,55 +1421,7 @@
       });
     }
 
-    // ── sessionStorage autosave every 30 s (per-tab, avoids multi-tab collisions) ──
-    const _autoKey = 'pd_draft_' + propId;
-    if (_autosaveTimer) clearInterval(_autosaveTimer);
-    _autosaveTimer = setInterval(() => {
-      const form = document.getElementById('pd-edit-form');
-      if (!form || !_formDirty) return;
-      try {
-        const fd = new FormData(form);
-        const snap = {};
-        for (const [k, v] of fd.entries()) snap[k] = v;
-        // Capture tag picker states — checkboxes have no `name` so FormData misses them
-        for (const [tn, opts] of [['amenities', AMENITY_OPTIONS], ['appliances', APPLIANCE_OPTIONS], ['flooring', FLOORING_OPTIONS], ['utilities_included', UTILITY_OPTIONS]]) {
-          snap['_tags_' + tn] = _readTags(form, tn, opts);
-        }
-        sessionStorage.setItem(_autoKey, JSON.stringify({ ts: Date.now(), data: snap }));
-        const badge = document.getElementById('pd-autosave-badge');
-        if (badge) {
-          badge.classList.add('show');
-          setTimeout(() => badge.classList.remove('show'), 2000);
-        }
-      } catch (e) { /* storage unavailable */ }
-    }, 30_000);
 
-    // Check for a saved draft (sessionStorage is per-tab — no cross-tab collision)
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(_autoKey) || 'null');
-      if (saved && saved.ts && Date.now() - saved.ts < 24 * 3600_000) {
-        const form = document.getElementById('pd-edit-form');
-        if (form) {
-          for (const [k, v] of Object.entries(saved.data || {})) {
-            const el = form.elements[k];
-            if (el && el.type !== 'checkbox') el.value = v;
-          }
-          // Restore tag picker checkboxes and any custom "other" values
-          for (const [tn, opts] of [['amenities', AMENITY_OPTIONS], ['appliances', APPLIANCE_OPTIONS], ['flooring', FLOORING_OPTIONS], ['utilities_included', UTILITY_OPTIONS]]) {
-            const vals = new Set(saved.data['_tags_' + tn] || []);
-            form.querySelectorAll(`[data-tag="${tn}"]`).forEach(cb => { cb.checked = vals.has(cb.value); });
-            // Repopulate the "other" text input with non-standard values from _tags_*
-            const otherEl = form.elements[tn + '_other'];
-            if (otherEl) {
-              const custom = [...vals].filter(v => !opts.includes(v));
-              if (custom.length) otherEl.value = custom.join(', ');
-            }
-          }
-          _markDirty();
-          S.toast('Draft restored from auto-save', 'success');
-        }
-      }
-    } catch (e) { /* ignore */ }
 
     const _guardedClose = async () => {
       if (_formDirty) {
@@ -1329,8 +1434,7 @@
         });
         if (!leave) return;
       }
-      clearInterval(_autosaveTimer);
-      _autosaveTimer = null;
+      clearTimeout(_editUndoDebounce);
       _formDirty = false;
       panel.classList.remove('open');
       setTimeout(() => panel.remove(), 300);
@@ -1340,10 +1444,8 @@
     document.getElementById('pd-edit-cancel').addEventListener('click', _guardedClose);
     document.getElementById('pd-edit-overlay').addEventListener('click', _guardedClose);
     document.getElementById('pd-edit-save').addEventListener('click', () => saveEdit(() => {
-      clearInterval(_autosaveTimer);
-      _autosaveTimer = null;
+      clearTimeout(_editUndoDebounce);
       _formDirty = false;
-      try { sessionStorage.removeItem('pd_draft_' + propId); } catch(e) {}
       panel.classList.remove('open');
       setTimeout(() => panel.remove(), 300);
     }));
@@ -1539,22 +1641,21 @@
       let uploadedCnt = 0;
 
       for (let i = 0; i < entries.length; i++) {
-        const [, file] = entries[i];
+        const [sid, file] = entries[i];
         if (statusEl) statusEl.textContent = `Uploading photo ${i + 1} of ${entries.length}…`;
         try {
           const result = await _uploadAdminPhoto(file, propId, () => {});
           const { data: newPhotoRows } = await CP.sb()
-            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null, p_display_order: null, p_is_hero: false });
           const newPhoto = newPhotoRows && newPhotoRows[0];
-          if (newPhoto) { _photos.push(newPhoto); uploadedCnt++; }
+          if (newPhoto) { _photos.push(newPhoto); uploadedCnt++; _editPendingPhotos.delete(sid); }
         } catch (uploadErr) {
           S.toast('Photo upload failed: ' + (uploadErr.message || uploadErr), 'error');
         }
         // Brief pause between uploads to avoid CDN rate limiting
         if (i < entries.length - 1) await new Promise(r => setTimeout(r, 400));
       }
-
-      _editPendingPhotos.clear();
+      // Failed entries remain in _editPendingPhotos so user can retry
       if (statusEl) { statusEl.textContent = uploadedCnt > 0 ? `${uploadedCnt} photo${uploadedCnt > 1 ? 's' : ''} uploaded!` : ''; }
       if (saveBtn) saveBtn.innerHTML = ico('spin') + ' Saving…';
     }
@@ -1703,7 +1804,7 @@
   // ── Admin photo upload helpers ────────────────────────────────────────────────
   // Mirrors imagekit.js logic — inline here because property-detail.js is a
   // non-module IIFE and cannot use ES-module imports.
-  async function _compressPhoto(file, maxPx = 2048, quality = 0.85) {
+  async function _compressPhoto(file, maxPx = 2048, quality = 0.92) {
     let bmp;
     try { bmp = await createImageBitmap(file); }
     catch {
@@ -1908,9 +2009,13 @@
         </div>
         <div class="pd-edit-footer">
           <button class="btn btn-ghost" id="pd-pm-cancel">Cancel</button>
-          <button class="btn btn-primary" id="pd-pm-save">
-            <i class="fas fa-check"></i> Save
-          </button>
+          <div style="display:flex;gap:6px;margin-left:auto;align-items:center">
+            <button class="btn btn-ghost btn-sm" id="pd-pm-undo" disabled title="Undo last reorder or cover change">↩ Undo</button>
+            <button class="btn btn-ghost btn-sm" id="pd-pm-redo" disabled title="Redo">Redo ↪</button>
+            <button class="btn btn-primary" id="pd-pm-save">
+              <i class="fas fa-check"></i> Save
+            </button>
+          </div>
         </div>
       </div>`;
 
@@ -1994,9 +2099,45 @@
         cb.title = idx === 0 ? 'Cover photo' : 'Set as cover';
       });
       S.toast('Cover photo updated — tap Save to confirm', 'success');
+      _pmPushHistory();
     });
 
-    bindDragToReorder(document.getElementById('pd-pm-grid'));
+    const _pmGrid = document.getElementById('pd-pm-grid');
+    const _pmHistory = _pmGrid ? [_pmCaptureOrder(_pmGrid)] : [];
+    let _pmHistIdx = 0;
+
+    function _pmSyncButtons() {
+      const u = document.getElementById('pd-pm-undo');
+      const r = document.getElementById('pd-pm-redo');
+      if (u) u.disabled = _pmHistIdx <= 0;
+      if (r) r.disabled = _pmHistIdx >= _pmHistory.length - 1;
+    }
+
+    function _pmPushHistory() {
+      if (!_pmGrid) return;
+      _pmHistory.splice(_pmHistIdx + 1);
+      _pmHistory.push(_pmCaptureOrder(_pmGrid));
+      _pmHistIdx = _pmHistory.length - 1;
+      _pmSyncButtons();
+    }
+
+    _pmSyncButtons();
+
+    bindDragToReorder(_pmGrid, _pmPushHistory);
+
+    document.getElementById('pd-pm-undo')?.addEventListener('click', () => {
+      if (!_pmGrid || _pmHistIdx <= 0) return;
+      _pmHistIdx--;
+      _pmRestoreOrder(_pmGrid, _pmHistory[_pmHistIdx]);
+      _pmSyncButtons();
+    });
+
+    document.getElementById('pd-pm-redo')?.addEventListener('click', () => {
+      if (!_pmGrid || _pmHistIdx >= _pmHistory.length - 1) return;
+      _pmHistIdx++;
+      _pmRestoreOrder(_pmGrid, _pmHistory[_pmHistIdx]);
+      _pmSyncButtons();
+    });
 
     // ── Replace-all flow ─────────────────────────────────────────────────────
     const replaceInput   = document.getElementById('pd-pm-replace-input');
@@ -2134,7 +2275,7 @@
             if (uploadPct) uploadPct.textContent = overall + '%';
           });
           const { error: insErr } = await CP.sb()
-            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null, p_display_order: null, p_is_hero: false });
           if (insErr) throw new Error(insErr.message);
           successCnt++;
           if (thumb) { thumb.style.outline = '2px solid #4ade80'; }
@@ -2280,7 +2421,7 @@
             uploadPct.textContent = overall + '%';
           });
           const { error: insErr } = await CP.sb()
-            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null, p_display_order: null, p_is_hero: false });
           if (insErr) throw new Error(insErr.message);
           successCnt++;
           if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
@@ -2329,7 +2470,7 @@
     });
   }
 
-  function bindDragToReorder(grid) {
+  function bindDragToReorder(grid, onReorder) {
     if (!grid) return;
     let dragItem = null;
     let dragOver = null;
@@ -2343,6 +2484,7 @@
       if (dragItem) dragItem.classList.remove('dragging');
       if (dragOver) dragOver.classList.remove('drag-over');
       dragItem = null; dragOver = null;
+      if (onReorder) onReorder();
     });
     grid.addEventListener('dragover', e => {
       e.preventDefault();
@@ -2419,8 +2561,10 @@
     }, { passive: false });
 
     grid.addEventListener('touchend', () => {
+      const hadDrag = !!touchItem;
       if (touchItem) { touchItem.classList.remove('dragging'); touchItem = null; }
       if (touchClone) { touchClone.remove(); touchClone = null; }
+      if (hadDrag && onReorder) onReorder();
     });
   }
 
@@ -2555,6 +2699,62 @@
       // Clean up URL so refresh doesn't re-open
       const cleanUrl = location.pathname + '?id=' + encodeURIComponent(propId);
       history.replaceState(null, '', cleanUrl);
+    }
+
+    // ─── Real-time updates ──────────────────────────────────────────────────
+    // Reflect edits/deletes made to THIS property from elsewhere (another
+    // admin tab, a bulk action, a re-publish) without requiring a refresh.
+    // Deliberately non-disruptive for updates (a toast, not a forced
+    // re-render) so it never clobbers an in-progress edit in this tab.
+    try {
+      CP.sb()
+        .channel('property-detail-' + propId)
+        .on('postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'properties', filter: 'id=eq.' + propId },
+          () => {
+            S.toast('This property was deleted in another tab.', 'error');
+            setTimeout(() => { location.href = '/admin/pipeline.html'; }, 1500);
+          })
+        .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'properties', filter: 'id=eq.' + propId },
+          async () => {
+            // If edit drawer is open, don't clobber the in-progress form
+            if (document.getElementById('pd-edit-panel')) {
+              S.toast('This property was updated elsewhere — your edit is still open.', 'info');
+              return;
+            }
+            // Auto-refresh page data without requiring a manual reload
+            const { data: freshProp } = await CP.sb()
+              .from('properties')
+              .select('*, landlords(id,user_id,business_name,contact_name,avatar_url,tagline,verified), property_photos(id,url,display_order,watermark_status,file_id)')
+              .eq('id', propId).single();
+            if (freshProp) {
+              render(freshProp, [], []);
+              S.toast('Property updated — page refreshed automatically.', 'info');
+              Promise.all([
+                CP.sb().from('applications').select('id,status,created_at,tenants(full_name,name,email)').eq('property_id', propId).order('created_at',{ascending:false}).limit(25),
+                CP.sb().from('inquiries').select('id,created_at,name,email,phone,message').eq('property_id', propId).order('created_at',{ascending:false}).limit(25),
+              ]).then(([a, i]) => _updateAppsInqs(a.data || [], i.data || [])).catch(() => {});
+            }
+          })
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'property_photos', filter: 'property_id=eq.' + propId },
+          async () => {
+            // Skip while photo manager is open — an upload may be in progress
+            if (document.getElementById('pd-photo-manager')) return;
+            const fresh = await CP.sb().from('property_photos')
+              .select('id,url,display_order,watermark_status,file_id')
+              .eq('property_id', propId).order('display_order');
+            if (!fresh.error && fresh.data) {
+              _photos = fresh.data.slice().sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+              refreshGalleryInPlace();
+              const photosBtn = document.getElementById('pd-btn-photos');
+              if (photosBtn) photosBtn.textContent = _photos.length ? 'All photos (' + _photos.length + ')' : 'Manage photos';
+            }
+          })
+        .subscribe();
+    } catch (e) {
+      console.warn('[property-detail] realtime subscription failed — falling back to manual refresh', e);
     }
   });
 })();

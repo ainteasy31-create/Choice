@@ -8,6 +8,7 @@
 -->
 <html lang="en" data-theme="light">
 <head>
+  <script src="/js/cp-error-reporter.js?v=1784145767610"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0B1D38">
@@ -51,7 +52,7 @@
     <div class="label">Active Listings</div>
   </div>
 
-  <script type="module">
+  <script type="module" nonce="__CSP_NONCE__">
     await new Promise(r => setTimeout(r, 300));
     try {
       const { count } = await CP.sb()

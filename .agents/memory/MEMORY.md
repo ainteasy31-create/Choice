@@ -1,4 +1,6 @@
 - [GitHub push method](github-push.md) — blob→tree→commit→PATCH refs/heads/main; always capture full SHAs from blob responses.
+- [Photo import direct method](photo-import-direct.md) — bypass edge fn 401s; download non-streaming bytes then upload to IK; watermark_status 'none' is invalid, use 'pending'.
+- [Pipeline publish ID format](pipeline-publish-id.md) — pipeline_publish uses gen_random_uuid() not generate_property_id(); route regex must match both prop-XXXXXXXX and full UUIDs.
 - [Autosave isolation](autosave-isolation.md) — use sessionStorage (not localStorage) for draft autosave to prevent multi-tab collisions on the same property.
 - [Lease SELECT fields](lease-select-fields.md) — rent_due_day_of_month and rent_proration_method must be in CP.Applications.getAll() SELECT or form pre-population silently falls back to defaults.
 - [Audit log pattern](audit-log-pattern.md) — use CP.Auth.getSession() (not auth.getUser().then()) to get userId; insert to admin_actions non-blocking inside try/catch; include source:'bulk' in metadata for batch ops.

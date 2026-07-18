@@ -348,13 +348,39 @@ def _details_texts(detail_list, *keywords):
                     seen.add(t)
     return out
 
+# ── CDN URL normalisation ──────────────────────────────────────────────────────
+_REALTOR_CDN_RE = re.compile(r"rdcpix\.com|realtor\.com/api/media")
+
+def _upgrade_photo_url(url):
+    """
+    Upgrade a CDN photo URL to maximum available resolution/quality.
+
+    Realtor.com CDN (rdcpix.com): replace size params with w-2016,q-95 —
+    the CDN's maximum quality tier — instead of stripping to a blank path
+    that may return a default (often lower) resolution.
+
+    Other CDNs (Zillow, Zumper, etc.): strip _[qwhr]-N size params to get
+    the original-resolution upload.
+    """
+    if not url:
+        return url
+    if _REALTOR_CDN_RE.search(url):
+        # Upgrade to max: 2016px wide, 95 % quality, drop height / ratio caps
+        s = re.sub(r"_q-\d+", "_q-95",  url)
+        s = re.sub(r"_w-\d+", "_w-2016", s)
+        s = re.sub(r"_h-\d+", "",        s)
+        s = re.sub(r"_r-\d+", "",        s)
+        return s
+    # Other CDNs — strip all size params to get original upload
+    return re.sub(r"_[qwhr]-\d+", "", url)
+
+
 def _collect_photos(prop):
     """
     Collect all photo URLs from a HomeHarvest Property object.
     Checks all three locations: prop.description.(primary_photo/alt_photos),
     prop.photos (list of dicts), and legacy direct attrs on prop.
-    Strips Realtor CDN size params (e.g. _w-120_h-80) to avoid storing
-    thumbnail-sized URLs that get imported as tiny 120x80 images.
+    Upgrades Realtor CDN URLs to w-2016,q-95; strips params on other CDNs.
     """
     urls, seen = [], set()
 
@@ -364,9 +390,8 @@ def _collect_photos(prop):
         s = str(u).strip()
         if not s or not s.startswith("http"):
             return
-        # Strip Realtor CDN resize params (e.g. _q-80_w-1024_h-768_r-1)
-        # so we always store the original-resolution URL, not a thumbnail.
-        s = re.sub(r"_[qwhr]-\d+", "", s)
+        # Upgrade Realtor CDN to max quality; strip params on other CDNs
+        s = _upgrade_photo_url(s)
         if s not in seen:
             urls.append(s)
             seen.add(s)
@@ -415,8 +440,8 @@ def _quality_score(r):
     for f in _BONUS:
         if r.get(f) not in (None, "", "[]"):
             sc += 2
-    n   = len(json.loads(r.get("original_image_urls") or "[]"))
-    sc += 6 if n >= 5 else (3 if n >= 1 else 0)
+    n = len(json.loads(r.get("original_image_urls") or "[]"))
+    sc += 10 if n >= 12 else (7 if n >= 6 else (4 if n >= 3 else (1 if n >= 1 else 0)))
     return min(sc, 100)
 
 def _missing_fields(r):
@@ -879,6 +904,17 @@ def _map_realtor_property(prop):
     }
     record["data_quality_score"] = _quality_score(record)
     record["missing_fields"]     = _jdumps(_missing_fields(record))
+
+    # listed_at fallback: compute from days_on_mls if list_date was unavailable
+    if not record.get("listed_at"):
+        _dom_mls = _safe_int(getattr(prop, "days_on_mls", None))
+        if _dom_mls is not None:
+            try:
+                from datetime import date as _date_r, timedelta as _td_r
+                record["listed_at"] = (_date_r.today() - _td_r(days=_dom_mls)).isoformat()
+            except Exception:
+                pass
+
     return record
 
 
@@ -971,10 +1007,8 @@ def _collect_realtor_detail_photos(prop):
             return
         s = str(u).strip()
         if s and s.startswith("http") and s not in seen:
-            # Strip Realtor CDN resize params to get original-resolution image
-            hd = re.sub(r"_[qwhr]-\d+", "", s)
-            # Prefer the stripped URL; fall back to original if they differ
-            target = hd if hd != s else s
+            # Upgrade Realtor CDN to max quality; strip params on other CDNs
+            target = _upgrade_photo_url(s)
             if target not in seen:
                 urls.append(target)
                 seen.add(target)
@@ -1388,6 +1422,84 @@ def _stage_records(records, location, source_label, args, started_at):
         _log_run(location, source_label, total_scraped, 0, 0, None, started_at,
                  count_dup, 0, count_watermarked)
         return 0, count_dup, 0, 0
+
+    # ── ImageKit image upload (permanent scraper behavior) ────────────────────
+    # Upload every listing image to ImageKit CDN before staging. This runs for
+    # every scraping job automatically — Zillow/Realtor CDN URLs are temporary;
+    # ImageKit URLs are permanent. Never publish listings with source-CDN images
+    # when ImageKit is configured.
+    _ik_full = _ik_partial = _ik_no_img = 0
+    try:
+        import sys as _iksys
+        import os as _ikos
+        _iksys.path.insert(0, _ikos.path.dirname(_ikos.path.abspath(__file__)))
+        from imagekit_upload import upload_images as _ik_upload, is_configured as _ik_ok
+        if _ik_ok():
+            print(f"\n📸  [{source_label}] Uploading images to ImageKit ({len(records)} listings)...")
+            for _rec in records:
+                _src_urls = []
+                try:
+                    _src_urls = json.loads(_rec.get("original_image_urls") or "[]")
+                except (ValueError, TypeError):
+                    pass
+                if not _src_urls:
+                    _ik_no_img += 1
+                    continue
+                _ik_urls, _ik_failed = _ik_upload(_src_urls, _rec["id"], verify=True, verbose=False)
+                # Store ImageKit URLs as the permanent CDN copies (in original order)
+                _rec["local_image_paths"] = json.dumps(_ik_urls)
+                # Record upload validation result in original_data for admin review
+                try:
+                    _od = json.loads(_rec.get("original_data") or "{}")
+                except (ValueError, TypeError):
+                    _od = {}
+                _od["imagekit_uploaded"] = len(_ik_urls)
+                _od["imagekit_failed"]   = _ik_failed
+                _od["imagekit_ready"]    = (_ik_failed == 0 and len(_ik_urls) > 0)
+                _rec["original_data"] = json.dumps(_od, default=str)
+                if _ik_failed > 0:
+                    _ik_partial += 1
+                    _addr = " ".join(filter(None, [_rec.get("address"), _rec.get("city")])) or _rec.get("id", "?")
+                    print(f"  ⚠  [IK] {_addr}: {_ik_failed} image(s) failed — review before publishing")
+                else:
+                    _ik_full += 1
+            print(f"   [IK] {_ik_full} fully uploaded, {_ik_partial} partial, {_ik_no_img} no images")
+        else:
+            print(
+                f"   [IK] ImageKit upload skipped — "
+                "set IMAGEKIT_PRIVATE_KEY + IMAGEKIT_URL_ENDPOINT in .env to enable"
+            )
+    except ImportError:
+        print("   [IK] imagekit_upload module not found — skipping image upload")
+    except Exception as _ik_err:
+        print(f"   [IK] Image upload step error (staging continues): {_ik_err}")
+    # ── End ImageKit upload ────────────────────────────────────────────────────
+
+    # ── Pre-staging validation log ─────────────────────────────────────────────
+    # Log records missing listed_at or with image issues so admin can review
+    # before approving publication. Records are always staged — the admin
+    # pipeline is the final gate before any listing goes live.
+    _val_warn = 0
+    for _rec in records:
+        _issues = []
+        if not _rec.get("listed_at"):
+            _issues.append("no original listing date captured")
+        try:
+            _n_src = len(json.loads(_rec.get("original_image_urls") or "[]"))
+            _n_ik  = len(json.loads(_rec.get("local_image_paths") or "[]"))
+        except (ValueError, TypeError):
+            _n_src = _n_ik = 0
+        if _n_src > 0 and _n_ik == 0:
+            _issues.append(f"0/{_n_src} images uploaded to ImageKit")
+        elif _n_src > 0 and _n_ik < _n_src:
+            _issues.append(f"{_n_ik}/{_n_src} images on ImageKit ({_n_src - _n_ik} failed)")
+        if _issues:
+            _val_warn += 1
+            _a = " ".join(filter(None, [_rec.get("address"), _rec.get("city")])) or _rec.get("id", "?")
+            print(f"  ⚠  [validation] {_a}: " + "; ".join(_issues))
+    if _val_warn:
+        print(f"  ⚠  [{source_label}] {_val_warn} record(s) have validation warnings — review before publishing")
+    # ── End pre-staging validation ─────────────────────────────────────────────
 
     batches       = [records[i:i+BATCH_SIZE] for i in range(0, len(records), BATCH_SIZE)]
     total_batches = len(batches)

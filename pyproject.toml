@@ -1,0 +1,14 @@
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "curl-cffi>=0.15.0",
+    "homeharvest>=0.8.18",
+    "python-dotenv>=1.2.2",
+    "requests>=2.34.2",
+]
+
+[tool.setuptools]
+packages = []

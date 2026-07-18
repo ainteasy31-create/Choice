@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html data-theme="light" lang="en">
 <head>
+  <script src="/js/cp-error-reporter.js?v=1784145767610"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a0f1e">
@@ -14,12 +15,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap">
-<link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
+<link rel="stylesheet" href="/css/cp-design.css?v=1784145767610">
 <script defer src="/config.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js" integrity="sha384-YieCqqg9gQufX7+5HcFvCEg/n3KUEdl8/Jb+A6J0npf1mB740VayvwKjTrtCeUoy" crossorigin="anonymous"></script>
 <script defer src="/js/cp-api.js" type="module"></script>
-<script defer src="/js/cp-chrome.js?v=__BUILD_VERSION__"></script>
-<script defer src="/js/cp-shell.js?v=__BUILD_VERSION__"></script>
+<script defer src="/js/cp-chrome.js?v=1784145767610"></script>
+<script defer src="/js/cp-shell.js?v=1784145767610"></script>
 <style>
   /* ── Filter toolbar ──────────────────────────────────────────────────────── */
   .pl-toolbar{display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-2);margin-bottom:var(--sp-4)}
@@ -262,7 +263,7 @@
         <button class="importer-banner-dismiss" id="importer-banner-dismiss" title="Dismiss">✕</button>
       </div>
     </div>
-    <script>
+    <script nonce="__CSP_NONCE__">
       (function(){
         document.addEventListener('DOMContentLoaded',function(){
           var btn=document.getElementById('importer-banner-dismiss');
@@ -365,6 +366,6 @@
   <button class="btn-bulk-pub" id="pl-bulk-pub">Publish all →</button>
 </div>
 
-<script defer src="/js/admin/pipeline.js?v=__BUILD_VERSION__"></script>
+<script defer src="/js/admin/pipeline.js?v=1784145767610"></script>
 </body>
 </html>

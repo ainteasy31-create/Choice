@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
-  <script>(function(){try{var t=localStorage.getItem('cp-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <script src="/js/cp-error-reporter.js?v=1784145767610"></script>
+  <script nonce="__CSP_NONCE__">(function(){try{var t=localStorage.getItem('cp-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
@@ -23,12 +24,92 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="/assets/fontawesome.css">
-  <link rel="stylesheet" href="/css/cp-design.css?v=__BUILD_VERSION__">
-  <link rel="stylesheet" href="/css/cp-marketing.css?v=__BUILD_VERSION__">
+  <link rel="stylesheet" href="/css/cp-design.css?v=1784145767610">
+  <link rel="stylesheet" href="/css/cp-marketing.css?v=1784145767610">
 </head>
 <body data-portal="public" data-page="holding-deposit-policy">
 
-<div id="site-nav"></div>
+<div id="site-nav" data-server-injected="1"><div class="nav-drawer-overlay" id="drawerOverlay"></div>
+
+<!-- ── Mobile Drawer ── -->
+<nav class="nav-drawer mv2-nav-drawer" id="navDrawer">
+  <div class="nav-drawer-header mv2-nav-drawer-header">
+    <a href="/index.html" class="nav-logo mv2-nav-logo">
+      <div class="nav-logo-emblem">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 9.5L12 3L21 9.5V20C21 20.55 20.55 21 20 21H15V15H9V21H4C3.45 21 3 20.55 3 20V9.5Z" fill="white" opacity="0.9"/>
+          <circle cx="12" cy="11" r="2.5" fill="rgba(0,106,255,0.8)"/>
+        </svg>
+      </div>
+      <div class="nav-logo-text-wrap">
+        <div class="nav-logo-name mv2-nav-logo-name">Choice Properties</div>
+        <div class="nav-logo-tagline mv2-nav-logo-tagline">Rental Marketplace</div>
+      </div>
+    </a>
+    <button class="nav-drawer-close" id="drawerClose" aria-label="Close menu">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="nav-drawer-body mv2-nav-drawer-body">
+    <a href="/listings.html" class="nav-drawer-link mv2-nav-drawer-link" data-nav-path="/listings.html"><i class="fas fa-home"></i> Browse Listings</a>
+    <a href="/listings/" class="nav-drawer-link mv2-nav-drawer-link" data-nav-path="/listings/"><i class="fas fa-map-marker-alt"></i> Browse by City</a>
+    <a href="/how-to-apply.html" class="nav-drawer-link mv2-nav-drawer-link" data-nav-path="/how-to-apply.html"><i class="fas fa-question-circle"></i> How to Apply</a>
+    <a href="/faq.html" class="nav-drawer-link mv2-nav-drawer-link" data-nav-path="/faq.html"><i class="fas fa-life-ring"></i> FAQ</a>
+    <a href="/tenant/portal.html" target="_blank" rel="noopener noreferrer" class="nav-drawer-link"><i class="fas fa-file-alt"></i> Track Application</a>    <a href="/landlord/register.html" class="nav-drawer-link mv2-nav-drawer-link" data-nav-path="/landlord/register.html"><i class="fas fa-user-tie"></i> Landlord Portal</a>
+    <div class="nav-drawer-divider"></div>
+    <a href="/how-it-works.html" class="nav-drawer-link mv2-nav-drawer-link" id="drawerListPropertyLink" data-nav-path="/how-it-works.html"><i class="fas fa-building"></i> For Landlords</a>
+    <a href="/about.html" class="nav-drawer-link mv2-nav-drawer-link" data-nav-path="/about.html"><i class="fas fa-info-circle"></i> About Us</a>
+    <a href="#" class="nav-drawer-link mv2-nav-drawer-link nav-drawer-theme-toggle" data-theme-toggle role="button" aria-pressed="false">
+        <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--moon"></i>
+        <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--sun"></i>
+        <span class="nav-drawer-theme-toggle__label">Toggle dark mode</span>
+      </a>
+  
+  </div>
+  <div class="nav-drawer-cta">
+    <a href="/landlord/login.html" class="btn btn-primary btn-full" id="drawerAuthLink">Landlord Login</a>
+  </div>
+  <div class="nav-drawer-footer"><a id="drawerFooterEmail" href="mailto:support@choiceproperties.com">support@choiceproperties.com</a></div>
+</nav>
+
+<!-- ── Main Navigation ── -->
+<nav class="nav mv2-nav" id="mainNav">
+  <div class="nav-inner mv2-nav-inner">
+    <a href="/index.html" class="nav-logo mv2-nav-logo">
+      <div class="nav-logo-emblem">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 9.5L12 3L21 9.5V20C21 20.55 20.55 21 20 21H15V15H9V21H4C3.45 21 3 20.55 3 20V9.5Z" fill="white" opacity="0.9"/>
+          <circle cx="12" cy="11" r="2.5" fill="rgba(0,106,255,0.8)"/>
+        </svg>
+      </div>
+      <div class="nav-logo-text-wrap">
+        <div class="nav-logo-name mv2-nav-logo-name">Choice Properties</div>
+        <div class="nav-logo-tagline mv2-nav-logo-tagline">Rental Marketplace</div>
+      </div>
+    </a>
+
+    <div class="nav-links mv2-nav-links">
+      <a href="/listings.html" class="nav-link mv2-nav-link" data-nav-path="/listings.html">Browse Listings</a>
+      <a href="/how-to-apply.html" class="nav-link mv2-nav-link" data-nav-path="/how-to-apply.html">How to Apply</a>
+      <a href="/faq.html" class="nav-link mv2-nav-link" data-nav-path="/faq.html">FAQ</a>
+      <a href="/tenant/portal.html" target="_blank" rel="noopener noreferrer" class="nav-link nav-link--track">
+        <i class="fas fa-file-alt" style="font-size:11px"></i> Track Application
+      </a>
+      <a href="/landlord/register.html" class="nav-link mv2-nav-link nav-link--landlord mv2-nav-link--landlord" data-nav-path="/landlord/register.html">Landlord Portal</a>
+    </div>
+      <button class="theme-toggle mv2-theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="Switch to dark theme" title="Switch theme">
+          <i class="fas fa-moon theme-toggle__icon theme-toggle__icon--moon" aria-hidden="true"></i>
+          <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true"></i>
+          <span class="visually-hidden">Toggle theme</span>
+        </button>
+  
+
+    <button class="nav-mobile-toggle" id="mobileToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navDrawer">
+      <i class="fas fa-bars"></i>
+    </button>
+  </div>
+</nav>
+</div>
 
   <div class="info-hero">
     <div class="container"><div class="info-hero-inner">
@@ -114,11 +195,70 @@
       </div>
     </div>
 
-<div id="site-footer"></div>
+<div id="site-footer" data-server-injected="1"><footer class="footer mv2-footer">
+    <div class="container">
+      <div class="footer-grid mv2-footer-grid">
+        <div>
+          <div class="footer-logo mv2-footer-logo">
+            <div class="footer-logo-mark">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M3 9.5L12 3L21 9.5V20C21 20.55 20.55 21 20 21H15V15H9V21H4C3.45 21 3 20.55 3 20V9.5Z" fill="white" opacity="0.92"/>
+                <circle cx="12" cy="11" r="2.5" fill="rgba(0,106,255,0.9)"/>
+              </svg>
+            </div>
+            <div class="footer-logo-text mv2-footer-logo-text">Choice Properties</div>
+          </div>
+          <p class="footer-desc mv2-footer-desc">A clear, structured rental marketplace. Connecting quality tenants with verified landlords — expanding nationwide with active listings in select markets.</p>
+          <a href="mailto:support@choiceproperties.com" class="footer-link mv2-footer-link" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:6px" data-cfg-email><i class="fas fa-envelope"></i> support@choiceproperties.com</a>
+          <a href="tel:7077063137" class="footer-link mv2-footer-link" style="display:inline-flex;align-items:center;gap:6px" data-cfg-phone><i class="fas fa-phone"></i> 707-706-3137</a>
+        </div>
+        <div>
+          <div class="footer-col-title mv2-footer-col-title">Renters</div>
+          <a href="/listings.html" class="footer-link mv2-footer-link">Browse Listings</a>
+          <a href="/listings/" class="footer-link mv2-footer-link">Browse by City</a>
+          <a href="/how-to-apply.html" class="footer-link mv2-footer-link">How to Apply</a>
+          <a href="/faq.html" class="footer-link mv2-footer-link">FAQ</a>
+          <a href="/tenant/portal.html" class="footer-link mv2-footer-link" target="_blank" rel="noopener noreferrer">Track Application</a>
+        </div>
+        <div>
+          <div class="footer-col-title mv2-footer-col-title">Landlords</div>
+          <a href="/landlord/register.html" class="footer-link mv2-footer-link">List a Property</a>
+          <a href="/landlord/login.html" class="footer-link mv2-footer-link">Landlord Login</a>
+          <a href="/how-it-works.html" class="footer-link mv2-footer-link">How It Works</a>
+        </div>
+        <div>
+          <div class="footer-col-title mv2-footer-col-title">Company</div>
+          <a href="/about.html" class="footer-link mv2-footer-link">About Us</a>
+          <a href="/privacy.html" class="footer-link mv2-footer-link">Privacy Policy</a>
+          <a href="/terms.html" class="footer-link mv2-footer-link">Terms of Service</a>
+          <a href="mailto:support@choiceproperties.com" class="footer-link mv2-footer-link" data-cfg-email>Contact</a>
+        </div>
+        <div>
+          <div class="footer-col-title mv2-footer-col-title">Legal &amp; Policies</div>
+          <a href="/policies.html" class="footer-link mv2-footer-link"><strong>Complete Policy Framework</strong></a>
+          <a href="/rental-application-policy.html" class="footer-link mv2-footer-link">Rental Application Policy</a>
+          <a href="/application-credit-policy.html" class="footer-link mv2-footer-link">Application Credit Policy</a>
+          <a href="/holding-deposit-policy.html" class="footer-link mv2-footer-link">Holding Deposit Policy</a>
+          <a href="/fair-housing.html" class="footer-link mv2-footer-link">Fair Housing Policy</a>
+          <a href="/policy-changelog.html" class="footer-link mv2-footer-link">Policy Changelog</a>
+        </div>
+      </div>
+      <div class="footer-bottom mv2-footer-bottom">
+        <span class="footer-legal mv2-footer-legal">&copy; 2026 Choice Properties. All rights reserved.</span>
+        <span class="footer-eq mv2-footer-eq"><i class="fas fa-home" aria-hidden="true"></i> Equal Housing Opportunity</span>
+        <div class="footer-bottom-links mv2-footer-bottom-links">
+          <a href="/privacy.html">Privacy</a>
+          <a href="/terms.html">Terms</a>
+          <a href="/fair-housing.html">Fair Housing</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+  </div>
 
 <script defer src="/config.js"></script>
 <script type="module" src="/js/cp-api.js"></script>
 <script defer src="/js/components.js"></script>
-<script defer src="/js/policy-toc.js?v=__BUILD_VERSION__"></script>
+<script defer src="/js/policy-toc.js?v=1784145767610"></script>
 </body>
 </html>
