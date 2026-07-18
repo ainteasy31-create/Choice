@@ -168,11 +168,13 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://tlfmwetmhthpyrytrcfo.supabase.co").rstrip("/")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+if not SUPABASE_URL:
+    raise RuntimeError("SUPABASE_URL env var is required — set it in .env or environment secrets.")
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 IK_PRIVATE_KEY = os.environ.get("IMAGEKIT_PRIVATE_KEY", "").strip()
 IK_URL_ENDPOINT = os.environ.get("IMAGEKIT_URL_ENDPOINT", "https://ik.imagekit.io/21rg7lvzo").rstrip("/")
-SITE_BASE_URL = "https://choice-properties-site.pages.dev"
+SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "https://choiceproperties.com").rstrip("/")
 
 IK_UPLOAD_URL = "https://upload.imagekit.io/api/v1/files/upload"
 
@@ -502,11 +504,42 @@ class PipelineOrchestrator:
                 result.errors.append("No pipeline ID: " + addr)
                 continue
 
+            # ── FIX C1: Visual watermark + photo count gate BEFORE publish ──
+            # Runs before any DB writes so a watermark-only listing is never
+            # made live. If clean photos fall below MIN_PHOTOS, skip entirely.
+            src_urls = []
+            try:
+                src_urls = json.loads(rec.get("original_image_urls") or "[]")
+            except Exception:
+                pass
+
+            if _VW_OK and src_urls:
+                self._log("      Pre-publish: visual watermark scan ({} photos)...".format(len(src_urls)))
+                src_urls, rejected = self._step13a_visual_watermark(src_urls)
+                result.visual_watermark_rejected += rejected
+                if rejected:
+                    self._log("      Visual watermark: {} photo(s) rejected, {} clean remain".format(
+                        rejected, len(src_urls)))
+
+            if len(src_urls) < MIN_PHOTOS:
+                self._log("   SKIP: {} — only {} clean photo(s) available (min {}). Not publishing.".format(
+                    addr, len(src_urls), MIN_PHOTOS))
+                result.errors.append(
+                    "Skipped (insufficient clean photos after watermark check): " + addr)
+                # FIX C2: Clean up staged record so it does not accumulate as zombie
+                self._cleanup_staged(pid)
+                continue
+
+            # Write cleaned URLs back so _step13b uses the filtered list
+            rec["original_image_urls"] = json.dumps(src_urls)
+
             # Step 11: Publish
             prop_id, err = self._step11_publish(pid)
             if err:
                 self._log("   ERROR: PUBLISH FAILED: {} — {}".format(addr, err))
                 result.errors.append("Publish failed {}: {}".format(addr, err))
+                # FIX C2: Mark staged record as failed so it does not re-stage on next run
+                self._cleanup_staged(pid)
                 continue
             self._log("   OK Published: {} -> {}".format(addr, prop_id))
 
@@ -517,21 +550,8 @@ class PipelineOrchestrator:
             else:
                 self._log("      WARNING: activation PATCH failed")
 
-            # Step 13: Photos (download + ImageKit upload + DB insert)
-            self._log("      Importing photos...")
-            src_urls = []
-            try:
-                src_urls = json.loads(rec.get("original_image_urls") or "[]")
-            except Exception:
-                pass
-
-            # Visual watermark check per photo (if available)
-            if _VW_OK and src_urls:
-                src_urls, rejected = self._step13a_visual_watermark(src_urls)
-                result.visual_watermark_rejected += rejected
-                if rejected:
-                    self._log("      Visual watermark: {} photo(s) rejected".format(rejected))
-
+            # Step 13: Photos — src_urls already watermark-filtered above
+            self._log("      Importing photos ({} clean source URLs)...".format(len(src_urls)))
             uploaded, failed = self._step13b_import_photos(prop_id, src_urls)
             result.photos_ok += uploaded
             result.photos_failed += failed
@@ -911,6 +931,9 @@ class PipelineOrchestrator:
                     if len(data) > 20 * 1024 * 1024:
                         return idx, None, None, "too large"
                     ct = rd.headers.get("Content-Type", "")
+                    # FIX H2: Reject non-image responses (HTML error pages, PDFs, etc.)
+                    if ct and not ct.lower().startswith("image/"):
+                        return idx, None, None, "non-image content-type: {}".format(ct[:40])
                     ext = "webp" if ("webp" in ct or ".webp" in url) else "jpg"
                 except Exception as e:
                     if attempt < IK_MAX_RETRIES:
@@ -1014,6 +1037,25 @@ class PipelineOrchestrator:
             except Exception as e:
                 self._log("   WARNING: fetch_pipeline_id_map: {}".format(str(e)[:80]))
         return result
+
+    def _cleanup_staged(self, pipeline_id: str):
+        """
+        FIX C2: Mark a staged pipeline_properties record as failed so it does
+        not accumulate as a zombie or re-stage on the next batch run.
+        Called when publish fails or the photo gate rejects a listing after staging.
+        """
+        if not self._pipe_session:
+            return
+        try:
+            self._pipe_session.patch(
+                "{}/rest/v1/pipeline_properties?id=eq.{}".format(
+                    SUPABASE_URL, urllib.parse.quote(pipeline_id)),
+                json={"status": "failed"},
+                timeout=10,
+            )
+        except Exception as e:
+            self._log("   WARNING: _cleanup_staged failed for {}: {}".format(
+                pipeline_id, str(e)[:80]))
 
     def _fetch_property_row(self, prop_id: str) -> Optional[Dict]:
         if not self._pub_session:
