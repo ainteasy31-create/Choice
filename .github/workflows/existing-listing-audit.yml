@@ -1,0 +1,66 @@
+name: Daily Listing Audit
+
+on:
+  schedule:
+    # Run every day at 06:00 UTC (before business hours)
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      fix:
+        description: "Unpublish non-compliant listings (true/false)"
+        required: false
+        default: "false"
+      dry_run:
+        description: "Dry run — log only, no writes (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  audit:
+    name: Existing Listing Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests python-dotenv
+
+      - name: Run audit
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          FIX_FLAG=""
+          DRY_FLAG=""
+
+          if [ "${{ github.event.inputs.fix }}" = "true" ]; then
+            FIX_FLAG="--fix"
+          fi
+
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_FLAG="--dry-run"
+          fi
+
+          # Scheduled runs: report only (no auto-unpublish — human reviews first)
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python3 scraper/listing_audit.py --report-only
+          else
+            python3 scraper/listing_audit.py $FIX_FLAG $DRY_FLAG
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ github.run_id }}
+          path: "*.log"
+          retention-days: 30
