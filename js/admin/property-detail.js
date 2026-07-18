@@ -1804,7 +1804,7 @@
   // ── Admin photo upload helpers ────────────────────────────────────────────────
   // Mirrors imagekit.js logic — inline here because property-detail.js is a
   // non-module IIFE and cannot use ES-module imports.
-  async function _compressPhoto(file, maxPx = 2048, quality = 0.85) {
+  async function _compressPhoto(file, maxPx = 2048, quality = 0.92) {
     let bmp;
     try { bmp = await createImageBitmap(file); }
     catch {

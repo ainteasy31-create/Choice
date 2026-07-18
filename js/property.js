@@ -1861,7 +1861,7 @@ function buildAdminEditDrawer(prop) {
   const _pendingMap = new Map();
   let _uploading = false;
 
-  async function _adwCompress(file, maxPx = 2048, quality = 0.85) {
+  async function _adwCompress(file, maxPx = 2048, quality = 0.92) {
     let bmp;
     try { bmp = await createImageBitmap(file); } catch {
       if (file.size > 4 * 1024 * 1024) throw new Error(`"${file.name}" is too large (${(file.size / 1048576).toFixed(1)} MB). Use a smaller image.`);
