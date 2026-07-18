@@ -1594,7 +1594,7 @@
         try {
           const result = await _uploadAdminPhoto(file, propId, () => {});
           const { data: newPhotoRows } = await CP.sb()
-            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null, p_display_order: null, p_is_hero: false });
           const newPhoto = newPhotoRows && newPhotoRows[0];
           if (newPhoto) { _photos.push(newPhoto); uploadedCnt++; }
         } catch (uploadErr) {
@@ -2184,7 +2184,7 @@
             if (uploadPct) uploadPct.textContent = overall + '%';
           });
           const { error: insErr } = await CP.sb()
-            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null, p_display_order: null, p_is_hero: false });
           if (insErr) throw new Error(insErr.message);
           successCnt++;
           if (thumb) { thumb.style.outline = '2px solid #4ade80'; }
@@ -2330,7 +2330,7 @@
             uploadPct.textContent = overall + '%';
           });
           const { error: insErr } = await CP.sb()
-            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null });
+            .rpc('add_property_photo', { p_property_id: propId, p_url: result.url, p_file_id: result.fileId || null, p_display_order: null, p_is_hero: false });
           if (insErr) throw new Error(insErr.message);
           successCnt++;
           if (ovlEl) ovlEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i><span style="color:#fff;font-size:.72rem">Uploaded</span>';
