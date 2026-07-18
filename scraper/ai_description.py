@@ -21,10 +21,36 @@ Required environment variable:
 
 import os
 import json
+import re
 import time
 import logging
+import unicodedata
 
 logger = logging.getLogger("ai_description")
+
+
+def _sanitize(text: str) -> str:
+    """
+    Normalize Unicode to ASCII-safe text before sending to OpenAI.
+    Replaces smart quotes, curly apostrophes, dashes, and other non-ASCII
+    characters that cause codec errors in the HTTP request layer.
+    """
+    if not text:
+        return text
+    # Replace common Unicode punctuation with ASCII equivalents
+    replacements = {
+        "\u2018": "'", "\u2019": "'",   # curly single quotes / apostrophes
+        "\u201c": '"', "\u201d": '"',   # curly double quotes
+        "\u2013": "-", "\u2014": "--",  # en-dash, em-dash
+        "\u2026": "...",                # ellipsis
+        "\u00a0": " ",                  # non-breaking space
+    }
+    for ch, rep in replacements.items():
+        text = text.replace(ch, rep)
+    # NFKD normalize then drop any remaining non-ASCII
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", errors="ignore").decode("ascii")
+    return text
 
 _OPENAI_OK = False
 _client = None
@@ -138,9 +164,9 @@ def rewrite_description(record: dict) -> "str | None":
         pets_str = "Contact for policy"
 
     prompt = _USER_PROMPT_TEMPLATE.format(
-        address=record.get("address") or "Not specified",
-        city=record.get("city") or "Not specified",
-        state=record.get("state") or "Not specified",
+        address=_sanitize(record.get("address") or "Not specified"),
+        city=_sanitize(record.get("city") or "Not specified"),
+        state=_sanitize(record.get("state") or "Not specified"),
         bedrooms=record.get("bedrooms") or "Not specified",
         bathrooms=record.get("bathrooms") or "Not specified",
         property_type=(record.get("property_type") or "").replace("_", " ").title() or "Not specified",
@@ -148,14 +174,16 @@ def rewrite_description(record: dict) -> "str | None":
         rent="{:,}".format(int(record["monthly_rent"])) if record.get("monthly_rent") else "Contact for pricing",
         deposit="{:,}".format(int(record["security_deposit"])) if record.get("security_deposit") else "Equal to rent",
         pets=pets_str,
-        parking=record.get("parking") or "Not specified",
-        laundry=record.get("laundry_type") or "Not specified",
-        heating=record.get("heating_type") or "Not specified",
-        cooling=record.get("cooling_type") or "Not specified",
+        parking=_sanitize(record.get("parking") or "Not specified"),
+        laundry=_sanitize(record.get("laundry_type") or "Not specified"),
+        heating=_sanitize(record.get("heating_type") or "Not specified"),
+        cooling=_sanitize(record.get("cooling_type") or "Not specified"),
         available_date=record.get("available_date") or "Contact for availability",
         lease_term="{} months".format(record["minimum_lease_months"]) if record.get("minimum_lease_months") else "Not specified",
-        amenities=amenities_str,
-        original_description=(record.get("description") or "No original description provided.")[:1500],
+        amenities=_sanitize(amenities_str),
+        original_description=_sanitize(
+            (record.get("description") or "No original description provided.")[:1500]
+        ),
     )
 
     # FIX M3: Retry with exponential backoff on transient errors

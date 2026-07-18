@@ -633,9 +633,12 @@ class PipelineOrchestrator:
         for rec in records:
             sid = rec.get("source_listing_id", "")
 
-            # Rule 2: active/available only — skip if status is not active
-            status = (rec.get("status") or "").lower()
-            if status and status not in ("active", "for_rent", ""):
+            # Rule 2: active/available only.
+            # Freshly scraped records always have status="scraped" (pipeline state);
+            # availability is carried in source_status ("available", "pending",
+            # "rented", "removed"). Accept "available" or blank (unknown).
+            source_status = (rec.get("source_status") or "").lower()
+            if source_status and source_status not in ("available", ""):
                 continue
 
             if sid and sid in seen_sids:
