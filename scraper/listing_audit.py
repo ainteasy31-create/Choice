@@ -33,10 +33,14 @@ import os
 import sys
 import json
 import time
+import logging
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger("listing_audit")
 
 # ---------------------------------------------------------------------------
 # Bootstrap
@@ -73,9 +77,9 @@ except ImportError:
     sys.exit("ERROR: requests not installed -- pip install requests")
 
 # ---------------------------------------------------------------------------
-# Config
+# Config — FIX H1: no hardcoded Supabase URL default; fail fast if unset
 # ---------------------------------------------------------------------------
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://tlfmwetmhthpyrytrcfo.supabase.co").rstrip("/")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 IMAGEKIT_DOMAIN = "ik.imagekit.io"
 
@@ -84,6 +88,8 @@ URL_CHECK_WORKERS = 8
 URL_CHECK_TIMEOUT = 8     # seconds per HEAD request
 PAGE_SIZE = 200           # listings per Supabase page
 
+if not SUPABASE_URL:
+    sys.exit("ERROR: SUPABASE_URL not set.")
 if not SERVICE_ROLE_KEY:
     sys.exit("ERROR: SUPABASE_SERVICE_ROLE_KEY not set.")
 
@@ -154,10 +160,17 @@ def fetch_property_photos(property_id: str) -> List[Dict]:
 # ---------------------------------------------------------------------------
 
 def _check_url(url: str) -> Tuple[str, bool, int]:
-    """HEAD-check a URL. Returns (url, is_accessible, status_code)."""
+    """
+    HEAD-check a URL. Returns (url, is_accessible, status_code).
+    Falls back to a streaming GET if HEAD returns 405 (some CDNs block HEAD).
+    """
     try:
         r = _req.head(url, timeout=URL_CHECK_TIMEOUT, allow_redirects=True,
                       headers={"User-Agent": "ChoiceProperties-Audit/1.0"})
+        if r.status_code == 405:
+            # FIX L16: Fallback to GET with stream=True for CDNs that block HEAD
+            r = _req.get(url, timeout=URL_CHECK_TIMEOUT, allow_redirects=True, stream=True,
+                         headers={"User-Agent": "ChoiceProperties-Audit/1.0"})
         return url, r.status_code < 400, r.status_code
     except Exception:
         return url, False, 0
@@ -216,13 +229,34 @@ def unpublish_property(property_id: str) -> bool:
         json={"status": "needs_review"},
         timeout=15,
     )
-    return r.ok
+    if not r.ok:
+        logger.warning("unpublish_property: HTTP %d for %s — %s",
+                       r.status_code, property_id, r.text[:200])
+        return False
+
+    # FIX M7: Validate response confirms status change, not just HTTP 200
+    try:
+        rows = r.json()
+        if isinstance(rows, list) and rows:
+            updated_status = rows[0].get("status")
+            if updated_status != "needs_review":
+                logger.warning(
+                    "unpublish_property: property %s status is '%s', expected 'needs_review' — "
+                    "possible RLS or trigger block",
+                    property_id, updated_status,
+                )
+                return False
+    except Exception as parse_err:
+        logger.warning("unpublish_property: could not parse response for %s: %s",
+                       property_id, parse_err)
+        # r.ok was True, so HTTP succeeded — treat as best-effort success
+    return True
 
 
 def log_audit_action(property_id: str, failures: List[str], dry_run: bool):
-    """Insert an audit log entry (non-blocking)."""
+    """Insert an audit log entry. Logs a warning if the insert fails."""
     try:
-        _session.post(
+        r = _session.post(
             "{}/rest/v1/admin_actions".format(SUPABASE_URL),
             json={
                 "action": "listing_audit",
@@ -237,8 +271,13 @@ def log_audit_action(property_id: str, failures: List[str], dry_run: bool):
             },
             timeout=10,
         )
-    except Exception:
-        pass
+        if not r.ok:
+            # FIX M6: No longer swallows silently — warns if logging fails
+            logger.warning("log_audit_action: failed to insert admin_action for %s — HTTP %d: %s",
+                           property_id, r.status_code, r.text[:200])
+    except Exception as e:
+        # FIX M6: Log the failure rather than silently passing
+        logger.warning("log_audit_action: exception for %s: %s", property_id, str(e)[:200])
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +339,7 @@ def run_audit(dry_run: bool = False, fix: bool = False, report_only: bool = Fals
                 if ok:
                     print("         -> unpublished (status=needs_review)")
                 else:
-                    print("         -> WARNING: failed to unpublish")
+                    print("         -> WARNING: failed to unpublish — check logs")
         else:
             compliant_count += 1
 
