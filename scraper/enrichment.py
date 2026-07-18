@@ -424,10 +424,14 @@ def validate_for_publish(record, transferred_photo_count=None):
     #    Tier A (preferred): caller provides the actual ImageKit transfer count.
     #    Tier B (fallback):  inspect original_image_urls to verify source photos
     #                        exist that can be transferred post-publish.
+    MIN_PHOTOS = 6
     if transferred_photo_count is not None:
         # Real ImageKit signal — use it directly
-        if transferred_photo_count == 0:
-            failures.append("No images have been transferred to ImageKit yet")
+        if transferred_photo_count < MIN_PHOTOS:
+            failures.append(
+                "Only {} photo(s) on ImageKit; minimum is {} before publishing".format(
+                    transferred_photo_count, MIN_PHOTOS)
+            )
     else:
         # Fallback: source photos must exist (import-pipeline-photos will
         # transfer them immediately after publish)
@@ -436,8 +440,11 @@ def validate_for_publish(record, transferred_photo_count=None):
             urls = raw_urls if isinstance(raw_urls, list) else __import__("json").loads(raw_urls)
         except Exception:
             urls = []
-        if not urls:
-            failures.append("No source images available — add at least one photo before publishing")
+        if len(urls) < MIN_PHOTOS:
+            failures.append(
+                "Only {} source photo(s) found; minimum is {} before publishing".format(
+                    len(urls), MIN_PHOTOS)
+            )
 
     # 2. Description must not imply a free application
     if _FREE_APP_RE.search(desc):

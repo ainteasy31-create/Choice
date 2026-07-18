@@ -221,12 +221,12 @@ def filter_records(records, strict=True):
         rent = rec.get("monthly_rent")
         if rent is None or rent < RENT_MIN or rent > RENT_MAX:
             issues.append(f"rent=${rent}")
-        # Must have at least one source image URL
+        # Must have at least 6 source images (sparse galleries look poor on the site)
         src_imgs = []
         try: src_imgs = json.loads(rec.get("original_image_urls") or "[]")
         except (ValueError, TypeError): pass
-        if not src_imgs:
-            issues.append("no source images")
+        if len(src_imgs) < 6:
+            issues.append("too few photos ({}/6 minimum)".format(len(src_imgs)))
 
         if issues:
             addr = f"{rec.get('address','')} {rec.get('city','')}".strip()
@@ -294,8 +294,8 @@ def validate(rec, strict=True):
     src_imgs = []
     try: src_imgs = json.loads(rec.get("original_image_urls") or "[]")
     except (ValueError, TypeError): pass
-    if not src_imgs:
-        fails.append("no source images for photo import")
+    if len(src_imgs) < 6:
+        fails.append("too few photos ({}/6 minimum)".format(len(src_imgs)))
     return len(fails) == 0, fails
 
 # ── Fetch existing pipeline IDs by source_listing_id ─────────────────────────
@@ -432,7 +432,7 @@ def main():
     ap.add_argument("--target",    type=int, default=15)
     ap.add_argument("--past-days", type=int, default=90)
     ap.add_argument("--limit",     type=int, default=200)
-    ap.add_argument("--min-score", type=int, default=30)
+    ap.add_argument("--min-score", type=int, default=40)
     args = ap.parse_args()
 
     print("=" * 60)

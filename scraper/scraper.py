@@ -348,13 +348,39 @@ def _details_texts(detail_list, *keywords):
                     seen.add(t)
     return out
 
+# ── CDN URL normalisation ──────────────────────────────────────────────────────
+_REALTOR_CDN_RE = re.compile(r"rdcpix\.com|realtor\.com/api/media")
+
+def _upgrade_photo_url(url):
+    """
+    Upgrade a CDN photo URL to maximum available resolution/quality.
+
+    Realtor.com CDN (rdcpix.com): replace size params with w-2016,q-95 —
+    the CDN's maximum quality tier — instead of stripping to a blank path
+    that may return a default (often lower) resolution.
+
+    Other CDNs (Zillow, Zumper, etc.): strip _[qwhr]-N size params to get
+    the original-resolution upload.
+    """
+    if not url:
+        return url
+    if _REALTOR_CDN_RE.search(url):
+        # Upgrade to max: 2016px wide, 95 % quality, drop height / ratio caps
+        s = re.sub(r"_q-\d+", "_q-95",  url)
+        s = re.sub(r"_w-\d+", "_w-2016", s)
+        s = re.sub(r"_h-\d+", "",        s)
+        s = re.sub(r"_r-\d+", "",        s)
+        return s
+    # Other CDNs — strip all size params to get original upload
+    return re.sub(r"_[qwhr]-\d+", "", url)
+
+
 def _collect_photos(prop):
     """
     Collect all photo URLs from a HomeHarvest Property object.
     Checks all three locations: prop.description.(primary_photo/alt_photos),
     prop.photos (list of dicts), and legacy direct attrs on prop.
-    Strips Realtor CDN size params (e.g. _w-120_h-80) to avoid storing
-    thumbnail-sized URLs that get imported as tiny 120x80 images.
+    Upgrades Realtor CDN URLs to w-2016,q-95; strips params on other CDNs.
     """
     urls, seen = [], set()
 
@@ -364,9 +390,8 @@ def _collect_photos(prop):
         s = str(u).strip()
         if not s or not s.startswith("http"):
             return
-        # Strip Realtor CDN resize params (e.g. _q-80_w-1024_h-768_r-1)
-        # so we always store the original-resolution URL, not a thumbnail.
-        s = re.sub(r"_[qwhr]-\d+", "", s)
+        # Upgrade Realtor CDN to max quality; strip params on other CDNs
+        s = _upgrade_photo_url(s)
         if s not in seen:
             urls.append(s)
             seen.add(s)
@@ -415,8 +440,8 @@ def _quality_score(r):
     for f in _BONUS:
         if r.get(f) not in (None, "", "[]"):
             sc += 2
-    n   = len(json.loads(r.get("original_image_urls") or "[]"))
-    sc += 6 if n >= 5 else (3 if n >= 1 else 0)
+    n = len(json.loads(r.get("original_image_urls") or "[]"))
+    sc += 10 if n >= 12 else (7 if n >= 6 else (4 if n >= 3 else (1 if n >= 1 else 0)))
     return min(sc, 100)
 
 def _missing_fields(r):
@@ -982,10 +1007,8 @@ def _collect_realtor_detail_photos(prop):
             return
         s = str(u).strip()
         if s and s.startswith("http") and s not in seen:
-            # Strip Realtor CDN resize params to get original-resolution image
-            hd = re.sub(r"_[qwhr]-\d+", "", s)
-            # Prefer the stripped URL; fall back to original if they differ
-            target = hd if hd != s else s
+            # Upgrade Realtor CDN to max quality; strip params on other CDNs
+            target = _upgrade_photo_url(s)
             if target not in seen:
                 urls.append(target)
                 seen.add(target)

@@ -389,14 +389,14 @@ def filter_records(records):
         if rent is None or rent < RENT_MIN or rent > RENT_MAX:
             issues.append("rent=${}".format(rent))
 
-        # Must have at least one source image URL
+        # Must have at least 6 source images (sparse galleries look poor on the site)
         src_imgs = []
         try:
             src_imgs = json.loads(rec.get("original_image_urls") or "[]")
         except (ValueError, TypeError):
             pass
-        if not src_imgs:
-            issues.append("no source images")
+        if len(src_imgs) < 6:
+            issues.append("too few photos ({}/6 minimum)".format(len(src_imgs)))
 
         if issues:
             addr = "{} {}".format(rec.get("address", ""), rec.get("city", "")).strip()
@@ -514,14 +514,14 @@ def validate(rec):
         if not rec.get(f):
             fails.append("missing {}".format(f))
 
-    # Source images required for photo import
+    # Minimum 6 source images required
     src_imgs = []
     try:
         src_imgs = json.loads(rec.get("original_image_urls") or "[]")
     except (ValueError, TypeError):
         pass
-    if not src_imgs:
-        fails.append("no source images for photo import")
+    if len(src_imgs) < 6:
+        fails.append("too few photos ({}/6 minimum)".format(len(src_imgs)))
 
     return len(fails) == 0, fails
 
@@ -668,7 +668,7 @@ def main():
     ap.add_argument("--target",    type=int, default=15,  help="Number of listings to publish")
     ap.add_argument("--past-days", type=int, default=90,  help="Realtor.com lookback window")
     ap.add_argument("--limit",     type=int, default=200, help="Max listings per location")
-    ap.add_argument("--min-score", type=int, default=30,  help="Minimum data quality score")
+    ap.add_argument("--min-score", type=int, default=40,  help="Minimum data quality score")
     args = ap.parse_args()
 
     print("=" * 65)

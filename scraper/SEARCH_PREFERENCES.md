@@ -135,6 +135,21 @@ one is not already present.
 Same as rule 1, restated for clarity: if every photo has an agent initial, a
 brokerage watermark, or a competitor logo overlaid, skip the listing entirely.
 
+### 6. Photo — minimum 6 photos required per listing
+Any listing with fewer than 6 source photos is dropped during filter and
+rejected by the pre-publish validation gate. Sparse galleries (1–5 photos)
+look poor on the property detail page and reduce conversion.
+→ Enforced in `filter_records()` and `validate()` in every batch script,
+  and in `validate_for_publish()` in `enrichment.py`.
+
+### 7. Photo quality — Realtor CDN images are upgraded to maximum resolution
+When scraping from Realtor.com, photo URLs are upgraded to `w-2016,q-95`
+(the CDN's maximum quality tier) rather than stripped to the bare URL.
+This avoids the default CDN resolution (often 1024px) and ensures every
+scraped photo arrives at 2016px wide / 95% quality before ImageKit
+re-encodes it.
+→ Enforced by `_upgrade_photo_url()` in `scraper.py`.
+
 ---
 
 ## How to Run
