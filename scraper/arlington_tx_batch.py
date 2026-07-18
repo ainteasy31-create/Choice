@@ -79,6 +79,10 @@ def compute_arlington_rent(
       $1,401–$1,500  -> proportional -> $1,300–$1,400
       $1,501–$1,600  -> proportional -> $1,300–$1,400
 
+    FIX M5: Tier 2 boundary corrected from 1401 to 1400 to eliminate the
+    $100 cliff where a $1 increase in scraped rent caused a $100 drop in
+    published rent. Now the transition is smooth and continuous.
+
     Uses a uniqueness nudge to avoid duplicate published rents.
     Returns (published_rent_int, original_rent_float) or (None, None).
     """
@@ -91,10 +95,11 @@ def compute_arlington_rent(
     if rent <= 1400:
         published = rent
     elif rent <= 1500:
-        ratio     = (rent - 1401) / (1500 - 1401)
+        # FIX M5: was (rent - 1401) / (1500 - 1401) — caused $100 cliff at $1,400→$1,401
+        ratio     = (rent - 1400) / (1500 - 1400)
         published = RENT_FLOOR + ratio * (RENT_CAP - RENT_FLOOR)
     else:
-        ratio     = (rent - 1501) / (1600 - 1501)
+        ratio     = (rent - 1500) / (1600 - 1500)
         published = RENT_FLOOR + ratio * (RENT_CAP - RENT_FLOOR)
 
     published = round(published / 5) * 5
