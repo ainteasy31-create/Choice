@@ -7,6 +7,43 @@ rules. Run the scraper with the commands listed under each market.
 
 ## Active Markets
 
+### Market 3 — Dallas, GA (West Paulding County / West Cobb / I-75 Corridor)
+
+| Criteria | Value |
+|---|---|
+| Locations | Dallas, GA · Hiram, GA · Powder Springs, GA · Acworth, GA + Kennesaw, Marietta, Austell, Smyrna, Villa Rica (fallback) |
+| Property types | Houses (SINGLE_FAMILY), Townhouses (TOWNHOMES) — NO apartments, condos, duplexes |
+| Bedrooms | 3 exactly |
+| Bathrooms | 2+ |
+| Scraped rent range | $1,250–$1,500 / month |
+| Published rent cap | $1,250 / month (tiered proportional reduction — see batch script) |
+| Security deposit | Equal to published rent |
+| Goal | 15 published listings per batch |
+
+**Tiered pricing (this market):**
+
+| Original rent | Published rent range |
+|---|---|
+| $1,250 | $1,250 (as-is) |
+| $1,251–$1,299 | $1,200–$1,250 (proportional) |
+| $1,300–$1,349 | $1,175–$1,225 (proportional) |
+| $1,350–$1,399 | $1,150–$1,200 (proportional) |
+| $1,400–$1,449 | $1,150–$1,200 (proportional) |
+| $1,450–$1,500 | $1,200–$1,250, cap $1,250 (proportional) |
+
+**Batch script (runs the full scrape → filter → price → publish → photo import pipeline):**
+```bash
+cd /home/runner/workspace
+python3 scraper/dallas_ga_batch.py
+# Options:
+#   --dry-run          preview without writing to DB
+#   --target 15        number of listings to publish (default 15)
+#   --past-days 90     lookback window (default 90)
+#   --min-score 30     minimum data quality score (default 30)
+```
+
+---
+
 ### Market 1 — Milwaukee / Menomonee Falls, WI
 
 | Criteria | Value |
