@@ -44,13 +44,24 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Prefer curl_cffi for browser-accurate TLS fingerprinting (bypasses DataDome JA3
 # detection that blocks plain Python requests even on residential IPs).
-# Falls back to requests if curl_cffi is not installed -- useful when running on
-# iSH/Alpine where pre-built musl wheels may not be available.
+# On iSH/Alpine: install with `pip install curl-cffi --no-binary curl-cffi` to
+# compile from source, since pre-built musl wheels may not be available.
+# WARNING: without curl_cffi, the plain-requests fallback uses Python's SSL stack,
+# which has a different JA3 fingerprint that DataDome will block even on residential
+# IPs. Do NOT run Zillow scraping without curl_cffi installed.
 try:
     from curl_cffi import requests as _req
     _CURL_CFFI = True
 except ImportError:
     _CURL_CFFI = False
+    import sys as _sys
+    _sys.stderr.write(
+        "\n[zillow_scraper] WARNING: curl_cffi is not installed.\n"
+        "  Zillow scraping requires curl_cffi for Chrome TLS fingerprinting.\n"
+        "  Without it, DataDome will block ALL requests (even from residential IPs).\n"
+        "  Install with: pip install curl-cffi\n"
+        "  On iSH/Alpine: pip install curl-cffi --no-binary curl-cffi\n\n"
+    )
     try:
         import requests as _req
         from requests.adapters import HTTPAdapter
@@ -58,7 +69,7 @@ except ImportError:
     except ImportError:
         raise ImportError(
             "Neither curl_cffi nor requests is installed. "
-            "Run: pip install curl-cffi  (or: pip install requests)"
+            "Run: pip install curl-cffi"
         )
 
 
@@ -74,47 +85,48 @@ MAX_DETAIL_RETRY = 1             # retries per detail page (0 = no retry)
 ENRICH_SKIP_SCORE = 80           # skip detail fetch for records already >= this score
 
 # Rotate through realistic Chrome user-agent strings to reduce fingerprinting.
-# These cover Chrome 122-125 on Windows + macOS + Linux.
+# These cover Chrome 131 on Windows + macOS + Linux, matching the impersonate=
+# "chrome131" TLS fingerprint used by curl_cffi below.
 _USER_AGENTS = [
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/128.0.0.0 Safari/537.36"
+        "Chrome/131.0.0.0 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/127.0.6533.119 Safari/537.36"
+        "Chrome/131.0.6778.205 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0"
+        "Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
     ),
     (
         "Mozilla/5.0 (X11; Linux x86_64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/127.0.0.0 Safari/537.36"
+        "Chrome/131.0.0.0 Safari/537.36"
     ),
     (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) "
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/127.0.6533.99 Safari/537.36"
-    ),
-    (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/126.0.0.0 Safari/537.36"
-    ),
-    (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/126.0.6478.234 Safari/537.36"
+        "Chrome/131.0.6778.205 Safari/537.36"
     ),
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/125.0.0.0 Safari/537.36"
+        "Chrome/131.0.6778.139 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_1) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.6778.108 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.6778.85 Safari/537.36"
     ),
 ]
 
@@ -123,7 +135,7 @@ _BASE_HEADERS = {
     "Accept-Language":           "en-US,en;q=0.9",
     "Accept-Encoding":           "gzip, deflate, br",
     "Referer":                   "https://www.zillow.com/",
-    "sec-ch-ua":                 '"Chromium";v="128", "Google Chrome";v="128", "Not-A.Brand";v="99"',
+    "sec-ch-ua":                 '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
     "sec-ch-ua-mobile":          "?0",
     "sec-ch-ua-platform":        '"Windows"',
     "sec-fetch-dest":            "document",
@@ -186,9 +198,10 @@ def _make_session():
     headers["User-Agent"] = ua
 
     if _CURL_CFFI:
-        # impersonate="chrome124" sets the correct TLS ClientHello fingerprint.
+        # impersonate="chrome131" sets the correct TLS ClientHello fingerprint.
+        # Must match the Chrome version in _USER_AGENTS and sec-ch-ua header above.
         # curl_cffi does not support HTTPAdapter/mount -- retries handled manually.
-        s = _req.Session(impersonate="chrome124")
+        s = _req.Session(impersonate="chrome131")
         s.headers.update(headers)
         return s
 
@@ -227,7 +240,7 @@ def _warm_session(session, verbose=False):
         ("https://www.zillow.com/", "none"),
         ("https://www.zillow.com/homes/for_rent/", "same-origin"),
     ]
-    for url, fetch_site in pages:
+    for i, (url, fetch_site) in enumerate(pages):
         try:
             hdrs = {
                 "User-Agent":      random.choice(_USER_AGENTS),
@@ -245,10 +258,12 @@ def _warm_session(session, verbose=False):
         except Exception as e:
             if verbose:
                 print("  [warmup] " + url + " failed: " + str(e)[:60])
-        delay = random.uniform(3.0, 5.0)
-        if verbose:
-            print("  [warmup] Waiting " + str(round(delay, 1)) + "s ...")
-        time.sleep(delay)
+        # Only sleep between pages, not after the last one
+        if i < len(pages) - 1:
+            delay = random.uniform(3.0, 5.0)
+            if verbose:
+                print("  [warmup] Waiting " + str(round(delay, 1)) + "s ...")
+            time.sleep(delay)
 
 
 def _rotate_ua(session):
@@ -1603,6 +1618,23 @@ def scrape_and_map(
         (records: list[dict], blocked: bool)
         blocked=True means Zillow returned bot-detection on the first search page.
     """
+    # -- Cloud/datacenter IP guard ------------------------------------------------
+    # DataDome blocks ALL datacenter IPs regardless of TLS fingerprint or UA.
+    # Detect common cloud environments and warn immediately so the user does not
+    # waste time watching requests silently fail with 403s.
+    _cloud_signals = ["REPLIT_CLUSTER", "REPLIT_ID", "REPL_ID", "AWS_EXECUTION_ENV",
+                      "ECS_CONTAINER_METADATA_URI", "GOOGLE_CLOUD_PROJECT", "DYNO"]
+    _on_cloud = any(os.environ.get(k) for k in _cloud_signals)
+    if _on_cloud:
+        import sys as _warn_sys
+        _warn_sys.stderr.write(
+            "\n[zillow_scraper] WARNING: Cloud/datacenter environment detected.\n"
+            "  Zillow's DataDome bot-detection blocks all datacenter IPs regardless of\n"
+            "  TLS fingerprint or user-agent. Requests will return 403.\n"
+            "  Run this scraper from a residential IP (home WiFi, office, or iPhone\n"
+            "  mobile data via iSH) to get results.\n\n"
+        )
+
     session  = _make_session()
     slug     = _location_to_slug(location)
     raw_kept = []
@@ -1610,6 +1642,11 @@ def scrape_and_map(
 
     if verbose:
         print("  [Zillow] Phase 1 -- search pages for: " + location)
+        print("  [Zillow] Warming up session (homepage + for-rent page) ...")
+
+    # Establish session cookies before hitting search pages. Without this warm-up,
+    # DataDome flags the first search request (no prior cookie chain).
+    _warm_session(session, verbose=verbose)
 
     # -- Phase 1: Search pages -------------------------------------------------
     for page in range(1, MAX_PAGES + 1):
@@ -1628,30 +1665,35 @@ def scrape_and_map(
             break
 
         if _is_bot_page(resp.text if resp.status_code == 200 else "", resp.status_code):
-            if verbose:
-                if resp.status_code == 403:
-                    print("  [blocked] Zillow returned 403 -- DataDome bot detection triggered.")
-                elif resp.status_code == 429:
+            # Handle 429 rate-limit with a wait-and-retry regardless of verbose mode.
+            if resp.status_code == 429:
+                if verbose:
                     print("  [rate-limited] 429 -- waiting 45s and retrying...")
-                    time.sleep(45)
-                    try:
-                        resp = session.get(url, timeout=25, allow_redirects=True)
-                        if resp.status_code == 200 and not _is_bot_page(resp.text, resp.status_code):
-                            pass  # retry succeeded, continue below
-                        else:
-                            if page == 1:
-                                blocked = True
-                            break
-                    except Exception:
+                time.sleep(45)
+                try:
+                    resp = session.get(url, timeout=25, allow_redirects=True)
+                    if resp.status_code == 200 and not _is_bot_page(resp.text, resp.status_code):
+                        pass  # retry succeeded -- fall through to normal processing
+                    else:
                         if page == 1:
                             blocked = True
                         break
-                else:
-                    print("  [blocked] Bot-detection page detected (status=" + str(resp.status_code) + ").")
-            if resp.status_code != 200:
-                if page == 1:
-                    blocked = True
-                break
+                except Exception:
+                    if page == 1:
+                        blocked = True
+                    break
+            else:
+                if verbose:
+                    if resp.status_code == 403:
+                        print("  [blocked] Zillow returned 403 -- DataDome bot detection triggered.")
+                        print("  [blocked] Must run from a residential IP (home/office WiFi or mobile data).")
+                        print("  [blocked] Datacenter/cloud IPs (Replit, AWS, GCP) are always blocked.")
+                    else:
+                        print("  [blocked] Bot-detection page detected (status=" + str(resp.status_code) + ").")
+                if resp.status_code != 200:
+                    if page == 1:
+                        blocked = True
+                    break
 
         if resp.status_code != 200:
             if verbose:
@@ -1774,6 +1816,24 @@ def _map_from_detail_only(prop, source_url=None, zpid=None):
     addr = prop.get("address") or {}
     now  = _now()
 
+    # Map homeStatus/statusType to canonical source_status so the availability
+    # filter in pipeline._step2_availability_dedup() can gate off-market listings.
+    _raw_status = str(prop.get("homeStatus") or prop.get("statusType") or "").upper()
+    if "FOR_RENT" in _raw_status or _raw_status in ("ACTIVE", "ACTIVE_FOR_RENT"):
+        _src_status = "available"
+    elif "PENDING" in _raw_status:
+        _src_status = "pending"
+    elif "RENTED" in _raw_status or "LEASED" in _raw_status:
+        _src_status = "rented"
+    elif "SOLD" in _raw_status or "OFF_MARKET" in _raw_status or "REMOVED" in _raw_status:
+        _src_status = "removed"
+    elif _raw_status:
+        # Unknown non-empty status -- treat as available and let the pipeline decide
+        _src_status = "available"
+    else:
+        # No status on detail page -- default to available (for-rent search URLs)
+        _src_status = "available"
+
     # Blank record -- all fields defaulted, then _enrich_from_detail fills them in
     record = {
         "id":                    _gen_id(),
@@ -1781,6 +1841,7 @@ def _map_from_detail_only(prop, source_url=None, zpid=None):
         "source_url":            source_url,
         "source_listing_id":     zpid_str,
         "status":                "scraped",
+        "source_status":         _src_status,
         "title":                 None,
         "address":               addr.get("streetAddress") or addr.get("street"),
         "unit_number":           None,

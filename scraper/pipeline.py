@@ -184,11 +184,26 @@ IK_MAX_PHOTOS = 20
 IK_MAX_RETRIES = 3
 RETRY_BACKOFF = 2.0
 
-_DL_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36",
+_DL_HEADERS_REALTOR = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
     "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     "Referer": "https://www.realtor.com/",
 }
+_DL_HEADERS_ZILLOW = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    "Referer": "https://www.zillow.com/",
+}
+
+
+def _dl_headers_for(url: str) -> dict:
+    """Return the correct download headers for a given image URL.
+    Zillow's CDN (zillowstatic.com) requires a zillow.com Referer;
+    using realtor.com as the Referer causes 403s on Zillow images.
+    """
+    if "zillow" in url.lower() or "zillowstatic" in url.lower():
+        return _DL_HEADERS_ZILLOW
+    return _DL_HEADERS_REALTOR
 
 
 # ---------------------------------------------------------------------------
@@ -925,7 +940,7 @@ class PipelineOrchestrator:
         def _upload_one(idx: int, url: str) -> Tuple[int, Optional[str], Optional[str], Optional[str]]:
             for attempt in range(1, IK_MAX_RETRIES + 1):
                 try:
-                    rd = _req.get(url, headers=_DL_HEADERS, timeout=25)
+                    rd = _req.get(url, headers=_dl_headers_for(url), timeout=25)
                     if rd.status_code != 200 or not rd.content:
                         if attempt < IK_MAX_RETRIES:
                             time.sleep(RETRY_BACKOFF * attempt)
