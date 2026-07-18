@@ -17,12 +17,11 @@ Rules enforced (permanent — per PLATFORM_RULES.md Section 2):
 
 Required environment variable:
   OPENAI_API_KEY  -- if not set, rewrite_description() returns None gracefully
-
-iSH / Python 3.9 compatibility: NOT required here (runs on Replit only).
 """
 
 import os
 import json
+import time
 import logging
 
 logger = logging.getLogger("ai_description")
@@ -39,6 +38,14 @@ try:
 except ImportError:
     pass
 
+# ---------------------------------------------------------------------------
+# Mandatory closing paragraph that must appear in every description
+# ---------------------------------------------------------------------------
+_REQUIRED_CLOSING = (
+    "Application Required Before Viewing: To provide an efficient leasing process, "
+    "applications are required before scheduling a property viewing. Property viewings "
+    "are arranged only after an application has been submitted and approved."
+)
 
 # ---------------------------------------------------------------------------
 # Prompt
@@ -99,7 +106,7 @@ Write the new description now (2–4 paragraphs, 150–300 words):"""
 # Public API
 # ---------------------------------------------------------------------------
 
-def rewrite_description(record: dict) -> str | None:
+def rewrite_description(record: dict) -> "str | None":
     """
     Generate a fresh professional description for a pipeline record.
 
@@ -151,25 +158,51 @@ def rewrite_description(record: dict) -> str | None:
         original_description=(record.get("description") or "No original description provided.")[:1500],
     )
 
-    try:
-        response = _client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.7,
-            max_tokens=600,
-        )
-        text = response.choices[0].message.content.strip()
-        if len(text) > 80:
+    # FIX M3: Retry with exponential backoff on transient errors
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = _client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.35,   # FIX M2: lowered from 0.7 for consistent, fact-based copy
+                max_tokens=750,     # FIX L3: raised from 600 to avoid clipping required closing paragraph
+            )
+            text = response.choices[0].message.content.strip()
+
+            if len(text) < 80:
+                logger.warning("AI rewrite returned unexpectedly short text (%d chars)", len(text))
+                return None
+
+            # FIX L3: Ensure mandatory closing paragraph is present; append if missing
+            if "Application Required Before Viewing" not in text:
+                text = text.rstrip() + "\n\n" + _REQUIRED_CLOSING
+
             logger.debug("AI rewrite OK for %s (%d chars)", record.get("address", "?"), len(text))
             return text
-        logger.warning("AI rewrite returned unexpectedly short text (%d chars)", len(text))
-        return None
-    except Exception as e:
-        logger.warning("OpenAI API error for %s: %s", record.get("address", "?"), str(e)[:120])
-        return None
+
+        except Exception as e:
+            last_error = e
+            err_str = str(e)[:120]
+            # FIX M3: Retry on rate limit or server errors; bail immediately on auth errors
+            if "rate_limit" in err_str.lower() or "529" in err_str or "500" in err_str:
+                wait = 2 ** attempt
+                logger.warning(
+                    "OpenAI transient error for %s (attempt %d/3, retry in %ds): %s",
+                    record.get("address", "?"), attempt + 1, wait, err_str,
+                )
+                time.sleep(wait)
+            else:
+                logger.warning("OpenAI API error for %s: %s", record.get("address", "?"), err_str)
+                break
+
+    if last_error:
+        logger.warning("OpenAI API failed after retries for %s: %s",
+                       record.get("address", "?"), str(last_error)[:120])
+    return None
 
 
 def is_available() -> bool:
