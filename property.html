@@ -313,6 +313,88 @@
 
     <div class="prop-divider"></div>
 
+    <!-- About -->
+    <div class="prop-section detail-section" id="aboutSection">
+      <div class="prop-section-eyebrow">About this home</div>
+      <div class="prop-section-head">A place to <em>call home</em>.</div>
+      <div class="prop-desc" id="detailDesc">
+        <div class="skeleton skeleton-line" style="width:100%;height:15px;margin-bottom:10px"></div>
+        <div class="skeleton skeleton-line" style="width:96%;height:15px;margin-bottom:10px"></div>
+        <div class="skeleton skeleton-line" style="width:88%;height:15px;margin-bottom:10px"></div>
+        <div class="skeleton skeleton-line" style="width:70%;height:15px"></div>
+      </div>
+    </div>
+
+    <!-- Amenities / Utilities / Lease (tabbed) -->
+    <div class="prop-section detail-tabs-wrap" id="detailTabsSection" style="display:none">
+      <div class="prop-section-eyebrow">Features &amp; details</div>
+      <div class="detail-tabs" id="detailTabs" role="tablist">
+        <button class="detail-tab active" data-panel="panelAmenities" id="tabAmenities" role="tab" aria-selected="true" aria-controls="panelAmenities">
+          <i class="fas fa-list-check"></i> Amenities
+        </button>
+        <button class="detail-tab" data-panel="panelUtilities" id="tabUtilities" role="tab" aria-selected="false" aria-controls="panelUtilities" style="display:none">
+          <i class="fas fa-bolt"></i> Utilities
+        </button>
+        <button class="detail-tab" data-panel="panelLease" id="tabLease" role="tab" aria-selected="false" aria-controls="panelLease" style="display:none">
+          <i class="fas fa-file-contract"></i> Lease
+        </button>
+      </div>
+      <div class="detail-tab-panel active" id="panelAmenities" role="tabpanel" aria-labelledby="tabAmenities">
+        <div class="amenities-grid" id="amenitiesGrid"></div>
+        <div id="appliancesSection" style="display:none;margin-top:20px">
+          <div style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m-muted-2);margin-bottom:10px">Appliances</div>
+          <div class="amenities-grid" id="appliancesGrid"></div>
+        </div>
+      </div>
+      <div class="detail-tab-panel" id="panelUtilities" role="tabpanel" aria-labelledby="tabUtilities">
+        <div class="amenities-grid" id="utilitiesGrid"></div>
+      </div>
+      <div class="detail-tab-panel" id="panelLease" role="tabpanel" aria-labelledby="tabLease">
+        <div class="amenities-grid" id="leaseGrid"></div>
+      </div>
+    </div>
+    <!-- Legacy hidden sections kept for JS compat -->
+    <div id="amenitiesSection" style="display:none"></div>
+    <div id="utilitiesSection" style="display:none"></div>
+    <div id="leaseSection" style="display:none"></div>
+
+    <div class="prop-divider" id="dividerAfterFeatures" style="display:none"></div>
+
+    <!-- Property facts — Zillow-style expanded facts grid (JS-populated) -->
+    <div id="propFactsSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterFacts" style="display:none"></div>
+
+    <div class="prop-divider" id="dividerBeforeMap"></div>
+
+    <!-- Map -->
+    <div class="prop-section">
+      <div class="prop-section-eyebrow">Location</div>
+      <div class="prop-section-head">Where it <em>sits</em>.</div>
+      <div class="map-container" id="mapContainer">
+        <div id="mapFallback" style="height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#8892a2">
+          <i class="fas fa-map-marker-alt" style="font-size:32px;color:#2563eb"></i>
+          <span id="mapAddressLabel" style="font-size:14px"></span>
+        </div>
+      </div>
+      <p id="mapNeighborhood" style="font-size:13px;color:#8892a2;margin-top:8px;display:none">
+        <i class="fas fa-info-circle" style="color:#c9a55c"></i>
+        <span id="mapNeighborhoodText"></span>
+      </p>
+      <a href="#" class="map-open-btn" id="mapOpenBtn" target="_blank" rel="noopener noreferrer" style="display:none">
+        <i class="fas fa-diamond-turn-right"></i> Open in Maps
+      </a>
+    </div>
+
+    <div class="prop-divider"></div>
+
+    <!-- Walk Score & nearby schools (JS-populated) -->
+    <div id="scoresSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterScores" style="display:none"></div>
+
+    <!-- Similar listings in same city (JS-populated, async) -->
+    <div id="similarSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterSimilar" style="display:none"></div>
+
     <!-- ── Before You Apply / Process & Trust Section ── -->
     <div class="prop-section" id="processSection">
       <div class="prop-section-eyebrow">Before You Apply</div>
@@ -332,7 +414,7 @@
           <div class="prop-step-num">1</div>
           <div class="prop-step-body">
             <div class="prop-step-title">Apply Online</div>
-            <div class="prop-step-desc">Select this property and submit your application. <strong>Nothing is charged at submission</strong> — your application is received and held until our team reaches out to coordinate payment.</div>
+            <div class="prop-step-desc">Select this property and submit your application. <strong>Nothing is charged at submission</strong> — your application is received and placed in queue once the application fee is paid.</div>
             <span class="prop-step-badge free">Free to submit</span>
           </div>
         </div>
@@ -341,7 +423,7 @@
           <div class="prop-step-num">2</div>
           <div class="prop-step-body">
             <div class="prop-step-title">Pay the Application Fee</div>
-            <div class="prop-step-desc">Our leasing team contacts you within <strong>24 hours</strong> at the phone or email you provided to securely coordinate payment. Your application is activated for review only after payment is completed. Paying quickly places you earlier in the queue.</div>
+            <div class="prop-step-desc">The application fee activates your application for review. Payment must be completed before your application enters the queue — paying promptly places you earlier in the review order.</div>
             <span class="prop-step-badge paid">$50 — non-refundable once processed</span>
           </div>
         </div>
@@ -456,89 +538,7 @@
 
     <div class="prop-divider"></div>
 
-    <!-- About -->
-    <div class="prop-section detail-section" id="aboutSection">
-      <div class="prop-section-eyebrow">About this home</div>
-      <div class="prop-section-head">A place to <em>call home</em>.</div>
-      <div class="prop-desc" id="detailDesc">
-        <div class="skeleton skeleton-line" style="width:100%;height:15px;margin-bottom:10px"></div>
-        <div class="skeleton skeleton-line" style="width:96%;height:15px;margin-bottom:10px"></div>
-        <div class="skeleton skeleton-line" style="width:88%;height:15px;margin-bottom:10px"></div>
-        <div class="skeleton skeleton-line" style="width:70%;height:15px"></div>
-      </div>
-    </div>
-
-    <!-- Amenities / Utilities / Lease (tabbed) -->
-    <div class="prop-section detail-tabs-wrap" id="detailTabsSection" style="display:none">
-      <div class="prop-section-eyebrow">Features &amp; details</div>
-      <div class="detail-tabs" id="detailTabs" role="tablist">
-        <button class="detail-tab active" data-panel="panelAmenities" id="tabAmenities" role="tab" aria-selected="true" aria-controls="panelAmenities">
-          <i class="fas fa-list-check"></i> Amenities
-        </button>
-        <button class="detail-tab" data-panel="panelUtilities" id="tabUtilities" role="tab" aria-selected="false" aria-controls="panelUtilities" style="display:none">
-          <i class="fas fa-bolt"></i> Utilities
-        </button>
-        <button class="detail-tab" data-panel="panelLease" id="tabLease" role="tab" aria-selected="false" aria-controls="panelLease" style="display:none">
-          <i class="fas fa-file-contract"></i> Lease
-        </button>
-      </div>
-      <div class="detail-tab-panel active" id="panelAmenities" role="tabpanel" aria-labelledby="tabAmenities">
-        <div class="amenities-grid" id="amenitiesGrid"></div>
-        <div id="appliancesSection" style="display:none;margin-top:20px">
-          <div style="font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m-muted-2);margin-bottom:10px">Appliances</div>
-          <div class="amenities-grid" id="appliancesGrid"></div>
-        </div>
-      </div>
-      <div class="detail-tab-panel" id="panelUtilities" role="tabpanel" aria-labelledby="tabUtilities">
-        <div class="amenities-grid" id="utilitiesGrid"></div>
-      </div>
-      <div class="detail-tab-panel" id="panelLease" role="tabpanel" aria-labelledby="tabLease">
-        <div class="amenities-grid" id="leaseGrid"></div>
-      </div>
-    </div>
-    <!-- Legacy hidden sections kept for JS compat -->
-    <div id="amenitiesSection" style="display:none"></div>
-    <div id="utilitiesSection" style="display:none"></div>
-    <div id="leaseSection" style="display:none"></div>
-
-    <div class="prop-divider" id="dividerAfterFeatures" style="display:none"></div>
-
-    <!-- Property facts — Zillow-style expanded facts grid (JS-populated) -->
-    <div id="propFactsSection" style="display:none"></div>
-    <div class="prop-divider" id="dividerAfterFacts" style="display:none"></div>
-
-    <div class="prop-divider" id="dividerBeforeMap"></div>
-
-    <!-- Map -->
-    <div class="prop-section">
-      <div class="prop-section-eyebrow">Location</div>
-      <div class="prop-section-head">Where it <em>sits</em>.</div>
-      <div class="map-container" id="mapContainer">
-        <div id="mapFallback" style="height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#8892a2">
-          <i class="fas fa-map-marker-alt" style="font-size:32px;color:#2563eb"></i>
-          <span id="mapAddressLabel" style="font-size:14px"></span>
-        </div>
-      </div>
-      <p id="mapNeighborhood" style="font-size:13px;color:#8892a2;margin-top:8px;display:none">
-        <i class="fas fa-info-circle" style="color:#c9a55c"></i>
-        <span id="mapNeighborhoodText"></span>
-      </p>
-      <a href="#" class="map-open-btn" id="mapOpenBtn" target="_blank" rel="noopener noreferrer" style="display:none">
-        <i class="fas fa-diamond-turn-right"></i> Open in Maps
-      </a>
-    </div>
-
-    <div class="prop-divider"></div>
-
-    <!-- Walk Score & nearby schools (JS-populated) -->
-    <div id="scoresSection" style="display:none"></div>
-    <div class="prop-divider" id="dividerAfterScores" style="display:none"></div>
-
-    <!-- Similar listings in same city (JS-populated, async) -->
-    <div id="similarSection" style="display:none"></div>
-    <div class="prop-divider" id="dividerAfterSimilar" style="display:none"></div>
-
-    <!-- Contact / message landlord -->
+        <!-- Contact / message landlord -->
     <div class="prop-section">
       <div class="prop-section-eyebrow">Questions?</div>
       <div class="prop-section-head">Message the <em>landlord</em>.</div>
