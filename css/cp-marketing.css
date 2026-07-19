@@ -3290,6 +3290,120 @@ body[data-portal="public"][data-page="property"] .prop-split-content .detail-lis
   }
 }
 
+/* ── Mobile-first refinements ≤767px ──────────────────────────────── */
+@media (max-width: 767px) {
+
+  /* Meta grid → horizontal scroll pill row */
+  body[data-portal="public"][data-page="property"] .prop-meta-grid {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 8px;
+    padding-bottom: 6px;
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent 100%);
+    mask-image: linear-gradient(to right, black calc(100% - 36px), transparent 100%);
+  }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid::-webkit-scrollbar { display: none; }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item {
+    flex: 0 0 auto;
+    min-width: 86px;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 14px;
+    gap: 4px;
+    border-radius: 10px;
+  }
+  /* Cancel the odd-item full-width span — not a grid any more */
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-value { font-size: 18px; }
+
+  /* Tighter section headings — editorial size is too large on small screens */
+  body[data-portal="public"][data-page="property"] .prop-section-head {
+    font-size: 17px;
+    margin-bottom: 10px;
+  }
+
+  /* Tighter dividers */
+  body[data-portal="public"][data-page="property"] .prop-divider { margin: 20px 0; }
+
+  /* Share buttons: icon + label on ≥380px, icon-only below */
+  body[data-portal="public"][data-page="property"] .prop-share-btn {
+    padding: 9px 13px;
+    font-size: 12.5px;
+    gap: 5px;
+  }
+}
+
+@media (max-width: 380px) {
+  /* Icon-only share buttons on very small screens */
+  body[data-portal="public"][data-page="property"] .prop-share-btn span { display: none; }
+  body[data-portal="public"][data-page="property"] .prop-share-btn { padding: 10px 13px; }
+}
+
+/* ── Collapsible process steps (details/summary) ────────────────── */
+body[data-portal="public"][data-page="property"] .prop-process-collapse {
+  margin-bottom: 28px;
+}
+/* On desktop: hide the summary toggle — steps are always visible */
+@media (min-width: 768px) {
+  body[data-portal="public"][data-page="property"] .prop-process-collapse > summary {
+    display: none;
+  }
+  /* Force open regardless of [open] attribute on desktop */
+  body[data-portal="public"][data-page="property"] .prop-process-collapse > .prop-process-steps {
+    display: flex !important;
+  }
+}
+/* On mobile: style the summary as a tappable toggle header */
+@media (max-width: 767px) {
+  body[data-portal="public"][data-page="property"] .prop-process-collapse {
+    border: 1.5px solid #e4e8ef;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  body[data-portal="public"][data-page="property"] .prop-process-collapse-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #f8fafc;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0a1628;
+    letter-spacing: -.01em;
+    list-style: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    gap: 10px;
+  }
+  body[data-portal="public"][data-page="property"] .prop-process-collapse-summary::-webkit-details-marker { display: none; }
+  body[data-portal="public"][data-page="property"] .prop-process-collapse-summary::marker { display: none; }
+  body[data-portal="public"][data-page="property"] .prop-collapse-chevron {
+    font-size: 12px;
+    color: #6b7280;
+    flex-shrink: 0;
+    transition: transform 240ms ease;
+  }
+  body[data-portal="public"][data-page="property"] .prop-process-collapse[open] .prop-collapse-chevron {
+    transform: rotate(180deg);
+  }
+  body[data-portal="public"][data-page="property"] .prop-process-collapse > .prop-process-steps {
+    padding: 16px 16px 4px;
+    margin-bottom: 0;
+  }
+  /* Also hide the sublabel inside — summary replaces it on mobile */
+  body[data-portal="public"][data-page="property"] .prop-process-collapse .prop-process-sublabel-inner {
+    display: none;
+  }
+}
+
 /* ── Wide screens: expand right column cap ── */
 @media (min-width: 1400px) {
   body[data-portal="public"][data-page="property"] .prop-split { grid-template-columns: 1fr 500px; }
