@@ -62,6 +62,39 @@
     #mobile-apply-bar .mob-msg-btn{width:44px;height:44px;border-radius:9px;border:1.5px solid #e4e8ef;background:transparent;color:#6b7280;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
     #mobile-apply-bar .mob-btn{background:#006aff;color:#fff;border:none;border-radius:9px;padding:12px 22px;font-size:.875rem;font-weight:800;text-decoration:none;white-space:nowrap;cursor:pointer;box-shadow:0 4px 16px rgba(0,106,255,.35)}
     @media(max-width:900px){#mobile-apply-bar.active{display:flex}body.mob-bar-active{padding-bottom:calc(72px + env(safe-area-inset-bottom))}}
+
+    /* ── Process & Transparency Section ─────────────────────────────────── */
+    .prop-process-notice{background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #f59e0b;border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;margin-bottom:24px;font-size:13.5px;color:#92400e;line-height:1.55;font-weight:500}
+    .prop-process-notice i{flex-shrink:0;margin-top:1px}
+    .prop-process-steps{display:flex;flex-direction:column;margin-bottom:28px;position:relative}
+    .prop-process-step{display:flex;align-items:flex-start;gap:14px;position:relative;padding-bottom:22px}
+    .prop-process-step:last-child{padding-bottom:0}
+    .prop-process-step:not(:last-child)::before{content:'';position:absolute;left:15px;top:33px;bottom:0;width:2px;background:linear-gradient(180deg,#dbeafe,#e5e7eb)}
+    .prop-step-num{width:32px;height:32px;border-radius:50%;background:#006aff;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(0,106,255,.25);position:relative;z-index:1}
+    .prop-step-num.done{background:#10b981}
+    .prop-step-body{padding-top:4px;flex:1;min-width:0}
+    .prop-step-title{font-size:14px;font-weight:700;color:#0a1628;margin-bottom:3px}
+    .prop-step-desc{font-size:12.5px;color:#6b7280;line-height:1.55}
+    .prop-step-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-top:6px;line-height:1.6}
+    .prop-step-badge.free{background:#dcfce7;color:#166534}
+    .prop-step-badge.paid{background:#fee2e2;color:#991b1b}
+    .prop-step-badge.credited{background:#dbeafe;color:#1e40af}
+    .prop-step-badge.done{background:#f0fdf4;color:#15803d}
+    .prop-fee-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px}
+    @media(max-width:540px){.prop-fee-cards{grid-template-columns:1fr}}
+    .prop-fee-card{background:#f8fafc;border:1.5px solid #e4e8ef;border-radius:12px;padding:14px 16px}
+    .prop-fee-card.highlight{border-color:#bfdbfe;background:linear-gradient(135deg,#eff6ff 0%,#f8fafc 100%)}
+    .prop-fee-card-label{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8892a2;margin-bottom:4px}
+    .prop-fee-card-amount{font-size:17px;font-weight:800;color:#0a1628;letter-spacing:-.02em;margin-bottom:5px;line-height:1.25}
+    .prop-fee-card-note{font-size:11.5px;color:#6b7280;line-height:1.5}
+    .prop-denied-box{background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:14px 16px;margin-bottom:24px;font-size:13px;color:#166534;line-height:1.65}
+    .prop-req-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+    .prop-req-item{display:flex;align-items:center;gap:6px;background:#f1f5f9;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;color:#374151}
+    .prop-req-item i{color:#006aff;font-size:12px;flex-shrink:0}
+    .prop-policy-row{display:flex;flex-wrap:wrap;gap:8px}
+    .prop-policy-link{font-size:12px;color:#006aff;text-decoration:none;display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid #dbeafe;border-radius:6px;background:#eff6ff;transition:background .15s,border-color .15s;white-space:nowrap}
+    .prop-policy-link:hover{background:#dbeafe;border-color:#93c5fd}
+    .prop-process-sublabel{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8892a2;margin-bottom:12px;margin-top:0}
   </style>
 <script defer src="/config.js?v=1784145767610"></script>
 <script defer src="/js/supabase.min.js"></script>
@@ -277,6 +310,149 @@
         </a>
       </div>
     </div>
+
+    <div class="prop-divider"></div>
+
+    <!-- ── Before You Apply / Process & Trust Section ── -->
+    <div class="prop-section" id="processSection">
+      <div class="prop-section-eyebrow">Before You Apply</div>
+      <div class="prop-section-head">Here's exactly what <em>to expect</em>.</div>
+
+      <!-- Application-First Notice -->
+      <div class="prop-process-notice">
+        <i class="fas fa-lock" style="font-size:14px;color:#b45309"></i>
+        <span><strong>Application Required Before Viewing.</strong> This property operates on an application-first basis. Viewings are arranged after an application has been submitted and approved — not before. Applications are reviewed and a decision is made before any property access is scheduled.</span>
+      </div>
+
+      <!-- Step-by-Step Process -->
+      <p class="prop-process-sublabel">The Process — Step by Step</p>
+      <div class="prop-process-steps">
+
+        <div class="prop-process-step">
+          <div class="prop-step-num">1</div>
+          <div class="prop-step-body">
+            <div class="prop-step-title">Apply Online</div>
+            <div class="prop-step-desc">Select this property and submit your application. <strong>Nothing is charged at submission</strong> — your application is received and held until our team reaches out to coordinate payment.</div>
+            <span class="prop-step-badge free">Free to submit</span>
+          </div>
+        </div>
+
+        <div class="prop-process-step">
+          <div class="prop-step-num">2</div>
+          <div class="prop-step-body">
+            <div class="prop-step-title">Pay the Application Fee</div>
+            <div class="prop-step-desc">Our leasing team contacts you within <strong>24 hours</strong> at the phone or email you provided to securely coordinate payment. Your application is activated for review only after payment is completed. Paying quickly places you earlier in the queue.</div>
+            <span class="prop-step-badge paid">$50 — non-refundable once processed</span>
+          </div>
+        </div>
+
+        <div class="prop-process-step">
+          <div class="prop-step-num">3</div>
+          <div class="prop-step-body">
+            <div class="prop-step-title">Active Review (24–72 Hours)</div>
+            <div class="prop-step-desc">Your application — including background and credit check — is reviewed. Decisions are typically made within <strong>24 to 72 hours</strong> of payment. Applicants who respond promptly and provide complete, accurate information are often prioritized. Multiple applications may be reviewed for the same property.</div>
+          </div>
+        </div>
+
+        <div class="prop-process-step">
+          <div class="prop-step-num">4</div>
+          <div class="prop-step-body">
+            <div class="prop-step-title">Approval / Selection</div>
+            <div class="prop-step-desc">If selected, you are notified by email. <strong>This step is time-sensitive</strong> — units are offered on a first-completion basis among approved applicants. You'll need to move to the next step quickly to secure the property.</div>
+          </div>
+        </div>
+
+        <div class="prop-process-step">
+          <div class="prop-step-num">5</div>
+          <div class="prop-step-body">
+            <div class="prop-step-title">Pay the Holding Deposit</div>
+            <div class="prop-step-desc">A holding deposit reserves the property and removes it from active availability while your lease is being finalized. You have <strong>24–48 hours</strong> to complete this after selection. This is not an extra charge — it converts directly into your move-in costs.</div>
+            <span class="prop-step-badge credited">Fully credited toward your move-in costs — not an additional charge</span>
+          </div>
+        </div>
+
+        <div class="prop-process-step">
+          <div class="prop-step-num">6</div>
+          <div class="prop-step-body">
+            <div class="prop-step-title">Sign Your Lease</div>
+            <div class="prop-step-desc">You receive your lease documentation electronically, review it, and sign — typically within <strong>48 hours</strong> of selection. Your electronic signature carries the same legal weight as a handwritten signature under federal law (ESIGN Act).</div>
+          </div>
+        </div>
+
+        <div class="prop-process-step">
+          <div class="prop-step-num done">7</div>
+          <div class="prop-step-body">
+            <div class="prop-step-title">Move In</div>
+            <div class="prop-step-desc">Once the lease is fully executed and move-in costs are paid, we coordinate your move-in date with the landlord. Every step is guided and documented from start to finish.</div>
+            <span class="prop-step-badge done">🏠 You're in</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Fee Breakdown -->
+      <p class="prop-process-sublabel">What You'll Pay &amp; When</p>
+      <div class="prop-fee-cards">
+
+        <div class="prop-fee-card">
+          <div class="prop-fee-card-label">Application Fee</div>
+          <div class="prop-fee-card-amount">$50</div>
+          <div class="prop-fee-card-note">Paid after submission, before review begins. Non-refundable once processed. Covers background &amp; credit screening for this specific property.</div>
+        </div>
+
+        <div class="prop-fee-card highlight">
+          <div class="prop-fee-card-label">Holding Deposit</div>
+          <div class="prop-fee-card-amount">Communicated at approval</div>
+          <div class="prop-fee-card-note"><strong>Fully credited toward your security deposit</strong> at lease signing — not an extra charge. Full refund available within 24 hours of payment, no questions asked.</div>
+        </div>
+
+        <div class="prop-fee-card">
+          <div class="prop-fee-card-label">Security Deposit</div>
+          <div class="prop-fee-card-amount">See costs above</div>
+          <div class="prop-fee-card-note">Paid at move-in. Your holding deposit is applied toward this — so you are not paying both in full separately.</div>
+        </div>
+
+        <div class="prop-fee-card">
+          <div class="prop-fee-card-label">Admin / Move-in Fee</div>
+          <div class="prop-fee-card-amount">If applicable</div>
+          <div class="prop-fee-card-note">Non-refundable. Displayed on this listing if it applies. Itemized in your move-in cost breakdown before you sign anything.</div>
+        </div>
+
+      </div>
+
+      <!-- Protection / If Denied -->
+      <p class="prop-process-sublabel">You're Protected at Every Step</p>
+
+      <div class="prop-denied-box">
+        <strong><i class="fas fa-shield-halved" style="margin-right:6px"></i>If Your Application Is Not Approved</strong><br>
+        You automatically receive <strong>2 application credits</strong> — valid for 45 days — that fully waive the application fee on your next two applications, regardless of the fee amount. A denial doesn't cost you your ability to keep looking.
+      </div>
+
+      <div class="prop-denied-box" style="background:#eff6ff;border-color:#93c5fd;color:#1e40af;margin-bottom:24px">
+        <strong><i class="fas fa-file-circle-check" style="margin-right:6px"></i>Property Accuracy Guarantee</strong><br>
+        If the property is found to significantly differ from what was listed — wrong size, missing amenities, unavailable unit, or misrepresented condition — before your lease is finalized, you are eligible for a <strong>full refund of your holding deposit</strong>. Submit the discrepancy in writing and it is reviewed promptly.
+      </div>
+
+      <!-- Tenant Requirements -->
+      <p class="prop-process-sublabel">Basic Requirements</p>
+      <div class="prop-req-list">
+        <div class="prop-req-item"><i class="fas fa-user-check"></i> 18 years or older</div>
+        <div class="prop-req-item"><i class="fas fa-dollar-sign"></i> Gross income ≥ 3× monthly rent</div>
+        <div class="prop-req-item"><i class="fas fa-magnifying-glass"></i> Background &amp; credit check</div>
+        <div class="prop-req-item"><i class="fas fa-user-plus"></i> One co-applicant included free</div>
+        <div class="prop-req-item"><i class="fas fa-circle-check"></i> Truthful, complete application</div>
+      </div>
+
+      <!-- Policy Links -->
+      <div style="font-size:12px;color:#8892a2;margin-bottom:8px">Full policy details — opens in a new tab:</div>
+      <div class="prop-policy-row">
+        <a href="/rental-application-policy.html" class="prop-policy-link" target="_blank" rel="noopener noreferrer"><i class="fas fa-file-alt"></i> Application Policy</a>
+        <a href="/holding-deposit-policy.html" class="prop-policy-link" target="_blank" rel="noopener noreferrer"><i class="fas fa-hand-holding-dollar"></i> Holding Deposit</a>
+        <a href="/application-credit-policy.html" class="prop-policy-link" target="_blank" rel="noopener noreferrer"><i class="fas fa-rotate-left"></i> Credit Policy</a>
+        <a href="/terms.html" class="prop-policy-link" target="_blank" rel="noopener noreferrer"><i class="fas fa-scale-balanced"></i> Terms of Service</a>
+      </div>
+    </div>
+    <!-- ── End Process Section ── -->
 
     <div class="prop-divider"></div>
 
