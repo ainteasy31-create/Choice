@@ -493,6 +493,30 @@ class PipelineOrchestrator:
 
         # Sort: best quality first
         valid.sort(key=lambda r: -r.get("data_quality_score", 0))
+
+        # ── Same-floor-plan dedup ─────────────────────────────────────────
+        # Drop listings that are visually identical to one already selected:
+        # same city + square_footage + monthly_rent = same builder model home
+        # reused across multiple lots in the same subdivision.
+        seen_floorplans: set = set()
+        deduped = []
+        for rec in valid:
+            key = (
+                (rec.get("city") or "").lower().strip(),
+                rec.get("square_footage") or rec.get("square_feet"),
+                rec.get("monthly_rent"),
+            )
+            # Only deduplicate when all three fields are populated
+            if all(k is not None for k in key) and key[1] and key[2]:
+                if key in seen_floorplans:
+                    addr = "{} {}".format(rec.get("address", ""), rec.get("city", "")).strip()
+                    self._log("   [SKIP] {} — same floor plan already selected ({} sqft @ ${}/mo)".format(
+                        addr, key[1], key[2]))
+                    continue
+                seen_floorplans.add(key)
+            deduped.append(rec)
+        valid = deduped
+
         to_publish = valid[: criteria.target]
         result.selected = len(to_publish)
         self._log("\n   Selecting top {}/{} for publishing:".format(len(to_publish), len(valid)))
