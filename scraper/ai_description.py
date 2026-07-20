@@ -59,8 +59,22 @@ try:
     import openai
     _api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if _api_key:
-        _client = openai.OpenAI(api_key=_api_key)
-        _OPENAI_OK = True
+        # Validate the key is ASCII-clean before passing to the SDK.
+        # A key containing Unicode (e.g. curly apostrophes from a copy-paste
+        # error) causes a codec crash deep inside the HTTP layer on every call.
+        try:
+            _api_key.encode("ascii")
+        except UnicodeEncodeError:
+            logger.error(
+                "OPENAI_API_KEY contains non-ASCII characters — the key is "
+                "invalid (likely a copy-paste error with curly quotes or "
+                "special characters). AI rewrites are disabled until the key "
+                "is replaced with a valid sk-... token."
+            )
+            _api_key = ""
+        if _api_key:
+            _client = openai.OpenAI(api_key=_api_key)
+            _OPENAI_OK = True
 except ImportError:
     pass
 

@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""
+okc_batch.py — Oklahoma City Area Rental Batch
+===============================================
+Target markets  : Oklahoma City, OK  |  Moore, OK  |  Midwest City, OK
+Fallback markets: Edmond, Yukon, Mustang, Norman, Del City, Choctaw,
+                  Bethany, Warr Acres, Nicholls Hills, Harrah
+Property types  : Single-family homes ONLY (SINGLE_FAMILY)
+                  No apartments, townhomes, condos, duplexes, or multi-family.
+Bedrooms        : 3 exactly
+Bathrooms       : 2.0 minimum
+Rent range      : $1,300–$1,650 / month (scraped AND published)
+Published rent  : Original advertised rent — no adjustment required
+Target          : 10 published listings
+
+Pricing rule:
+  Publish at original advertised rent; no tiers needed.
+  Cap enforced at $1,650; floor at $1,300.
+
+Watermark policy (zero-tolerance):
+  The pipeline enforces this automatically at two levels:
+    1. Text/metadata check (_step3_filter via is_watermarked())
+    2. Visual GPT-4o check (_step13a_visual_watermark) — any image with a
+       watermark is dropped; if the listing ends up with fewer than MIN_PHOTOS
+       clean images, the whole listing is skipped.
+  The user instruction "do not scrape properties that have watermark on all
+  the images" is satisfied by this two-layer check.
+
+All platform rules (watermark detection, ImageKit upload, AI description
+rewrite, enrichment, fee normalization, duplicate detection, final validation)
+are enforced automatically by PipelineOrchestrator.  See pipeline.py.
+
+Usage:
+  python3 scraper/okc_batch.py
+  python3 scraper/okc_batch.py --dry-run
+  python3 scraper/okc_batch.py --target 10 --past-days 90
+"""
+
+import argparse
+import sys
+from typing import Optional, Set
+
+from pipeline import PipelineOrchestrator, BatchCriteria
+
+# ---------------------------------------------------------------------------
+# Batch constants
+# ---------------------------------------------------------------------------
+TARGET_LOCATIONS = [
+    "Oklahoma City, OK",
+    "Moore, OK",
+    "Midwest City, OK",
+]
+
+FALLBACK_LOCATIONS = [
+    "Edmond, OK",
+    "Yukon, OK",
+    "Mustang, OK",
+    "Norman, OK",
+    "Del City, OK",
+    "Choctaw, OK",
+    "Bethany, OK",
+    "Warr Acres, OK",
+    "Nichols Hills, OK",
+    "Harrah, OK",
+    "Tuttle, OK",
+    "Blanchard, OK",
+]
+
+ALLOWED_TYPES  = {"SINGLE_FAMILY"}   # single-family homes only
+BEDS_EXACT     = 3
+BATHS_MIN      = 2.0
+RENT_MIN       = 1300
+RENT_MAX       = 1650                # scrape cap == publish cap
+RENT_CAP       = 1650                # never publish above this
+
+
+# ---------------------------------------------------------------------------
+# Pricing function
+# ---------------------------------------------------------------------------
+
+def compute_okc_rent(
+    original_rent,
+    seen_rents: Optional[Set[int]] = None,
+):
+    """
+    No pricing tiers for this batch — publish at original advertised rent.
+
+    Validates rent is within [$1,300, $1,650].
+    Applies a small uniqueness nudge if two listings land on the same dollar
+    amount, keeping every published price within the allowed band.
+
+    Returns (published_rent_int, original_rent_float) or (None, None) to skip.
+    """
+    if original_rent is None:
+        return None, None
+    rent = float(original_rent)
+    if rent < RENT_MIN or rent > RENT_MAX:
+        return None, None
+
+    published = int(round(rent))
+    published = max(RENT_MIN, min(published, RENT_CAP))
+
+    # Uniqueness nudge — prefer $5 increments to keep prices natural-looking
+    if seen_rents is not None and published in seen_rents:
+        for nudge in (5, -5, 10, -10, 15, -15, 20, -20, 25, -25):
+            candidate = published + nudge
+            if RENT_MIN <= candidate <= RENT_CAP and candidate not in seen_rents:
+                published = candidate
+                break
+
+    return int(published), rent
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    ap = argparse.ArgumentParser(description="Oklahoma City area rental batch")
+    ap.add_argument("--dry-run",   action="store_true", help="Stop before any DB writes")
+    ap.add_argument("--target",    type=int, default=10,  help="Number of listings to publish")
+    ap.add_argument("--past-days", type=int, default=90)
+    ap.add_argument("--limit",     type=int, default=250, help="Max scraped per location")
+    ap.add_argument("--min-score", type=int, default=35,  help="Data quality floor")
+    args = ap.parse_args()
+
+    criteria = BatchCriteria(
+        batch_name="Oklahoma City, OK",
+        locations=TARGET_LOCATIONS,
+        fallback_locations=FALLBACK_LOCATIONS,
+        beds_exact=BEDS_EXACT,
+        baths_min=BATHS_MIN,
+        rent_min=RENT_MIN,
+        rent_max=RENT_MAX,
+        rent_floor=RENT_MIN,
+        rent_cap=RENT_CAP,
+        allowed_types=ALLOWED_TYPES,
+        target=args.target,
+        past_days=args.past_days,
+        limit=args.limit,
+        min_score=args.min_score,
+        pricing_fn=compute_okc_rent,
+    )
+
+    orchestrator = PipelineOrchestrator(verbose=True)
+    result = orchestrator.run(criteria, dry_run=args.dry_run)
+
+    if result.errors and result.published == 0:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
