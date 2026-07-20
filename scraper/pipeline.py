@@ -491,6 +491,24 @@ class PipelineOrchestrator:
             self._log("ERROR: No listings passed validation.")
             return result
 
+        # ── Already-published filter ──────────────────────────────────────
+        # Remove any listing whose source_listing_id is already published in
+        # pipeline_properties (has a choice_property_id). This prevents the
+        # same top-scoring listings from being selected run after run.
+        if self._pipe_session:
+            candidate_sids = [r.get("source_listing_id", "") for r in valid if r.get("source_listing_id")]
+            pub_map = self._fetch_pipeline_id_map(candidate_sids)
+            published_sids = {sid for sid in candidate_sids if pub_map.get("__published__" + sid)}
+            if published_sids:
+                before = len(valid)
+                valid = [r for r in valid if r.get("source_listing_id", "") not in published_sids]
+                self._log("   Excluded {} already-published listing(s) from candidates".format(
+                    before - len(valid)))
+
+        if not valid:
+            self._log("ERROR: All candidates already published. Try a different market or expand criteria.")
+            return result
+
         # Sort: best quality first
         valid.sort(key=lambda r: -r.get("data_quality_score", 0))
 
@@ -541,6 +559,12 @@ class PipelineOrchestrator:
             if not pid:
                 self._log("   ERROR: No pipeline ID for: {}".format(addr))
                 result.errors.append("No pipeline ID: " + addr)
+                continue
+
+            # Skip records that were already published in a prior run.
+            # _step9_stage tags these via __already_published__.
+            if rec.get("__already_published__"):
+                self._log("   SKIP (already published): {}".format(addr))
                 continue
 
             # ── FIX C1: Visual watermark + photo count gate BEFORE publish ──
@@ -840,8 +864,16 @@ class PipelineOrchestrator:
         existing_map = self._fetch_pipeline_id_map(source_ids)
         new_records = [r for r in records if r.get("source_listing_id", "") not in existing_map]
 
-        self._log("   Dedup: {} already staged, {} new".format(
-            len(records) - len(new_records), len(new_records)))
+        # Tag records already published so the main loop skips them
+        already_published = 0
+        for rec in records:
+            sid = rec.get("source_listing_id", "")
+            if existing_map.get("__published__" + sid):
+                rec["__already_published__"] = True
+                already_published += 1
+
+        self._log("   Dedup: {} already staged ({} already published), {} new".format(
+            len(records) - len(new_records), already_published, len(new_records)))
 
         # Insert new records in batches of 50
         for i in range(0, len(new_records), 50):
@@ -1069,13 +1101,17 @@ class PipelineOrchestrator:
             try:
                 r = self._pipe_session.get(
                     "{}/rest/v1/pipeline_properties"
-                    "?source_listing_id=in.({})&select=id,source_listing_id&limit=1000".format(
+                    "?source_listing_id=in.({})&select=id,source_listing_id,choice_property_id&limit=1000".format(
                         SUPABASE_URL, encoded),
                     timeout=20,
                 )
                 r.raise_for_status()
                 for row in r.json():
                     result[row["source_listing_id"]] = row["id"]
+                    # Tag records that have already been published so the
+                    # main publish loop can skip them without re-calling RPC.
+                    if row.get("choice_property_id"):
+                        result["__published__" + row["source_listing_id"]] = row["choice_property_id"]
             except Exception as e:
                 self._log("   WARNING: fetch_pipeline_id_map: {}".format(str(e)[:80]))
         return result
