@@ -1412,19 +1412,29 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
             rec["description"] = strip_corporate_fees(rec["description"])
 
         # Step 3b: filter branded/agent photos from the image list.
-        # Unlike step 1 this does NOT drop the whole listing — it only
-        # removes individual photos that show company branding, agent
-        # headshots, or office shots.  The listing is kept even if all
-        # photos are removed (rare edge case handled in the pipeline UI).
+        # Step 3b: filter branded/agent photos from the image list.
+        # If ALL photos are watermarked (none survive the filter), the entire
+        # listing is rejected — we never publish a property with zero usable
+        # photos. If only SOME photos are watermarked, the clean ones are kept.
         before_raw = rec.get("original_image_urls") or "[]"
         filter_record_photos(rec)
         after_raw = rec.get("original_image_urls") or "[]"
+        all_watermarked = False
         try:
             b_count = len(_json.loads(before_raw)) if isinstance(before_raw, str) else len(before_raw)
             a_count = len(_json.loads(after_raw))  if isinstance(after_raw,  str) else len(after_raw)
             count_photos_filtered += max(0, b_count - a_count)
+            if b_count > 0 and a_count == 0:
+                all_watermarked = True
         except Exception:
             pass
+
+        if all_watermarked:
+            count_watermarked += 1
+            if verbose:
+                addr = (rec.get("address") or "") + " " + (rec.get("city") or "")
+                print("  [watermark] Dropped: " + addr.strip() + " (all photos watermarked)")
+            continue
 
         # Step 4: normalize heating/cooling from raw MLS blobs
         normalize_hvac(rec)
