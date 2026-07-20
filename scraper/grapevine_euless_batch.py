@@ -59,6 +59,13 @@ FALLBACK_LOCATIONS = [
     "Southlake, TX",
     "Irving, TX",
     "Coppell, TX",
+    "Grand Prairie, TX",
+    "Carrollton, TX",
+    "Lewisville, TX",
+    "Flower Mound, TX",
+    "North Richland Hills, TX",
+    "Mansfield, TX",
+    "Keller, TX",
 ]
 
 # Apartments and townhomes only — per the brief
