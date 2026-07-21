@@ -8,12 +8,14 @@ config.js
 config.*.js
 apply/config.js
 
-# CRITICAL: Never commit .env files — secrets belong in Supabase and Cloudflare dashboards.
+# .env files are blocked by default — EXCEPT scraper/.env which carries
+# permanent pipeline credentials so any Replit import works without manual setup.
 .env
 .env.*
 *.env
 .env.local
 .env.*.local
+!scraper/.env
 
 # Node modules — never commit generated/installed files
 node_modules/
