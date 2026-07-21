@@ -51,6 +51,18 @@ FALLBACK_LOCATIONS = [
     "Villa Rica, GA",
 ]
 
+# ZIP-level scraping gives 200 results per ZIP vs 200 for the entire city
+ZIP_CODES = [
+    "30132",  # Dallas, GA
+    "30141",  # Hiram, GA
+    "30127",  # Powder Springs, GA
+    "30101",  # Acworth, GA (west)
+    "30102",  # Acworth, GA (east)
+    "30157",  # Dallas area extension
+    "30064",  # Marietta (Cobb County western corridor)
+    "30106",  # Austell, GA
+]
+
 ALLOWED_TYPES = {"SINGLE_FAMILY", "TOWNHOMES"}
 BEDS_EXACT    = 3
 BATHS_MIN     = 2.0
@@ -129,6 +141,7 @@ def main():
     criteria = BatchCriteria(
         batch_name="Dallas / Hiram / Powder Springs / Acworth, GA",
         locations=TARGET_LOCATIONS,
+        zip_codes=ZIP_CODES,
         fallback_locations=FALLBACK_LOCATIONS,
         beds_exact=BEDS_EXACT,
         baths_min=BATHS_MIN,

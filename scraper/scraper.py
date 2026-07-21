@@ -120,7 +120,7 @@ RETRY_DELAY = 1.5
 REALTOR_DETAIL_WORKERS   = 5
 REALTOR_DETAIL_DELAY     = (0.8, 2.0)
 REALTOR_DETAIL_TIMEOUT   = 20
-REALTOR_ENRICH_SKIP_SCORE = 80        # skip detail fetch if record already >= this score
+REALTOR_ENRICH_SKIP_SCORE = 999       # always fetch detail page — every listing needs photos
 
 _REALTOR_UA_POOL = [
     (
@@ -847,7 +847,7 @@ def _map_realtor_property(prop):
         "location_context":      None,
         "property_type":         prop_type,
         "bedrooms":              beds,
-        "bathrooms":             bath_f,
+        "bathrooms":             bath_total,  # full + 0.5 * half baths (accurate for filter)
         "half_bathrooms":        bath_h,
         "total_bathrooms":       bath_total,
         "square_footage":        sqft,
@@ -930,13 +930,21 @@ def _fetch_realtor_detail_html(url, timeout=REALTOR_DETAIL_TIMEOUT):
     headers = dict(_REALTOR_BASE_HEADERS)
     headers["User-Agent"] = random.choice(_REALTOR_UA_POOL)
     headers["Referer"] = "https://www.realtor.com/realestateandhomes-search/"
-    try:
-        r = _requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        if r.status_code == 200:
-            return r.text
-        return None
-    except Exception:
-        return None
+    for attempt in range(1, 4):
+        try:
+            r = _requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+            if r.status_code == 200:
+                return r.text
+            if r.status_code == 429:
+                wait = 30 * attempt
+                time.sleep(wait)
+                continue
+            return None
+        except Exception:
+            if attempt < 3:
+                time.sleep(5 * attempt)
+            continue
+    return None
 
 
 def _extract_realtor_detail_property(html):

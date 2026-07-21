@@ -18,7 +18,7 @@ Amenity priority : In-unit W/D, garage/covered parking, community amenities,
 Platform rules (applied automatically by the pipeline):
   - Watermark detection + rejection (text and visual)
   - ImageKit-only image hosting (min 6 photos per listing)
-  - Description fully rewritten — no original scraped text published
+  - Description cleaned — no competitor branding or agent language
   - Application fee normalized to $50
   - No tour/showing/contact/agent language
   - No third-party branding
@@ -66,6 +66,12 @@ FALLBACK_LOCATIONS = [
     "North Richland Hills, TX",
     "Mansfield, TX",
     "Keller, TX",
+]
+
+# ZIP-level scraping gives 200 results per ZIP vs 200 for the entire city
+ZIP_CODES = [
+    "76051", "76092", "76099",  # Grapevine
+    "76039", "76040",            # Euless
 ]
 
 # Apartments and townhomes only — per the brief
@@ -137,6 +143,7 @@ def main():
     criteria = BatchCriteria(
         batch_name="Grapevine / Euless, TX",
         locations=TARGET_LOCATIONS,
+        zip_codes=ZIP_CODES,
         fallback_locations=FALLBACK_LOCATIONS,
         beds_exact=beds_exact,
         beds_min=beds_min,

@@ -23,10 +23,10 @@ Final rent rules:
   - Security deposit = published rent when adjusted
   - Maintain natural price variation; avoid every listing at exactly $1,600
 
-All platform rules (watermark detection, ImageKit upload, AI description
-rewrite, enrichment, fee normalization, duplicate detection, final validation)
-are enforced automatically by PipelineOrchestrator — they do not need to be
-repeated here. See scraper/pipeline.py and scraper/PLATFORM_RULES.md.
+All platform rules (watermark detection, ImageKit upload, enrichment,
+fee normalization, duplicate detection, final validation) are enforced
+automatically by PipelineOrchestrator — they do not need to be repeated
+here. See scraper/pipeline.py and scraper/PLATFORM_RULES.md.
 
 Usage:
   python3 scraper/columbus_oh_batch.py
@@ -64,6 +64,18 @@ FALLBACK_LOCATIONS = [
     "Delaware, OH",
     "Heath, OH",
     "Lancaster, OH",
+]
+
+# ZIP-level scraping gives 200 results per ZIP vs 200 for the entire city
+ZIP_CODES = [
+    # Columbus core
+    "43201", "43202", "43203", "43204", "43205", "43206",
+    "43207", "43209", "43210", "43211", "43212", "43213",
+    "43214", "43215", "43219", "43220", "43221", "43222",
+    "43223", "43224", "43227", "43228", "43229", "43230",
+    "43231", "43232", "43235",
+    # Dublin / Hilliard / Grove City / Westerville
+    "43016", "43017", "43026", "43054", "43082", "43123",
 ]
 
 ALLOWED_TYPES    = {"SINGLE_FAMILY", "TOWNHOMES", "APARTMENT"}
@@ -162,6 +174,7 @@ def main():
     criteria = BatchCriteria(
         batch_name="Columbus, OH",
         locations=TARGET_LOCATIONS,
+        zip_codes=ZIP_CODES,
         fallback_locations=FALLBACK_LOCATIONS,
         beds_exact=BEDS_EXACT,
         baths_min=BATHS_MIN,

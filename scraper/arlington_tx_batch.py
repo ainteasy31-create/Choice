@@ -16,9 +16,9 @@ Pricing tiers (this batch only):
   $1,401–$1,500  -> proportional reduction -> $1,300–$1,400
   $1,501–$1,600  -> proportional reduction -> $1,300–$1,400
 
-All platform rules (watermark detection, ImageKit upload, AI description rewrite,
-enrichment, fee normalization, duplicate detection, final validation) are
-enforced automatically by PipelineOrchestrator — they do not need to be repeated
+All platform rules (watermark detection, ImageKit upload, enrichment,
+fee normalization, duplicate detection, final validation) are enforced
+automatically by PipelineOrchestrator — they do not need to be repeated
 here. See scraper/pipeline.py and scraper/PLATFORM_RULES.md.
 
 Usage:
@@ -51,6 +51,17 @@ FALLBACK_LOCATIONS = [
     "Mansfield, TX",
     "Keller, TX",
     "Fort Worth, TX",
+]
+
+# ZIP-level scraping gives 200 results per ZIP vs 200 for the entire city
+ZIP_CODES = [
+    # Arlington
+    "76001", "76002", "76006", "76010", "76011", "76012",
+    "76013", "76014", "76015", "76016", "76017", "76018",
+    # Euless
+    "76039", "76040",
+    # Grapevine
+    "76051", "76092",
 ]
 
 ALLOWED_TYPES  = {"SINGLE_FAMILY", "TOWNHOMES"}
@@ -133,6 +144,7 @@ def main():
     criteria = BatchCriteria(
         batch_name="Arlington / Euless / Grapevine, TX",
         locations=TARGET_LOCATIONS,
+        zip_codes=ZIP_CODES,
         fallback_locations=FALLBACK_LOCATIONS,
         beds_exact=BEDS_EXACT,
         baths_min=BATHS_MIN,

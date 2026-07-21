@@ -17,10 +17,9 @@ Pricing tiers (this batch only):
   $1,501–$1,600  -> apply reasonable adjustment to land at or below $1,400
 
 Platform rules enforced automatically by PipelineOrchestrator:
-  - Watermark detection & rejection (text/metadata + visual if OpenAI available)
-  - All-photo-watermarked listings now rejected at enrichment step
+  - Watermark detection & rejection (text/metadata)
+  - All-photo-watermarked listings rejected at enrichment step
   - ImageKit upload + verification
-  - AI description rewrite
   - Enrichment, fee normalization ($50 app fee), duplicate detection
   - Final validation gate before any DB write
 

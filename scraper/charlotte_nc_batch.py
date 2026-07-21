@@ -17,9 +17,9 @@ Pricing rule:
   Publish at original advertised rent; no tiers needed.
   Cap enforced at $1,700; floor at $1,400.
 
-All platform rules (watermark detection, ImageKit upload, AI description
-rewrite, enrichment, fee normalization, duplicate detection, final validation)
-are enforced automatically by PipelineOrchestrator.  See pipeline.py.
+All platform rules (watermark detection, ImageKit upload, enrichment,
+fee normalization, duplicate detection, final validation) are enforced
+automatically by PipelineOrchestrator.  See pipeline.py.
 
 Usage:
   python3 scraper/charlotte_nc_batch.py
@@ -54,6 +54,18 @@ FALLBACK_LOCATIONS = [
     "Kannapolis, NC",
     "Davidson, NC",
     "Harrisburg, NC",
+]
+
+# ZIP-level scraping gives 200 results per ZIP vs 200 for the entire city
+ZIP_CODES = [
+    # Charlotte core
+    "28202", "28203", "28204", "28205", "28206", "28207",
+    "28208", "28209", "28210", "28211", "28212", "28213",
+    "28214", "28215", "28216", "28217",
+    # High-demand suburbs
+    "28226", "28227", "28262", "28269", "28270", "28273", "28277", "28278",
+    # Huntersville
+    "28078",
 ]
 
 ALLOWED_TYPES  = {"SINGLE_FAMILY", "TOWNHOMES"}
@@ -112,6 +124,7 @@ def main():
     criteria = BatchCriteria(
         batch_name="Charlotte, NC",
         locations=TARGET_LOCATIONS,
+        zip_codes=ZIP_CODES,
         fallback_locations=FALLBACK_LOCATIONS,
         beds_exact=BEDS_EXACT,
         baths_min=BATHS_MIN,

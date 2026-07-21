@@ -63,6 +63,21 @@ FALLBACK_LOCATIONS = [
     "Blanchard, OK",
 ]
 
+# ZIP-level scraping gives 200 results per ZIP vs 200 for the entire city
+ZIP_CODES = [
+    # Oklahoma City core
+    "73103", "73104", "73105", "73106", "73107", "73108",
+    "73109", "73111", "73112", "73114", "73115", "73116",
+    "73117", "73118", "73119", "73120", "73127", "73128",
+    "73129", "73131", "73132", "73134", "73135", "73139",
+    "73141", "73142", "73145", "73149", "73151", "73159",
+    "73162", "73165", "73169", "73170", "73173", "73179",
+    # Moore
+    "73160",
+    # Midwest City
+    "73110", "73130",
+]
+
 ALLOWED_TYPES  = {"SINGLE_FAMILY"}   # single-family homes only
 BEDS_EXACT     = 3
 BATHS_MIN      = 2.0
@@ -124,6 +139,7 @@ def main():
     criteria = BatchCriteria(
         batch_name="Oklahoma City, OK",
         locations=TARGET_LOCATIONS,
+        zip_codes=ZIP_CODES,
         fallback_locations=FALLBACK_LOCATIONS,
         beds_exact=BEDS_EXACT,
         baths_min=BATHS_MIN,

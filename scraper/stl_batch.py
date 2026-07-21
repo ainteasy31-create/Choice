@@ -43,6 +43,17 @@ FALLBACK_LOCATIONS = [
     "Mehlville, MO",
 ]
 
+# ZIP-level scraping gives 200 results per ZIP vs 200 for the entire city
+ZIP_CODES = [
+    # Maryland Heights / Creve Coeur
+    "63043", "63141",
+    # North St. Louis County suburbs
+    "63031", "63033", "63034", "63044", "63074", "63114",
+    "63121", "63122", "63123", "63125", "63126", "63129",
+    "63130", "63131", "63132", "63133", "63135", "63136",
+    "63137", "63138", "63140", "63143", "63144", "63146",
+]
+
 ALLOWED_TYPES = {"SINGLE_FAMILY", "TOWNHOMES", "APARTMENT"}
 BEDS_EXACT    = 3
 RENT_MIN      = 1200
@@ -105,6 +116,7 @@ def main():
     criteria = BatchCriteria(
         batch_name="Maryland Heights / Creve Coeur, MO (St. Louis)",
         locations=TARGET_LOCATIONS,
+        zip_codes=ZIP_CODES,
         fallback_locations=FALLBACK_LOCATIONS,
         beds_exact=BEDS_EXACT,
         rent_min=RENT_MIN,

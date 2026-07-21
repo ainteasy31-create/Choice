@@ -166,7 +166,7 @@ SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "https://choiceproperties.com").
 IK_UPLOAD_URL = "https://upload.imagekit.io/api/v1/files/upload"
 
 MIN_PHOTOS = 6
-IK_MAX_WORKERS = 4
+IK_MAX_WORKERS = 10
 IK_MAX_PHOTOS = 20
 IK_MAX_RETRIES = 3
 RETRY_BACKOFF = 2.0
@@ -256,7 +256,8 @@ class BatchCriteria:
     rent_max: int = 3500
     rent_floor: Optional[int] = None             # None = no floor adjustment
     rent_cap: Optional[int] = None               # None = publish as-is
-    allowed_types: Set[str] = field(default_factory=lambda: {"SINGLE_FAMILY", "TOWNHOMES"})
+    allowed_types: Set[str] = field(default_factory=lambda: {"SINGLE_FAMILY", "TOWNHOMES", "APARTMENT", "CONDO"})
+    zip_codes: List[str] = field(default_factory=list)    # per-ZIP scraping for full metro coverage
     target: int = 10                             # how many to publish
     past_days: int = 90
     limit: int = 200                             # max scraped per location
@@ -358,7 +359,10 @@ class PipelineOrchestrator:
         self._log("=" * 65)
 
         # ── Step 1: Scrape ────────────────────────────────────────────────
-        self._log("\n── Step 1: Scraping {} location(s) ──".format(len(criteria.locations)))
+        loc_count = len(criteria.locations) + len(criteria.zip_codes)
+        self._log("\n── Step 1: Scraping {} location(s){} ──".format(
+            loc_count,
+            " ({} ZIP codes)".format(len(criteria.zip_codes)) if criteria.zip_codes else ""))
         records = self._step1_scrape(criteria)
         result.scraped = len(records)
         self._log("   Raw results: {}".format(result.scraped))
@@ -489,17 +493,20 @@ class PipelineOrchestrator:
         seen_floorplans: set = set()
         deduped = []
         for rec in valid:
+            # Include address so two distinct homes at different addresses with the
+            # same size/rent (common in large subdivisions) are never dropped.
             key = (
                 (rec.get("city") or "").lower().strip(),
+                (rec.get("address") or "").lower().strip(),
                 rec.get("square_footage") or rec.get("square_feet"),
                 rec.get("monthly_rent"),
             )
-            # Only deduplicate when all three fields are populated
-            if all(k is not None for k in key) and key[1] and key[2]:
+            # Deduplicate only when city, address, sqft, and rent are all present
+            if all(k is not None for k in key) and key[1] and key[2] and key[3]:
                 if key in seen_floorplans:
                     addr = "{} {}".format(rec.get("address", ""), rec.get("city", "")).strip()
-                    self._log("   [SKIP] {} — same floor plan already selected ({} sqft @ ${}/mo)".format(
-                        addr, key[1], key[2]))
+                    self._log("   [SKIP] {} — exact duplicate already selected ({} sqft @ ${}/mo)".format(
+                        addr, key[2], key[3]))
                     continue
                 seen_floorplans.add(key)
             deduped.append(rec)
@@ -612,7 +619,8 @@ class PipelineOrchestrator:
 
     def _step1_scrape(self, criteria: BatchCriteria) -> List[Dict]:
         records = []
-        for location in criteria.locations:
+        all_locations = list(criteria.locations) + list(criteria.zip_codes)
+        for location in all_locations:
             self._log("   Scraping: {}".format(location))
             if not _HH_OK or not _SCRAPER_OK:
                 self._log("   SKIP: homeharvest or scraper.py unavailable")
