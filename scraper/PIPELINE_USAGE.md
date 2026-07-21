@@ -12,9 +12,9 @@ A new batch script is ~60 lines. You only define:
 1. **Search criteria** (locations, bed/bath/rent/type filters)
 2. **A pricing function** (optional — omit if publishing as-is)
 
-Everything else — watermark detection, ImageKit upload, AI description
-rewrite, enrichment, fee normalization, duplicate detection, validation,
-publish, activate — runs automatically.
+Everything else — watermark detection, ImageKit upload, enrichment,
+fee normalization, duplicate detection, validation, publish, activate
+— runs automatically.
 
 ### Template
 
@@ -127,17 +127,13 @@ None can be skipped.
 | 3 | Criteria filter + text-based watermark check (drops competitor-branded listings) |
 | 4 | Pricing — applies `pricing_fn` or default proportional reduction |
 | 5 | Image pre-check — must have ≥ 6 source URLs |
-| 6 | AI description rewrite via GPT-4o-mini (requires `OPENAI_API_KEY`) |
-| 7 | Enrichment pipeline — cleanup, branding, fee normalization, price sync, CTA |
-| 8 | Pre-publish validation gate (`validate_for_publish`) |
-| 9 | Stage records in `pipeline_properties` |
-| 10 | Patch pricing + description on staged records |
-| 11 | Publish via `pipeline_publish` RPC |
-| 12 | Activate property (status = active) |
-| 13 | Download → ImageKit upload → verify → insert `property_photos` |
-
-Steps 6 (AI) and 13a (visual watermark) degrade gracefully if `OPENAI_API_KEY`
-is not set — the pipeline continues without them.
+| 6 | Enrichment pipeline — cleanup, branding, fee normalization, price sync, CTA |
+| 7 | Pre-publish validation gate (`validate_for_publish`) |
+| 8 | Stage records in `pipeline_properties` |
+| 9 | Patch pricing + description on staged records |
+| 10 | Publish via `pipeline_publish` RPC |
+| 11 | Activate property (status = active) |
+| 12 | Download → ImageKit upload → verify → insert `property_photos` |
 
 ---
 
@@ -149,7 +145,6 @@ is not set — the pipeline continues without them.
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | All DB + RPC calls |
 | `IMAGEKIT_PRIVATE_KEY` | yes | Photo uploads |
 | `IMAGEKIT_URL_ENDPOINT` | yes | Photo URL base |
-| `OPENAI_API_KEY` | optional | AI description rewrite + visual watermark check |
 
 Set in `.env` (local) or Replit Secrets / GitHub Actions secrets (CI).
 

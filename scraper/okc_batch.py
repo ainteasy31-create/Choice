@@ -18,16 +18,13 @@ Pricing rule:
   Cap enforced at $1,650; floor at $1,300.
 
 Watermark policy (zero-tolerance):
-  The pipeline enforces this automatically at two levels:
-    1. Text/metadata check (_step3_filter via is_watermarked())
-    2. Visual GPT-4o check (_step13a_visual_watermark) — any image with a
-       watermark is dropped; if the listing ends up with fewer than MIN_PHOTOS
-       clean images, the whole listing is skipped.
-  The user instruction "do not scrape properties that have watermark on all
-  the images" is satisfied by this two-layer check.
+  The pipeline enforces this automatically via text/metadata check
+  (_step3_filter via is_watermarked()). Any competitor-branded listing is
+  dropped before staging; if clean photos fall below MIN_PHOTOS the listing
+  is skipped entirely.
 
-All platform rules (watermark detection, ImageKit upload, AI description
-rewrite, enrichment, fee normalization, duplicate detection, final validation)
+All platform rules (watermark detection, ImageKit upload, enrichment,
+fee normalization, duplicate detection, final validation)
 are enforced automatically by PipelineOrchestrator.  See pipeline.py.
 
 Usage:

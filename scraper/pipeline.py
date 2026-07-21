@@ -15,20 +15,19 @@ Architecture
   PipelineOrchestrator -- the 13-step pipeline; one instance per run
   PipelineResult      -- returned stats / logs from a run
 
-Thirteen mandatory steps (spec: Choice Properties Permanent Pipeline Rules):
+Twelve mandatory steps (spec: Choice Properties Permanent Pipeline Rules):
   1.  Normalize & validate required fields
   2.  Active / available only  (no expired / removed listings)
   3.  Within-batch + DB duplicate check (address + source_id)
   4.  Download source images
   5.  Upload images to ImageKit; verify live; retry failures
   6.  Image QA  (min 6 photos; no broken CDN links)
-  7.  AI description rewrite  (never publish original text)
-  8.  Enrichment pipeline  (cleanup, branding, fee, pricing sync)
-  9.  Pre-publish validation gate  (validate_for_publish)
-  10. Stage record in pipeline_properties
-  11. Publish via pipeline_publish RPC
-  12. Activate property  (set status = active)
-  13. Insert property_photos into Supabase
+  7.  Enrichment pipeline  (cleanup, branding, fee, pricing sync)
+  8.  Pre-publish validation gate  (validate_for_publish)
+  9.  Stage record in pipeline_properties
+  10. Publish via pipeline_publish RPC
+  11. Activate property  (set status = active)
+  12. Insert property_photos into Supabase
 
 Usage
 -----
@@ -54,7 +53,6 @@ Required environment variables:
   SUPABASE_SERVICE_ROLE_KEY
   IMAGEKIT_PRIVATE_KEY
   IMAGEKIT_URL_ENDPOINT
-  OPENAI_API_KEY  (optional — AI description rewrite degrades gracefully)
 """
 
 from __future__ import annotations
@@ -153,17 +151,6 @@ except Exception as _se:
     _SCRAPER_OK = False
     print("WARNING: scraper.py imports unavailable: {}".format(_se))
 
-try:
-    from ai_description import rewrite_description
-    _AI_OK = True
-except Exception:
-    _AI_OK = False
-
-try:
-    from visual_watermark import check_photos_for_watermarks
-    _VW_OK = True
-except Exception:
-    _VW_OK = False
 
 # ---------------------------------------------------------------------------
 # Config
@@ -295,8 +282,6 @@ class PipelineResult:
     photos_ok: int = 0
     photos_failed: int = 0
     watermarked_dropped: int = 0
-    ai_rewrites: int = 0
-    visual_watermark_rejected: int = 0
     errors: List[str] = field(default_factory=list)
     published_urls: List[str] = field(default_factory=list)
 
@@ -314,8 +299,6 @@ class PipelineResult:
             "Photos OK            : {}".format(self.photos_ok),
             "Photo failures       : {}".format(self.photos_failed),
             "Watermarked dropped  : {}".format(self.watermarked_dropped),
-            "AI description rewrites: {}".format(self.ai_rewrites),
-            "Visual watermark rejected: {}".format(self.visual_watermark_rejected),
         ]
         if self.errors:
             lines.append("\nErrors:")
@@ -338,10 +321,8 @@ class PipelineOrchestrator:
     Unified 13-step pipeline. Every scraping job uses this — no exceptions.
 
     Platform rules enforced automatically (non-bypassable):
-      - Competitor watermark detection + rejection
-      - Visual watermark scan per photo (if OpenAI configured)
+      - Competitor watermark detection + rejection (text/metadata)
       - ImageKit-only image hosting; minimum 6 photos
-      - AI description rewrite (if OpenAI configured)
       - Full enrichment: cleanup, branding, fee normalization, pricing sync
       - Pre-publish validation gate
       - DB-level duplicate detection
@@ -454,27 +435,16 @@ class PipelineOrchestrator:
             self._log("ERROR: No records have enough source images (min {}).".format(MIN_PHOTOS))
             return result
 
-        # ── Step 6: AI description rewrite ───────────────────────────────
-        self._log("\n── Step 6: AI description rewrite ──")
-        ai_count = 0
-        for rec in records:
-            rewrote = self._step6_ai_description(rec)
-            if rewrote:
-                ai_count += 1
-        result.ai_rewrites = ai_count
-        self._log("   {} descriptions AI-rewritten ({} skipped — OpenAI not available)".format(
-            ai_count, len(records) - ai_count))
-
-        # ── Step 7: Enrichment pipeline (cleanup, branding, fee, pricing) ─
-        self._log("\n── Step 7: Enrichment pipeline ──")
+        # ── Step 6: Enrichment pipeline (cleanup, branding, fee, pricing) ─
+        self._log("\n── Step 6: Enrichment pipeline ──")
         if _ENRICH_OK:
             records, wm_count = apply_enrichment_pipeline(records, verbose=self.verbose)
             result.watermarked_dropped += wm_count
         else:
             self._log("   WARNING: enrichment module unavailable — skipping")
 
-        # ── Step 8: Pre-publish validation ───────────────────────────────
-        self._log("\n── Step 8: Pre-publish validation ──")
+        # ── Step 7: Pre-publish validation ───────────────────────────────
+        self._log("\n── Step 7: Pre-publish validation ──")
         valid, invalid = [], []
         for rec in records:
             ok, fails = validate_for_publish(rec) if _ENRICH_OK else (True, [])
@@ -547,8 +517,8 @@ class PipelineOrchestrator:
             self._log("\n[DRY RUN] Stopping before any database writes.")
             return result
 
-        # ── Steps 9-13: Stage → Publish → Activate → Photos ─────────────
-        self._log("\n── Steps 9–13: Stage → Publish → Activate → Photos ──")
+        # ── Steps 8–12: Stage → Publish → Activate → Photos ─────────────
+        self._log("\n── Steps 8–12: Stage → Publish → Activate → Photos ──")
         to_publish = self._step9_stage(to_publish)
         self._step10_patch_pipeline(to_publish)
 
@@ -567,28 +537,18 @@ class PipelineOrchestrator:
                 self._log("   SKIP (already published): {}".format(addr))
                 continue
 
-            # ── FIX C1: Visual watermark + photo count gate BEFORE publish ──
-            # Runs before any DB writes so a watermark-only listing is never
-            # made live. If clean photos fall below MIN_PHOTOS, skip entirely.
+            # Photo count gate — must have MIN_PHOTOS source URLs before publish.
             src_urls = []
             try:
                 src_urls = json.loads(rec.get("original_image_urls") or "[]")
             except Exception:
                 pass
 
-            if _VW_OK and src_urls:
-                self._log("      Pre-publish: visual watermark scan ({} photos)...".format(len(src_urls)))
-                src_urls, rejected = self._step13a_visual_watermark(src_urls)
-                result.visual_watermark_rejected += rejected
-                if rejected:
-                    self._log("      Visual watermark: {} photo(s) rejected, {} clean remain".format(
-                        rejected, len(src_urls)))
-
             if len(src_urls) < MIN_PHOTOS:
                 self._log("   SKIP: {} — only {} clean photo(s) available (min {}). Not publishing.".format(
                     addr, len(src_urls), MIN_PHOTOS))
                 result.errors.append(
-                    "Skipped (insufficient clean photos after watermark check): " + addr)
+                    "Skipped (insufficient photos): " + addr)
                 # FIX C2: Clean up staged record so it does not accumulate as zombie
                 self._cleanup_staged(pid)
                 continue
@@ -819,41 +779,6 @@ class PipelineOrchestrator:
                 addr = "{} {}".format(rec.get("address", ""), rec.get("city", "")).strip()
                 self._log("   [SKIP] {} — only {} source image(s)".format(addr, len(urls)))
         return passed
-
-    def _step6_ai_description(self, rec: Dict) -> bool:
-        """
-        Rewrite the description using AI. Returns True if rewrite happened.
-        Falls back gracefully if OPENAI_API_KEY is not set or AI module unavailable.
-        Rule 6: never publish the original listing description.
-        """
-        if not _AI_OK:
-            return False
-        try:
-            new_desc = rewrite_description(rec)
-            if new_desc:
-                rec["description"] = new_desc
-                return True
-        except Exception as e:
-            self._log("   WARNING: AI rewrite failed for {}: {}".format(
-                rec.get("address", "?"), str(e)[:80]))
-        return False
-
-    def _step13a_visual_watermark(
-        self, src_urls: List[str]
-    ) -> Tuple[List[str], int]:
-        """
-        Run vision-based watermark detection on each source photo.
-        Returns (clean_urls, rejected_count).
-        Falls back gracefully if visual_watermark module unavailable.
-        """
-        if not _VW_OK:
-            return src_urls, 0
-        try:
-            clean_urls, rejected_count = check_photos_for_watermarks(src_urls, verbose=self.verbose)
-            return clean_urls, rejected_count
-        except Exception as e:
-            self._log("   WARNING: visual watermark check error: {}".format(str(e)[:80]))
-            return src_urls, 0
 
     def _step9_stage(self, records: List[Dict]) -> List[Dict]:
         """Stage records in pipeline_properties; resolve pipeline IDs."""
