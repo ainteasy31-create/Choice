@@ -161,7 +161,7 @@ if not SUPABASE_URL:
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 IK_PRIVATE_KEY = os.environ.get("IMAGEKIT_PRIVATE_KEY", "").strip()
 IK_URL_ENDPOINT = os.environ.get("IMAGEKIT_URL_ENDPOINT", "https://ik.imagekit.io/21rg7lvzo").rstrip("/")
-SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "https://choiceproperties.com").rstrip("/")
+SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "https://choice-properties-site.pages.dev").rstrip("/")
 
 IK_UPLOAD_URL = "https://upload.imagekit.io/api/v1/files/upload"
 
@@ -1090,14 +1090,8 @@ class PipelineOrchestrator:
             s = re.sub(r"[^a-z0-9]+", "-", s)
             return s.strip("-")[:60]
 
-        state = (prop_row.get("state") or "").lower()[:2]
-        city = _slug(prop_row.get("city") or "")
-        beds = prop_row.get("bedrooms")
-        ptype = _slug(prop_row.get("property_type") or "home")
         prop_id = (prop_row.get("id") or "").lower()
-        beds_str = "{}br".format(beds) if beds else "home"
-        slug = "{}-{}-{}".format(beds_str, ptype, prop_id)
-        return "{}/rent/{}/{}/{}/".format(SITE_BASE_URL, state, city, slug)
+        return "{}/property.html?id={}".format(SITE_BASE_URL, prop_id)
 
     @staticmethod
     def _safe_int(v) -> Optional[int]:
