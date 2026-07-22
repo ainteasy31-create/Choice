@@ -714,37 +714,6 @@
     <div class="prop-divider" id="dividerAfterFacts" style="display:none"></div>
 
 
-    <div class="prop-divider" id="dividerBeforeMap"></div>
-
-    <!-- Map -->
-    <div class="prop-section">
-      <div class="prop-section-eyebrow">Location</div>
-      <div class="prop-section-head">Where it <em>sits</em>.</div>
-      <div class="map-container" id="mapContainer">
-        <div id="mapFallback" style="height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#8892a2">
-          <i class="fas fa-map-marker-alt" style="font-size:32px;color:#2563eb"></i>
-          <span id="mapAddressLabel" style="font-size:14px"></span>
-        </div>
-      </div>
-      <p id="mapNeighborhood" style="font-size:13px;color:#8892a2;margin-top:8px;display:none">
-        <i class="fas fa-info-circle" style="color:#c9a55c"></i>
-        <span id="mapNeighborhoodText"></span>
-      </p>
-      <a href="#" class="map-open-btn" id="mapOpenBtn" target="_blank" rel="noopener noreferrer" style="display:none">
-        <i class="fas fa-diamond-turn-right"></i> Open in Maps
-      </a>
-    </div>
-
-    <div class="prop-divider"></div>
-
-    <!-- Walk Score & nearby schools (JS-populated) -->
-    <div id="scoresSection" style="display:none"></div>
-    <div class="prop-divider" id="dividerAfterScores" style="display:none"></div>
-
-    <!-- Similar listings in same city (JS-populated, async) -->
-    <div id="similarSection" style="display:none"></div>
-    <div class="prop-divider" id="dividerAfterSimilar" style="display:none"></div>
-
     <!-- ── Before You Apply / Process & Trust Section ── -->
     <div class="prop-section" id="processSection">
       <div class="prop-section-eyebrow">Before You Apply</div>
@@ -886,6 +855,38 @@
     <!-- ── End Process Section ── -->
 
     <div class="prop-divider"></div>
+
+    <div class="prop-divider" id="dividerBeforeMap"></div>
+
+    <!-- Map -->
+    <div class="prop-section">
+      <div class="prop-section-eyebrow">Location</div>
+      <div class="prop-section-head">Where it <em>sits</em>.</div>
+      <div class="map-container" id="mapContainer">
+        <div id="mapFallback" style="height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#8892a2">
+          <i class="fas fa-map-marker-alt" style="font-size:32px;color:#2563eb"></i>
+          <span id="mapAddressLabel" style="font-size:14px"></span>
+        </div>
+      </div>
+      <p id="mapNeighborhood" style="font-size:13px;color:#8892a2;margin-top:8px;display:none">
+        <i class="fas fa-info-circle" style="color:#c9a55c"></i>
+        <span id="mapNeighborhoodText"></span>
+      </p>
+      <a href="#" class="map-open-btn" id="mapOpenBtn" target="_blank" rel="noopener noreferrer" style="display:none">
+        <i class="fas fa-diamond-turn-right"></i> Open in Maps
+      </a>
+    </div>
+
+    <div class="prop-divider"></div>
+
+    <!-- Walk Score & nearby schools (JS-populated) -->
+    <div id="scoresSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterScores" style="display:none"></div>
+
+    <!-- Similar listings in same city (JS-populated, async) -->
+    <div id="similarSection" style="display:none"></div>
+    <div class="prop-divider" id="dividerAfterSimilar" style="display:none"></div>
+
 
 
     <!-- Contact / message landlord -->
