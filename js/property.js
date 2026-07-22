@@ -592,7 +592,9 @@ function renderProperty(p) {
     mapOpenBtn.style.display = '';
   }
 
-  const availNow = !p.available_date || new Date(p.available_date) <= new Date();
+  // Append T00:00:00 so date-only strings are parsed as local midnight, not UTC
+  // midnight — avoids a one-day-off chip in US timezones (Bug 4 fix).
+  const availNow = !p.available_date || new Date(p.available_date + 'T00:00:00') <= new Date();
 
   // Sidebar
   document.getElementById('sidebarPrice').innerHTML = `${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() : 'TBD'}<span>/month</span>`;
@@ -611,7 +613,10 @@ function renderProperty(p) {
       ? `$${Number(p.application_fee).toLocaleString()} application fee`
       : 'a free application';
   }
-  if (p.available_date) {
+  // Only show "Available From" in the Costs table when the date is in the future.
+  // If the property is already available (availNow), showing a past date alongside
+  // the "Available Now" chip is contradictory — suppress it (Bug 3 fix).
+  if (p.available_date && !availNow) {
     document.getElementById('sidebarMoveInRow').style.display = '';
     document.getElementById('sidebarMoveIn').textContent = formatDate(p.available_date);
   }

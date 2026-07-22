@@ -248,7 +248,9 @@
         margin: 0 0 16px !important;
         grid-template-columns: none !important;
       }
-      .prop-meta-item {
+      /* JS renders .detail-meta-item / .detail-meta-value / .detail-meta-label —
+         the old selectors (.prop-meta-item etc.) never matched any element. */
+      .prop-meta-grid .detail-meta-item {
         flex: 1 !important;
         display: flex !important;
         align-items: center !important;
@@ -258,10 +260,11 @@
         border-radius: 10px !important;
         padding: 8px !important;
         white-space: nowrap !important;
+        flex-direction: row !important;
       }
-      .prop-meta-item i { color: #006aff !important; font-size: 12px !important; }
-      .prop-meta-value  { font-size: 12px !important; font-weight: 700 !important; color: #0a1729 !important; }
-      .prop-meta-label  { display: none !important; }
+      .prop-meta-grid .detail-meta-item .detail-meta-icon { display: none !important; }
+      .prop-meta-grid .detail-meta-value { font-size: 12px !important; font-weight: 700 !important; color: #0a1729 !important; }
+      .prop-meta-grid .detail-meta-label { display: none !important; }
       /* Landlord row → subtle box */
       #landlordCard {
         margin: 0 0 14px !important;
@@ -366,8 +369,15 @@
       .contact-drawer-handle-bar { display: none !important; }
       .contact-card-header-row   { display: none !important; }
 
-      /* ── Hide renter reqs (surfaced in about) ── */
-      #renterReqsSection { display: none !important; }
+      /* ── Renter reqs — shown as a compact chip row in the card stack ── */
+      #renterReqsSection {
+        margin: 0 16px !important;
+        background: white !important;
+        border-radius: 16px !important;
+        border: 1px solid #e4e8ef !important;
+        box-shadow: 0 1px 4px rgba(15,23,42,.07) !important;
+        padding: 16px 20px !important;
+      }
 
       /* ── Sticky bottom bar → CardStack style ── */
       #mobile-apply-bar {
@@ -1004,9 +1014,11 @@
       if (backLink && document.referrer.includes('listings')) {
         backLink.href = document.referrer;
       }
-      // Auto-open the process steps collapse on desktop (≥768px)
+      // Always open the process steps collapse — on mobile the <summary> toggle
+      // is hidden via CSS (display:none), so we must force open=true in JS or
+      // the content is invisible with no way to reveal it on phones < 768px.
       const collapse = document.getElementById('processStepsCollapse');
-      if (collapse && window.matchMedia('(min-width: 768px)').matches) {
+      if (collapse) {
         collapse.open = true;
       }
       // Sync the CardStack mobile apply button with the main apply button
