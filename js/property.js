@@ -233,6 +233,44 @@ function renderUnavailable(status) {
 }
 
 /* ── Amenity icon helpers ── */
+// Convert database slugs (underscored or space-separated) to clean human-readable labels.
+// Specific overrides win; everything else gets Title Cased from the slug.
+const AMENITY_LABELS = {
+  // HVAC / utilities
+  central_air: 'Central A/C', central_heat: 'Central Heat', forced_air: 'Forced Air',
+  heat_pump: 'Heat Pump', radiant_heat: 'Radiant Heat', window_ac: 'Window A/C',
+  // Laundry
+  washer_dryer: 'Washer/Dryer', washer_dryer_hookup: 'W/D Hookup',
+  in_unit_laundry: 'In-Unit Laundry', laundry_in_building: 'Laundry In Building',
+  // Outdoor
+  private_yard: 'Private Yard', fenced_yard: 'Fenced Yard', community_outdoor_space: 'Community Outdoor Space',
+  patio: 'Patio', deck: 'Deck', balcony: 'Balcony',
+  // Location features
+  cul_de_sac: 'Cul-de-Sac', lake: 'Lake Access', park: 'Near Park',
+  shopping: 'Near Shopping', farm: 'Farm Setting', ranch: 'Ranch', single_story: 'Single Story',
+  // Kitchen
+  granite_kitchen: 'Granite Kitchen', modern_kitchen: 'Modern Kitchen',
+  granite_countertops: 'Granite Countertops', stainless_appliances: 'Stainless Appliances',
+  // Community amenities
+  community_security_features: 'Gated / Security', community_pool: 'Community Pool',
+  fitness_center: 'Fitness Center', clubhouse: 'Clubhouse', dog_park: 'Dog Park',
+  // Garage / parking
+  attached_garage: 'Attached Garage', detached_garage: 'Detached Garage',
+  carport: 'Carport', driveway: 'Driveway',
+  // Misc
+  private_entrance: 'Private Entrance', double_vanity: 'Double Vanity',
+  ceramic_tile: 'Ceramic Tile', hardwood_floors: 'Hardwood Floors',
+  vaulted_ceilings: 'Vaulted Ceilings', walk_in_closet: 'Walk-in Closet',
+  smart_home: 'Smart Home', ev_charging: 'EV Charging',
+};
+function amenityLabel(raw) {
+  if (!raw) return '';
+  const key = raw.toLowerCase().replace(/[\s-]+/g, '_');
+  if (AMENITY_LABELS[key]) return AMENITY_LABELS[key];
+  // Title-case: replace underscores/hyphens with spaces, capitalise each word
+  return raw.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function amenityIcon(text) {
   const t = text.toLowerCase();
   if (/wi.?fi|internet|wireless/.test(t))              return 'fa-wifi';
@@ -487,14 +525,16 @@ function renderProperty(p) {
 
   if (p.amenities?.length) {
     hasAmenities = true;
-    document.getElementById('amenitiesGrid').innerHTML = p.amenities.map(a =>
-      `<div class="amenity-item"><i class="fas ${amenityIcon(a)} ${amenityIconColor(a)}"></i>${esc(a)}</div>`).join('');
+    document.getElementById('amenitiesGrid').innerHTML = p.amenities
+      .filter(a => a && !/^(yes|no|true|false)$/i.test(a.trim()))
+      .map(a => `<div class="amenity-item"><i class="fas ${amenityIcon(a)} ${amenityIconColor(a)}"></i>${esc(amenityLabel(a))}</div>`).join('');
   }
   if (p.appliances?.length) {
     hasAmenities = true;
     document.getElementById('appliancesSection').style.display = '';
-    document.getElementById('appliancesGrid').innerHTML = p.appliances.map(a =>
-      `<div class="amenity-item"><i class="fas ${amenityIcon(a)}"></i>${esc(a)}</div>`).join('');
+    document.getElementById('appliancesGrid').innerHTML = p.appliances
+      .filter(a => a && !/^(yes|no|true|false)$/i.test(a.trim()))
+      .map(a => `<div class="amenity-item"><i class="fas ${amenityIcon(a)}"></i>${esc(amenityLabel(a))}</div>`).join('');
   }
   if (p.flooring?.length) {
     hasAmenities = true;
@@ -510,8 +550,9 @@ function renderProperty(p) {
       flooringSec.insertAdjacentElement('afterend', flooringDiv);
     }
     flooringDiv.style.display = '';
-    document.getElementById('flooringGrid').innerHTML = p.flooring.map(f =>
-      `<div class="amenity-item"><i class="fas fa-layer-group"></i>${esc(f)}</div>`).join('');
+    document.getElementById('flooringGrid').innerHTML = p.flooring
+      .filter(f => f && !/^(yes|no|true|false)$/i.test(f.trim()))
+      .map(f => `<div class="amenity-item"><i class="fas fa-layer-group"></i>${esc(amenityLabel(f))}</div>`).join('');
   }
 
   const utilRows = [];

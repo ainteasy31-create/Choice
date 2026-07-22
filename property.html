@@ -240,31 +240,56 @@
         color: #6b7280 !important;
         margin-bottom: 14px !important;
       }
-      /* Stats pills */
+      /* ── Stat cards: 3-column grid, value + label stacked vertically ── */
       .prop-meta-grid {
-        display: flex !important;
-        flex-direction: row !important;
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
         gap: 8px !important;
         margin: 0 0 16px !important;
-        grid-template-columns: none !important;
       }
-      /* JS renders .detail-meta-item / .detail-meta-value / .detail-meta-label —
-         the old selectors (.prop-meta-item etc.) never matched any element. */
+      /* JS renders .detail-meta-item / .detail-meta-value / .detail-meta-label */
       .prop-meta-grid .detail-meta-item {
-        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 2px !important;
+        background: var(--m-surface, rgba(255,255,255,.06)) !important;
+        border: 1px solid var(--m-border, rgba(255,255,255,.10)) !important;
+        border-radius: 10px !important;
+        padding: 10px 10px 9px !important;
+        min-width: 0 !important;
+        white-space: normal !important;
+      }
+      .prop-meta-grid .detail-meta-item .detail-meta-icon {
         display: flex !important;
         align-items: center !important;
-        gap: 5px !important;
-        background: #f8fafc !important;
-        border: 1px solid #e4e8ef !important;
-        border-radius: 10px !important;
-        padding: 8px !important;
-        white-space: nowrap !important;
-        flex-direction: row !important;
+        justify-content: center !important;
+        width: 22px !important; height: 22px !important;
+        border-radius: 6px !important;
+        background: rgba(0,106,255,.12) !important;
+        margin-bottom: 4px !important;
+        flex-shrink: 0 !important;
       }
-      .prop-meta-grid .detail-meta-item .detail-meta-icon { display: none !important; }
-      .prop-meta-grid .detail-meta-value { font-size: 12px !important; font-weight: 700 !important; color: #0a1729 !important; }
-      .prop-meta-grid .detail-meta-label { display: none !important; }
+      .prop-meta-grid .detail-meta-item .detail-meta-icon i {
+        color: #006aff !important;
+        font-size: 10px !important;
+      }
+      .prop-meta-grid .detail-meta-value {
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        color: var(--m-ink, #fff) !important;
+        line-height: 1.1 !important;
+        word-break: break-word !important;
+      }
+      .prop-meta-grid .detail-meta-label {
+        display: block !important;
+        font-size: 9px !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: .05em !important;
+        color: var(--m-soft, rgba(255,255,255,.5)) !important;
+        margin-top: 1px !important;
+      }
       /* Landlord row → subtle box */
       #landlordCard {
         margin: 0 0 14px !important;
