@@ -2321,6 +2321,58 @@ body[data-portal="public"][data-page="property"] .lb-thumb.active {
   transform: translateY(-3px); box-shadow: 0 4px 16px rgba(0,0,0,0.40);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   PROPERTY PAGE — Dark theme token overrides
+   Adds parity with the other-public-pages dark block above but
+   for [data-page="property"] which was explicitly excluded there.
+   ══════════════════════════════════════════════════════════════ */
+html[data-theme="dark"] body[data-portal="public"][data-page="property"] {
+  color-scheme: dark;
+  --m-bg:            #0e0c08;
+  --m-white:         #181410;
+  --m-surface:       #1f1812;
+  --m-surface-2:     #2a221b;
+  --m-border:        #2e261c;
+  --m-border-strong: #3d3324;
+  --m-ink:           #f5f1e8;
+  --m-ink-2:         #e7e0d2;
+  --m-text:          #e0d8c8;
+  --m-muted:         #b8aea0;
+  --m-muted-2:       #9b9183;
+  --m-soft:          #6e6759;
+  --m-brand-pale:    #102239;
+  --m-gold-pale:     #2a221b;
+  --m-shadow-sm:     0 1px 2px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.30);
+  --m-shadow-md:     0 6px 16px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.30);
+  --m-shadow-lg:     0 18px 40px rgba(0,0,0,.55), 0 6px 14px rgba(0,0,0,.32);
+  background: #0e0c08;
+  color: #e0d8c8;
+}
+@media (prefers-color-scheme: dark) {
+  body[data-portal="public"][data-page="property"] {
+    color-scheme: dark;
+    --m-bg:            #0e0c08;
+    --m-white:         #181410;
+    --m-surface:       #1f1812;
+    --m-surface-2:     #2a221b;
+    --m-border:        #2e261c;
+    --m-border-strong: #3d3324;
+    --m-ink:           #f5f1e8;
+    --m-ink-2:         #e7e0d2;
+    --m-text:          #e0d8c8;
+    --m-muted:         #b8aea0;
+    --m-muted-2:       #9b9183;
+    --m-soft:          #6e6759;
+    --m-brand-pale:    #102239;
+    --m-gold-pale:     #2a221b;
+    --m-shadow-sm:     0 1px 2px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.30);
+    --m-shadow-md:     0 6px 16px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.30);
+    --m-shadow-lg:     0 18px 40px rgba(0,0,0,.55), 0 6px 14px rgba(0,0,0,.32);
+    background: #0e0c08;
+    color: #e0d8c8;
+  }
+}
+
 /* ── DETAIL LAYOUT ────────────────────────────────────────── */
 body[data-portal="public"][data-page="property"] .property-detail { padding: 0 0 var(--m-s-24); }
 body[data-portal="public"][data-page="property"] .detail-layout {
@@ -2885,6 +2937,9 @@ body[data-portal="public"][data-page="property"] .lqip-bg.faded { opacity: 0; }
    All existing gallery, lightbox, contact-card, and tab CSS stays in place.
    ===================================================================== */
 
+/* ── Smooth theme transition ── */
+html { transition: background-color 220ms ease, color 220ms ease; }
+
 /* ── Split container ── */
 body[data-portal="public"][data-page="property"] .prop-split {
   display: grid;
@@ -2899,7 +2954,7 @@ body[data-portal="public"][data-page="property"] .prop-split-photos {
   top: 56px;
   height: calc(100vh - 56px);
   overflow: hidden;
-  background: #0a0a0a;
+  background: var(--m-bg);
   display: flex;
   flex-direction: column;
 }
@@ -2958,14 +3013,14 @@ body[data-portal="public"][data-page="property"] .prop-share-btns {
 body[data-portal="public"][data-page="property"] .prop-share-btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 18px;
-  border: 1.5px solid #e4e8ef; border-radius: 10px;
-  background: #fff; color: #374151;
+  border: 1.5px solid var(--m-border); border-radius: 10px;
+  background: var(--m-white); color: var(--m-muted);
   font-size: 13px; font-weight: 600;
   cursor: pointer; font-family: inherit;
   transition: border-color 160ms, background 160ms, color 160ms;
 }
 body[data-portal="public"][data-page="property"] .prop-share-btn:hover {
-  border-color: #0a1628; color: #0a1628; background: #f8fafc;
+  border-color: var(--m-ink); color: var(--m-ink); background: var(--m-surface);
 }
 body[data-portal="public"][data-page="property"] .prop-share-btn.saved {
   color: #dc2626; border-color: #fecaca; background: #fef2f2;
@@ -2976,22 +3031,22 @@ body[data-portal="public"][data-page="property"] .prop-header {
   margin-bottom: 18px;
 }
 body[data-portal="public"][data-page="property"] #detailPrice {
-  font-size: 40px; font-weight: 800; color: #0a1628;
+  font-size: 40px; font-weight: 800; color: var(--m-ink);
   letter-spacing: -.04em; line-height: 1;
   display: flex; align-items: baseline; gap: 8px;
   margin-bottom: 6px;
 }
 body[data-portal="public"][data-page="property"] #detailPrice span {
-  font-size: 16px; font-weight: 400; color: #6b7280; letter-spacing: 0;
+  font-size: 16px; font-weight: 400; color: var(--m-muted-2); letter-spacing: 0;
 }
 body[data-portal="public"][data-page="property"] .prop-title {
   font-family: 'Fraunces', serif;
   font-size: 26px; font-weight: 600;
-  color: #0a1628; line-height: 1.2;
+  color: var(--m-ink); line-height: 1.2;
   margin: 0 0 8px; letter-spacing: -.01em;
 }
 body[data-portal="public"][data-page="property"] .prop-address {
-  font-size: 13.5px; color: #6b7280;
+  font-size: 13.5px; color: var(--m-muted-2);
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
 body[data-portal="public"][data-page="property"] .prop-address i { color: var(--m-brand); font-size: 11px; }
@@ -2999,8 +3054,8 @@ body[data-portal="public"][data-page="property"] .prop-address i { color: var(--
 /* ── Landlord inline row ── */
 body[data-portal="public"][data-page="property"] .prop-landlord-row {
   display: flex; align-items: center; gap: 12px;
-  background: #f8fafc; border-radius: 10px;
-  padding: 12px 14px; border: 1px solid #f1f5f9;
+  background: var(--m-surface); border-radius: 10px;
+  padding: 12px 14px; border: 1px solid var(--m-border);
   margin: 26px 0 8px;
 }
 body[data-portal="public"][data-page="property"] .prop-ll-avatar {
@@ -3012,14 +3067,14 @@ body[data-portal="public"][data-page="property"] .prop-ll-avatar img {
   width: 100%; height: 100%; object-fit: cover;
 }
 body[data-portal="public"][data-page="property"] .prop-ll-label {
-  font-size: 10px; font-weight: 700; color: #9ca3af;
+  font-size: 10px; font-weight: 700; color: var(--m-soft);
   text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px;
 }
 body[data-portal="public"][data-page="property"] .prop-ll-name {
-  font-size: 13.5px; font-weight: 700; color: #0a1628;
+  font-size: 13.5px; font-weight: 700; color: var(--m-ink);
 }
 body[data-portal="public"][data-page="property"] .prop-ll-tagline {
-  font-size: 11.5px; color: #9ca3af;
+  font-size: 11.5px; color: var(--m-soft);
 }
 body[data-portal="public"][data-page="property"] .prop-ll-verified {
   color: #006aff; font-size: 18px; margin-left: auto; flex-shrink: 0;
@@ -3033,8 +3088,8 @@ body[data-portal="public"][data-page="property"] .prop-meta-grid {
   margin: 20px 0 0;
 }
 body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item {
-  background: #f8fafc; border-radius: 10px;
-  padding: 14px 12px; border: 1px solid #f1f5f9;
+  background: var(--m-surface); border-radius: 10px;
+  padding: 14px 12px; border: 1px solid var(--m-border);
   flex-direction: column; align-items: flex-start;
   gap: 4px; min-width: 0;
   box-shadow: none;
@@ -3047,17 +3102,17 @@ body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-it
 }
 body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-icon { display: none; }
 body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-value {
-  font-size: 20px; font-weight: 700; color: #0a1628;
+  font-size: 20px; font-weight: 700; color: var(--m-ink);
   letter-spacing: -.02em; line-height: 1;
 }
 body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-label {
-  font-size: 10px; font-weight: 700; color: #9ca3af;
+  font-size: 10px; font-weight: 700; color: var(--m-soft);
   text-transform: uppercase; letter-spacing: .06em; margin-top: 4px;
 }
 
 /* ── Divider ── */
 body[data-portal="public"][data-page="property"] .prop-divider {
-  height: 1px; background: #f1f5f9; margin: 28px 0;
+  height: 1px; background: var(--m-border); margin: 28px 0;
 }
 
 /* ── Sections ── */
@@ -3070,7 +3125,7 @@ body[data-portal="public"][data-page="property"] .prop-section-eyebrow {
 }
 body[data-portal="public"][data-page="property"] .prop-section-head {
   font-family: 'Fraunces', serif;
-  font-size: 20px; font-weight: 600; color: #0a1628;
+  font-size: 20px; font-weight: 600; color: var(--m-ink);
   margin-bottom: 14px; line-height: 1.25;
 }
 body[data-portal="public"][data-page="property"] .prop-section-head em {
@@ -3086,7 +3141,7 @@ body[data-portal="public"][data-page="property"] .prop-cost-table {
   width: 100%; border-collapse: collapse; margin-bottom: 0;
 }
 body[data-portal="public"][data-page="property"] .prop-cost-table tr {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--m-border);
 }
 body[data-portal="public"][data-page="property"] .prop-cost-table tr:last-child {
   border-bottom: none;
@@ -3094,27 +3149,30 @@ body[data-portal="public"][data-page="property"] .prop-cost-table tr:last-child 
 body[data-portal="public"][data-page="property"] .prop-cost-table td {
   padding: 10px 0; font-size: 13.5px;
 }
-body[data-portal="public"][data-page="property"] .prop-cost-table td:first-child { color: #6b7280; }
+body[data-portal="public"][data-page="property"] .prop-cost-table td:first-child { color: var(--m-muted-2); }
 body[data-portal="public"][data-page="property"] .prop-cost-table td:last-child {
-  text-align: right; font-weight: 600; color: #0a1628;
+  text-align: right; font-weight: 600; color: var(--m-ink);
 }
 
 /* ── Apply strip ── */
 body[data-portal="public"][data-page="property"] .prop-apply-strip {
-  background: #0a1628; border-radius: 12px;
-  padding: 20px; color: #fff;
+  background: var(--m-surface);
+  border: 1.5px solid var(--m-border);
+  border-radius: 12px;
+  padding: 20px;
   margin-top: 20px;
   display: flex; align-items: center; gap: 16px;
 }
 body[data-portal="public"][data-page="property"] .prop-apply-strip-text { flex: 1; min-width: 0; }
 body[data-portal="public"][data-page="property"] .prop-apply-strip-price {
   font-size: 20px; font-weight: 800; letter-spacing: -.02em; line-height: 1;
+  color: var(--m-ink);
 }
 body[data-portal="public"][data-page="property"] .prop-apply-strip-price span {
-  font-size: 13px; font-weight: 400; color: rgba(255,255,255,.55); letter-spacing: 0;
+  font-size: 13px; font-weight: 400; color: var(--m-muted-2); letter-spacing: 0;
 }
 body[data-portal="public"][data-page="property"] .prop-apply-strip-sub {
-  font-size: 11.5px; color: rgba(255,255,255,.58); margin-top: 4px; line-height: 1.4;
+  font-size: 11.5px; color: var(--m-muted); margin-top: 4px; line-height: 1.4;
   display: flex; align-items: flex-start; gap: 5px;
 }
 body[data-portal="public"][data-page="property"] .prop-apply-btn {
@@ -3142,7 +3200,7 @@ body[data-portal="public"][data-page="property"] .prop-track-link:hover { color:
 
 /* ── Contact card — inline variant (no bottom drawer chrome on desktop) ── */
 body[data-portal="public"][data-page="property"] .mv2-contact-card {
-  background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;
+  background: var(--m-surface); border-radius: 12px; border: 1px solid var(--m-border);
   padding: 20px; margin-top: 0;
 }
 body[data-portal="public"][data-page="property"] .mv2-contact-card .contact-card-header-row {
@@ -3153,16 +3211,16 @@ body[data-portal="public"][data-page="property"] .mv2-contact-card .contact-draw
 body[data-portal="public"][data-page="property"] .mv2-contact-card .contact-form-group { margin-bottom: 14px; }
 body[data-portal="public"][data-page="property"] .mv2-contact-card .form-label,
 body[data-portal="public"][data-page="property"] .mv2-contact-card label {
-  font-size: 10.5px; font-weight: 700; color: #6b7280;
+  font-size: 10.5px; font-weight: 700; color: var(--m-muted-2);
   text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: block;
 }
 body[data-portal="public"][data-page="property"] .mv2-contact-card .form-input,
 body[data-portal="public"][data-page="property"] .mv2-contact-card input,
 body[data-portal="public"][data-page="property"] .mv2-contact-card .form-textarea,
 body[data-portal="public"][data-page="property"] .mv2-contact-card textarea {
-  width: 100%; border: 1.5px solid #e4e8ef; border-radius: 8px;
-  padding: 9px 12px; font-size: 13.5px; color: #1f2937;
-  background: #fff; outline: none; font-family: inherit;
+  width: 100%; border: 1.5px solid var(--m-border); border-radius: 8px;
+  padding: 9px 12px; font-size: 13.5px; color: var(--m-ink);
+  background: var(--m-white); outline: none; font-family: inherit;
   transition: border-color 160ms, box-shadow 160ms;
   box-sizing: border-box;
 }
@@ -3274,10 +3332,15 @@ body[data-portal="public"][data-page="property"] .prop-split-content .detail-lis
   body[data-portal="public"][data-page="property"] .prop-apply-strip { flex-direction: column; align-items: stretch; }
   body[data-portal="public"][data-page="property"] .prop-apply-btn { width: 100%; justify-content: center; padding: 15px; }
   /* Bump sub-12px text to readable sizes on mobile */
-  body[data-portal="public"][data-page="property"] .prop-section-eyebrow { font-size: 11px; }
-  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-label { font-size: 11px; }
-  body[data-portal="public"][data-page="property"] .prop-ll-label { font-size: 11px; }
+  body[data-portal="public"][data-page="property"] .prop-section-eyebrow { font-size: 12px; }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-label { font-size: 12px; }
+  body[data-portal="public"][data-page="property"] .prop-ll-label { font-size: 12px; }
   body[data-portal="public"][data-page="property"] .prop-avail-chip { font-size: 12px; }
+  body[data-portal="public"][data-page="property"] .prop-fee-card-label { font-size: 12px; }
+  body[data-portal="public"][data-page="property"] .prop-fee-card-note { font-size: 13px; }
+  body[data-portal="public"][data-page="property"] .prop-step-desc { font-size: 13.5px; }
+  body[data-portal="public"][data-page="property"] .prop-cost-table td { font-size: 14px; }
+  body[data-portal="public"][data-page="property"] .prop-apply-strip-sub { font-size: 13px; }
 }
 @media (max-width: 480px) {
   body[data-portal="public"][data-page="property"] .prop-meta-grid { grid-template-columns: repeat(2, 1fr); }
@@ -3362,7 +3425,7 @@ body[data-portal="public"][data-page="property"] .prop-process-collapse {
 /* On mobile: style the summary as a tappable toggle header */
 @media (max-width: 767px) {
   body[data-portal="public"][data-page="property"] .prop-process-collapse {
-    border: 1.5px solid #e4e8ef;
+    border: 1.5px solid var(--m-border);
     border-radius: 12px;
     overflow: hidden;
     margin-bottom: 24px;
@@ -3372,11 +3435,11 @@ body[data-portal="public"][data-page="property"] .prop-process-collapse {
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px;
-    background: #f8fafc;
+    background: var(--m-surface);
     cursor: pointer;
     font-size: 13px;
     font-weight: 700;
-    color: #0a1628;
+    color: var(--m-ink);
     letter-spacing: -.01em;
     list-style: none;
     user-select: none;
@@ -3387,7 +3450,7 @@ body[data-portal="public"][data-page="property"] .prop-process-collapse {
   body[data-portal="public"][data-page="property"] .prop-process-collapse-summary::marker { display: none; }
   body[data-portal="public"][data-page="property"] .prop-collapse-chevron {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--m-muted-2);
     flex-shrink: 0;
     transition: transform 240ms ease;
   }
