@@ -95,6 +95,307 @@
     .prop-policy-link{font-size:12px;color:#006aff;text-decoration:none;display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid var(--m-border,#e4e8ef);border-radius:6px;background:var(--m-surface,#f8fafc);transition:background .15s,border-color .15s;white-space:nowrap}
     .prop-policy-link:hover{background:var(--m-brand-pale,#eaf2ff);border-color:rgba(0,106,255,.3)}
     .prop-process-sublabel{font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m-soft,#8892a2);margin-bottom:12px;margin-top:0}
+
+    /* ════════════════════════════════════════════════════════════════════
+       MOBILE CARD-STACK REDESIGN  ≤ 900px
+       Visual overrides only — all JS IDs remain untouched.
+       ════════════════════════════════════════════════════════════════════ */
+    @media (max-width: 900px) {
+
+      /* ── Page background ── */
+      body[data-portal="public"] { background: #f1f5f9 !important; }
+
+      /* ── Split → single column ── */
+      .prop-split {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      .prop-split-photos {
+        position: static !important;
+        width: 100% !important;
+        height: auto !important;
+        top: auto !important;
+        padding: 12px 16px 0 !important;
+        overflow: visible !important;
+        flex-shrink: 0 !important;
+      }
+      .prop-split-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 0 96px !important;
+        border-left: none !important;
+      }
+
+      /* ── Gallery → rounded card ── */
+      #gallery {
+        border-radius: 16px !important;
+        overflow: hidden !important;
+        aspect-ratio: 16 / 9 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        position: relative !important;
+        background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 50%, #0ea5e9 100%) !important;
+      }
+      #mosaicMain {
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      #mosaicMainImg {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        border-radius: 0 !important;
+      }
+      #mosaicSide        { display: none !important; }
+      #galleryStrip      { display: none !important; }
+      .mosaic-expand-btn { display: none !important; }
+      /* Photo count chip → top-right pill */
+      #mosaicMobileCount {
+        position: absolute !important;
+        top: 12px !important; right: 12px !important;
+        bottom: auto !important; left: auto !important;
+        background: rgba(255,255,255,.95) !important;
+        color: #0a1729 !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        padding: 5px 12px !important;
+        border-radius: 999px !important;
+        backdrop-filter: blur(4px) !important;
+        -webkit-backdrop-filter: blur(4px) !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,.12) !important;
+      }
+      .mosaic-nav-btn {
+        background: rgba(255,255,255,.9) !important;
+        color: #0a1729 !important;
+        border-radius: 50% !important;
+        width: 36px !important; height: 36px !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,.15) !important;
+      }
+
+      /* ── Breadcrumb → hidden ── */
+      .detail-breadcrumb { display: none !important; }
+
+      /* ── Price card wrapper (mobile) ── */
+      .cs-price-card {
+        background: white !important;
+        border-radius: 16px !important;
+        border: 1px solid #e4e8ef !important;
+        box-shadow: 0 1px 4px rgba(15,23,42,.07) !important;
+        margin: 12px 16px 0 !important;
+        padding: 20px !important;
+      }
+      /* Avail + share row */
+      .prop-avail-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        margin: 0 0 12px !important;
+        padding: 0 !important;
+        border: none !important;
+        background: none !important;
+      }
+      .prop-share-btn {
+        width: 36px !important; height: 36px !important;
+        border-radius: 50% !important;
+        border: 1.5px solid #e4e8ef !important;
+        background: transparent !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 13px !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+        color: #6b7280 !important;
+      }
+      .prop-share-btn > span { display: none !important; }
+      /* Price */
+      .prop-price, #detailPrice {
+        font-size: 28px !important;
+        font-weight: 800 !important;
+        color: #0a1729 !important;
+        letter-spacing: -.03em !important;
+        margin-bottom: 2px !important;
+        line-height: 1.1 !important;
+      }
+      /* Title */
+      .prop-title, #detailTitle {
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        color: #0a1729 !important;
+        margin-bottom: 3px !important;
+        font-family: inherit !important;
+        font-style: normal !important;
+      }
+      /* Address */
+      .prop-address, #detailAddress {
+        font-size: 13px !important;
+        color: #6b7280 !important;
+        margin-bottom: 14px !important;
+      }
+      /* Stats pills */
+      .prop-meta-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        margin: 0 0 16px !important;
+        grid-template-columns: none !important;
+      }
+      .prop-meta-item {
+        flex: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        background: #f8fafc !important;
+        border: 1px solid #e4e8ef !important;
+        border-radius: 10px !important;
+        padding: 8px !important;
+        white-space: nowrap !important;
+      }
+      .prop-meta-item i { color: #006aff !important; font-size: 12px !important; }
+      .prop-meta-value  { font-size: 12px !important; font-weight: 700 !important; color: #0a1729 !important; }
+      .prop-meta-label  { display: none !important; }
+      /* Landlord row → subtle box */
+      #landlordCard {
+        margin: 0 0 14px !important;
+        padding: 10px 12px !important;
+        border-radius: 10px !important;
+        background: #f8fafc !important;
+        border: 1px solid #e4e8ef !important;
+        box-shadow: none !important;
+      }
+      /* Mobile Apply button inside price card */
+      .cs-card-apply-btn {
+        display: flex !important;
+        width: 100% !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        background: #006aff !important;
+        color: #fff !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        border-radius: 12px !important;
+        padding: 14px !important;
+        text-decoration: none !important;
+        box-shadow: 0 4px 12px rgba(0,106,255,.3) !important;
+      }
+      .cs-card-apply-btn:hover { background: #0056d6 !important; color: #fff !important; }
+
+      /* ── Section labels: eyebrow becomes card title, section head hides ── */
+      .prop-section-eyebrow {
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        color: #0a1729 !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+        margin-bottom: 14px !important;
+        display: block !important;
+      }
+      .prop-section-head { display: none !important; }
+      .prop-divider      { display: none !important; }
+
+      /* ── All content sections → white cards ── */
+      .prop-split-content .prop-section,
+      .prop-split-content .detail-tabs-wrap {
+        background: white !important;
+        border-radius: 16px !important;
+        border: 1px solid #e4e8ef !important;
+        box-shadow: 0 1px 4px rgba(15,23,42,.07) !important;
+        margin: 12px 16px 0 !important;
+        padding: 20px !important;
+      }
+
+      /* ── Cost table → dashed-separator list ── */
+      .prop-cost-table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 16px !important; }
+      .prop-cost-table td { padding: 10px 0 !important; font-size: 13.5px !important; border: none !important; }
+      .prop-cost-table tr { border-bottom: 1px dashed #e4e8ef !important; }
+      .prop-cost-table tr:last-child { border-bottom: none !important; }
+      .prop-cost-table td:first-child { color: #6b7280 !important; font-weight: 500 !important; }
+      .prop-cost-table td:last-child  { font-weight: 700 !important; color: #0a1729 !important; text-align: right !important; }
+      /* Apply strip in costs section */
+      .prop-apply-strip {
+        flex-direction: column !important;
+        gap: 10px !important;
+        padding: 16px !important;
+        border-radius: 12px !important;
+        background: #f8fafc !important;
+        border: 1.5px solid #e4e8ef !important;
+        margin-top: 4px !important;
+      }
+      .prop-apply-btn { width: 100% !important; text-align: center !important; border-radius: 10px !important; justify-content: center !important; }
+
+      /* ── About ── */
+      .prop-desc { font-size: 14px !important; line-height: 1.7 !important; }
+
+      /* ── Feature tabs ── */
+      .detail-tabs { gap: 4px !important; margin-bottom: 14px !important; flex-wrap: wrap !important; }
+      .detail-tab  { font-size: 12px !important; padding: 6px 12px !important; border-radius: 8px !important; }
+      .amenities-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+
+      /* ── Map section ── */
+      .map-container {
+        margin: 8px -20px -20px !important;
+        border-radius: 0 0 16px 16px !important;
+        height: 160px !important;
+        max-height: 160px !important;
+      }
+      .map-open-btn {
+        margin: 8px -20px -20px !important;
+        border-radius: 0 0 16px 16px !important;
+        justify-content: center !important;
+      }
+
+      /* ── Process section: always expand, simplify fee cards ── */
+      .prop-process-collapse-summary { display: none !important; }
+      .prop-process-steps { margin-top: 0 !important; }
+      .prop-fee-cards { grid-template-columns: 1fr !important; gap: 8px !important; margin-bottom: 14px !important; }
+      .prop-fee-card  { padding: 12px !important; }
+      .prop-denied-box { font-size: 12.5px !important; padding: 12px !important; margin-bottom: 14px !important; }
+      .prop-policy-link { font-size: 11px !important; padding: 4px 9px !important; }
+
+      /* ── Contact card ── */
+      .contact-card { border: none !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; }
+      .contact-drawer-handle-bar { display: none !important; }
+      .contact-card-header-row   { display: none !important; }
+
+      /* ── Hide renter reqs (surfaced in about) ── */
+      #renterReqsSection { display: none !important; }
+
+      /* ── Sticky bottom bar → CardStack style ── */
+      #mobile-apply-bar {
+        background: white !important;
+        border-top: 2px solid #e4e8ef !important;
+        box-shadow: 0 -4px 20px rgba(0,0,0,.08) !important;
+      }
+      #mobile-apply-bar .mob-price { color: #6b7280 !important; font-size: .7rem !important; }
+      #mobile-apply-bar .mob-price strong { font-size: 1.2rem !important; font-weight: 800 !important; color: #0a1729 !important; }
+      #mobile-apply-bar .mob-btn {
+        border-radius: 10px !important;
+        padding: 13px 28px !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        box-shadow: 0 4px 12px rgba(0,106,255,.3) !important;
+      }
+      #mobile-apply-bar .mob-msg-btn { display: none !important; }
+      #mobile-apply-bar .mob-actions { gap: 0 !important; }
+    }
+
+    /* Desktop: price-card wrapper is transparent (display:contents) */
+    @media (min-width: 901px) {
+      .cs-price-card    { display: contents; }
+      .cs-card-apply-btn { display: none !important; }
+    }
   </style>
 <script defer src="/config.js?v=1784145767610"></script>
 <script defer src="/js/supabase.min.js"></script>
@@ -225,46 +526,59 @@
       <span id="breadcrumbCity">Loading…</span>
     </div>
 
-    <!-- Availability + share row -->
-    <div class="prop-avail-row">
-      <!-- sidebarAvail: JS populates this with availability text + controls display -->
-      <div class="prop-avail-chip" id="sidebarAvail" style="display:none"></div>
-      <div class="prop-share-btns">
-        <button class="prop-share-btn" id="savePropBtn">
-          <i class="far fa-heart"></i> Save
-        </button>
-        <button class="prop-share-btn" id="shareBtn">
-          <i class="fas fa-share-alt"></i> Share
-        </button>
-      </div>
-    </div>
+    <!-- ┌─ Price card wrapper ──────────────────────────────────────────────┐
+         │ On desktop: display:contents → invisible wrapper, children flow   │
+         │ On mobile:  becomes a white rounded card (CardStack design)        │
+         └──────────────────────────────────────────────────────────────────┘ -->
+    <div class="cs-price-card">
 
-    <!-- Price + title -->
-    <div class="prop-header">
-      <div class="prop-price" id="detailPrice">
-        <div class="skeleton" style="height:44px;width:200px;border-radius:8px"></div>
+      <!-- Availability + share row -->
+      <div class="prop-avail-row">
+        <!-- sidebarAvail: JS populates this with availability text + controls display -->
+        <div class="prop-avail-chip" id="sidebarAvail" style="display:none"></div>
+        <div class="prop-share-btns">
+          <button class="prop-share-btn" id="savePropBtn">
+            <i class="far fa-heart"></i><span> Save</span>
+          </button>
+          <button class="prop-share-btn" id="shareBtn">
+            <i class="fas fa-share-alt"></i><span> Share</span>
+          </button>
+        </div>
       </div>
-      <h1 class="prop-title" id="detailTitle">
-        <div class="skeleton" style="height:30px;width:75%;border-radius:6px;margin-bottom:6px"></div>
-      </h1>
-      <div class="prop-address" id="detailAddress">
-        <div class="skeleton" style="height:18px;width:55%;border-radius:4px"></div>
-      </div>
-    </div>
 
-    <!-- Landlord inline row -->
-    <div class="prop-landlord-row" id="landlordCard" style="display:none">
-      <div class="prop-ll-avatar" id="landlordAvatar">?</div>
-      <div class="prop-ll-info">
-        <div class="prop-ll-label">Listed by</div>
-        <div class="prop-ll-name" id="landlordName">—</div>
-        <div class="prop-ll-tagline" id="landlordTagline"></div>
+      <!-- Price + title -->
+      <div class="prop-header">
+        <div class="prop-price" id="detailPrice">
+          <div class="skeleton" style="height:44px;width:200px;border-radius:8px"></div>
+        </div>
+        <h1 class="prop-title" id="detailTitle">
+          <div class="skeleton" style="height:30px;width:75%;border-radius:6px;margin-bottom:6px"></div>
+        </h1>
+        <div class="prop-address" id="detailAddress">
+          <div class="skeleton" style="height:18px;width:55%;border-radius:4px"></div>
+        </div>
       </div>
-      <i class="fas fa-circle-check prop-ll-verified" id="landlordVerified" style="display:none" title="Verified landlord"></i>
-    </div>
 
-    <!-- Stats / meta grid -->
-    <div class="prop-meta-grid" id="detailMeta"></div>
+      <!-- Landlord inline row -->
+      <div class="prop-landlord-row" id="landlordCard" style="display:none">
+        <div class="prop-ll-avatar" id="landlordAvatar">?</div>
+        <div class="prop-ll-info">
+          <div class="prop-ll-label">Listed by</div>
+          <div class="prop-ll-name" id="landlordName">—</div>
+          <div class="prop-ll-tagline" id="landlordTagline"></div>
+        </div>
+        <i class="fas fa-circle-check prop-ll-verified" id="landlordVerified" style="display:none" title="Verified landlord"></i>
+      </div>
+
+      <!-- Stats / meta grid -->
+      <div class="prop-meta-grid" id="detailMeta"></div>
+
+      <!-- Mobile-only Apply button (CardStack design; synced to #applyBtn by JS below) -->
+      <a href="#" class="cs-card-apply-btn" id="csCardApply">
+        Apply Now &nbsp;<i class="fas fa-arrow-right" style="font-size:13px"></i>
+      </a>
+
+    </div><!-- /.cs-price-card -->
 
     <!-- Renter requirements strip (pets, smoking, credit, income) -->
     <div id="renterReqsSection" style="display:none;margin-top:16px"></div>
@@ -694,6 +1008,20 @@
       const collapse = document.getElementById('processStepsCollapse');
       if (collapse && window.matchMedia('(min-width: 768px)').matches) {
         collapse.open = true;
+      }
+      // Sync the CardStack mobile apply button with the main apply button
+      // property.js sets #applyBtn href when property data loads; mirror it here.
+      const applyBtn    = document.getElementById('applyBtn');
+      const csCardApply = document.getElementById('csCardApply');
+      const mobApplyBtn = document.getElementById('mobApplyBtn');
+      if (applyBtn && csCardApply) {
+        var syncApply = function() {
+          if (applyBtn.href && applyBtn.href !== window.location.href) {
+            csCardApply.href = applyBtn.href;
+          }
+        };
+        new MutationObserver(syncApply).observe(applyBtn, { attributes: true, attributeFilter: ['href'] });
+        syncApply();
       }
     });
   </script>
