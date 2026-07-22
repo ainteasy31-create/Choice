@@ -269,22 +269,68 @@ class RentalApplication {
     setupDevTools() {
         const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
         const isDevParam  = new URLSearchParams(window.location.search).get('_dev') === '1';
-        if (!isLocalhost && !isDevParam) return;
+
+        // Always wire the long-press trigger — invisible to users, works in production
+        this._wireLongPressDevTrigger();
+
+        // Auto-activate immediately if on localhost or ?_dev=1
+        if (isLocalhost || isDevParam) this._activateDevTools(false);
+    }
+
+    // ── Long-press the header logo for 600 ms to activate dev mode ────────
+    _wireLongPressDevTrigger() {
+        const logo = document.getElementById('cp-logo-link');
+        if (!logo) return;
+        let timer    = null;
+        let activated = false;
+
+        const start = () => {
+            activated = false;
+            timer = setTimeout(() => {
+                activated = true;
+                timer = null;
+                this._activateDevTools(true);
+            }, 600);
+        };
+
+        const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+
+        logo.addEventListener('mousedown',   start);
+        logo.addEventListener('touchstart',  start,  { passive: true });
+        ['mouseup', 'mouseleave', 'touchend', 'touchcancel']
+            .forEach(ev => logo.addEventListener(ev, cancel));
+
+        // Prevent navigation when the long-press just fired
+        logo.addEventListener('click', (e) => { if (activated) { activated = false; e.preventDefault(); } });
+    }
+
+    // ── Inject the dev button + optional toast ────────────────────────────
+    _activateDevTools(showToast = false) {
+        if (this._devActive) return;
+        this._devActive = true;
 
         if (document.getElementById('devTestFillBtn')) return;
 
-        // "Fill Current Step" button
+        // "Fill Step" floating button
         const button = document.createElement('button');
-        button.id = 'devTestFillBtn';
-        button.type = 'button';
-        button.title = 'Fill current step with test data';
-        const icon = document.createElement('span');
-        icon.className = 'btn-icon';
-        icon.textContent = 'Test';
+        button.id    = 'devTestFillBtn';
+        button.type  = 'button';
+        button.title = 'Fill current step with test data (long-press logo to toggle)';
+        const icon   = document.createElement('span');
+        icon.className   = 'btn-icon';
+        icon.textContent = '⚡';
         button.replaceChildren(icon, document.createTextNode(' Fill Step'));
-        button.style.cssText = 'position:fixed;bottom:70px;right:16px;z-index:99998;background:#f39c12;color:#fff;border:none;border-radius:24px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,0.25)';
+        button.style.cssText = 'position:fixed;bottom:70px;right:16px;z-index:99998;background:#f39c12;color:#fff;border:none;border-radius:24px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.25)';
         button.addEventListener('click', () => this._devFillTestData());
         document.body.appendChild(button);
+
+        if (showToast) {
+            const t = document.createElement('div');
+            t.textContent = '🛠 Dev mode activated';
+            t.style.cssText = 'position:fixed;top:72px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:99999;pointer-events:none;transition:opacity .4s';
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 2200);
+        }
     }
 
 
