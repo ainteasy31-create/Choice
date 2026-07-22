@@ -3356,34 +3356,24 @@ body[data-portal="public"][data-page="property"] .prop-split-content .detail-lis
 /* ── Mobile-first refinements ≤767px ──────────────────────────────── */
 @media (max-width: 767px) {
 
-  /* Meta grid → horizontal scroll pill row */
+  /* Meta grid → 3-col wrapping grid; no horizontal scroll */
   body[data-portal="public"][data-page="property"] .prop-meta-grid {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    padding-bottom: 6px;
-    -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent 100%);
-    mask-image: linear-gradient(to right, black calc(100% - 36px), transparent 100%);
+    overflow-x: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
-  body[data-portal="public"][data-page="property"] .prop-meta-grid::-webkit-scrollbar { display: none; }
   body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item {
-    flex: 0 0 auto;
-    min-width: 86px;
     flex-direction: column;
     align-items: flex-start;
     padding: 10px 14px;
     gap: 4px;
     border-radius: 10px;
+    min-width: 0;
   }
-  /* Cancel the odd-item full-width span — not a grid any more */
-  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-item:last-child:nth-child(odd) {
-    grid-column: auto;
-  }
-  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-value { font-size: 18px; }
+  body[data-portal="public"][data-page="property"] .prop-meta-grid .detail-meta-value { font-size: 16px; }
 
   /* Tighter section headings — editorial size is too large on small screens */
   body[data-portal="public"][data-page="property"] .prop-section-head {
