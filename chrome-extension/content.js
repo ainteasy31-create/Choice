@@ -19,7 +19,7 @@
   // We use a MutationObserver to detect navigation and re-inject if needed.
 
   function isListingPage() {
-    return /\/homedetails\/.+\/(\d+)_zpid/.test(window.location.pathname);
+    return window.location.pathname.includes('/homedetails/');
   }
 
   function injectButton() {
