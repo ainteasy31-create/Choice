@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Install Bookmarklet — Choice Properties</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f7;
+      color: #111;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 48px 20px 80px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      max-width: 560px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: #6366f1;
+      padding: 28px 32px 24px;
+      color: #fff;
+    }
+
+    .logo {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+
+    .card-header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .card-header p {
+      margin-top: 8px;
+      font-size: 14px;
+      opacity: 0.85;
+      line-height: 1.5;
+    }
+
+    .card-body { padding: 32px; }
+
+    /* ── Bookmarklet drag target ─────────────────────────────────── */
+    .drag-zone {
+      background: #f0f0ff;
+      border: 2px dashed #a5b4fc;
+      border-radius: 14px;
+      padding: 28px 20px;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .drag-zone p {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .bookmarklet-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #6366f1;
+      color: #fff !important;
+      text-decoration: none !important;
+      padding: 12px 22px;
+      border-radius: 30px;
+      font-weight: 700;
+      font-size: 15px;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.4);
+      cursor: grab;
+      user-select: none;
+      transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+      border: none;
+    }
+
+    .bookmarklet-btn:hover {
+      background: #4f46e5;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99,102,241,0.5);
+    }
+
+    .bookmarklet-btn:active { cursor: grabbing; }
+
+    .drag-arrow {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+
+    /* ── Steps ──────────────────────────────────────────────────── */
+    .steps { list-style: none; display: flex; flex-direction: column; gap: 20px; }
+
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      background: #6366f1;
+      color: #fff;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+
+    .step-content h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .step-content p {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.55;
+    }
+
+    code {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 5px;
+      padding: 1px 6px;
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      color: #374151;
+    }
+
+    /* ── Divider ────────────────────────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid #f0f0f0;
+      margin: 28px 0;
+    }
+
+    /* ── How it works ───────────────────────────────────────────── */
+    .how {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .how h2 {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 14px;
+    }
+
+    .how ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .how li {
+      display: flex;
+      gap: 10px;
+      font-size: 13px;
+      color: #444;
+      line-height: 1.5;
+    }
+
+    .how li::before {
+      content: "✓";
+      color: #16a34a;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── Footer note ────────────────────────────────────────────── */
+    .footer-note {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+
+    .footer-note a { color: #6366f1; text-decoration: none; }
+
+    /* ── Error state ─────────────────────────────────────────────── */
+    #no-js-notice {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #856404;
+      margin-bottom: 20px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="logo">Choice Properties</div>
+    <h1>Zillow → Pipeline Bookmarklet</h1>
+    <p>One click on any Zillow listing sends it straight to your pipeline. Nothing to install in Chrome settings.</p>
+  </div>
+
+  <div class="card-body">
+
+    <div id="no-js-notice">
+      JavaScript is required to generate the bookmarklet link.
+    </div>
+
+    <!-- Step 1: drag the button -->
+    <div class="drag-zone">
+      <p>
+        <strong>Step 1 — Drag this button to your bookmarks bar</strong><br>
+        (If the bar isn't visible: <code>Ctrl+Shift+B</code> on Windows / <code>⌘+Shift+B</code> on Mac)
+      </p>
+      <!-- href is filled by JS below -->
+      <a class="bookmarklet-btn" id="bm-link" href="#" title="Drag me to your bookmarks bar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v13M5 9l7 7 7-7"/><path d="M3 20h18"/>
+        </svg>
+        Save to Pipeline
+      </a>
+      <div class="drag-arrow">☝ drag this button to your bookmarks bar</div>
+    </div>
+
+    <!-- Steps 2 & 3 -->
+    <ul class="steps">
+      <li class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h3>Browse Zillow as normal</h3>
+          <p>Open any listing detail page — the URL will look like<br><code>zillow.com/homedetails/…/12345_zpid</code></p>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h3>Click your bookmarklet</h3>
+          <p>A panel slides in from the bottom-right. It captures every field and up to 50 photos, then shows a green confirmation. Done.</p>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h3>Review in the admin pipeline</h3>
+          <p>Open <a href="https://choice-properties-site.pages.dev/admin/pipeline.html" target="_blank" style="color:#6366f1;font-weight:600;">admin pipeline</a> to review, score, and publish the listing.</p>
+        </div>
+      </li>
+    </ul>
+
+    <hr class="divider" />
+
+    <div class="how">
+      <h2>Why this works better than the extension</h2>
+      <ul>
+        <li>No Chrome settings to fiddle with — just drag one link</li>
+        <li>Fixes happen instantly on Replit — your bookmarklet auto-updates with no reinstall</li>
+        <li>Works in Chrome, Edge, Firefox, Brave, Arc — any desktop browser</li>
+        <li>Reads Zillow's own page data — never gets blocked or rate-limited</li>
+        <li>Captures all fields: address, rent, beds/baths, photos (up to 50), amenities, pet policy, and more</li>
+      </ul>
+    </div>
+
+    <p class="footer-note">
+      The script is hosted on Replit so it can be updated and debugged at any time.<br>
+      <a href="https://choice-properties-site.pages.dev/admin/pipeline.html" target="_blank">Open Pipeline</a>
+      &nbsp;·&nbsp;
+      <a href="/admin/pipeline.html" target="_blank">Admin Panel</a>
+    </p>
+
+  </div>
+</div>
+
+<script>
+  // Build the bookmarklet href dynamically using this page's origin,
+  // so it always points to the correct Replit server.
+  (function () {
+    var origin = window.location.origin;
+    var scriptUrl = origin + '/bookmarklet.js';
+
+    // The bookmarklet is a tiny loader — the real logic is in bookmarklet.js
+    // Using a cache-buster (?_=timestamp) forces a fresh copy each click.
+    var code = '(function(){' +
+      'var s=document.createElement("script");' +
+      's.src="' + scriptUrl + '?_="+Date.now();' +
+      'document.head.appendChild(s);' +
+      '})()';
+
+    var link = document.getElementById('bm-link');
+    link.href = 'javascript:' + encodeURIComponent(code).replace(/%20/g, ' ');
+
+    // Prevent the link from navigating on click — it's drag-only
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      alert(
+        'Don\'t click — drag this button to your bookmarks bar!\n\n' +
+        'If the bookmarks bar is hidden:\n' +
+        '• Chrome/Edge: Ctrl+Shift+B (Windows) or ⌘+Shift+B (Mac)\n' +
+        '• Firefox: View → Toolbars → Bookmarks Toolbar'
+      );
+    });
+  })();
+</script>
+
+</body>
+</html>

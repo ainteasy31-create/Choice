@@ -58,7 +58,15 @@ const server = http.createServer((req, res) => {
 
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': contentType });
+
+    // CORS headers for bookmarklet.js so it can be loaded from any site (e.g. Zillow)
+    const headers = { 'Content-Type': contentType };
+    if (urlPath === '/bookmarklet.js') {
+      headers['Access-Control-Allow-Origin'] = '*';
+      headers['Cache-Control'] = 'no-cache';
+    }
+
+    res.writeHead(200, headers);
     res.end(data);
   });
 });
