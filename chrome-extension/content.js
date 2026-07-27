@@ -1,5 +1,5 @@
 // ============================================================
-// Import to Choice Properties — Content Script v1.3
+// Import to Choice Properties — Content Script v1.4
 // Injected on: https://www.zillow.com/homedetails/*
 // ============================================================
 
@@ -10,86 +10,151 @@
   const SECRET   = 'cp_import_7Kx3m9P2w5';
   const BTN_ID   = 'cp-save-btn';
 
-  // ── Button HTML templates ─────────────────────────────────────────────────
+  // ── Base inline styles ────────────────────────────────────────────────────
+  // Zillow's CSS is extremely aggressive and overrides external stylesheets.
+  // Every visual property MUST be set via inline style so nothing can clobber it.
+  const BASE_STYLES = {
+    position:       'fixed',
+    bottom:         '24px',
+    right:          '24px',
+    zIndex:         '2147483647',
+    display:        'flex',
+    alignItems:     'center',
+    justifyContent: 'center',
+    gap:            '8px',
+    padding:        '0 18px',
+    height:         '46px',
+    minWidth:       '44px',
+    maxWidth:       '320px',
+    background:     '#6366f1',
+    color:          '#fff',
+    border:         'none',
+    borderRadius:   '23px',
+    boxShadow:      '0 4px 20px rgba(99,102,241,0.5), 0 2px 6px rgba(0,0,0,0.2)',
+    fontFamily:     '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontSize:       '14px',
+    fontWeight:     '700',
+    letterSpacing:  '0.01em',
+    lineHeight:     '1',
+    whiteSpace:     'nowrap',
+    cursor:         'pointer',
+    userSelect:     'none',
+    outline:        'none',
+    overflow:       'hidden',
+    transition:     'background 0.15s, box-shadow 0.15s, transform 0.12s, max-width 0.3s, padding 0.3s, opacity 0.2s',
+    textDecoration: 'none',
+    boxSizing:      'border-box',
+    verticalAlign:  'middle',
+  };
 
-  const HTML_IDLE = `
-    <div class="cp-btn-inner">
-      <span class="cp-icon">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v13M5 9l7 7 7-7"/>
-          <path d="M3 20h18"/>
-        </svg>
-      </span>
-      <span class="cp-label">Save to Pipeline</span>
-    </div>`;
+  // ── Button HTML ───────────────────────────────────────────────────────────
 
-  const HTML_LOADING = `
-    <div class="cp-spinner">
-      <div class="cp-spin-ring"></div>
-      <span>Saving…</span>
-    </div>`;
+  const ICON_SAVE = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.5"
+         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+      <path d="M12 2v13M5 9l7 7 7-7"/>
+      <path d="M3 20h18"/>
+    </svg>`;
 
-  function htmlResult(svgPath, text) {
-    return `
-    <div class="cp-result">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2.5"
-           stroke-linecap="round" stroke-linejoin="round">
-        ${svgPath}
-      </svg>
-      <span>${text}</span>
-    </div>`;
+  const ICON_CHECK = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.5"
+         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>`;
+
+  const ICON_X = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.5"
+         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>`;
+
+  const SPINNER_HTML = `
+    <span style="
+      display:inline-block;
+      width:15px;height:15px;
+      border:2px solid rgba(255,255,255,0.35);
+      border-top-color:#fff;
+      border-radius:50%;
+      animation:cp-spin 0.7s linear infinite;
+      flex-shrink:0;
+    "></span>`;
+
+  function labelHtml(icon, text) {
+    return `${icon}<span style="display:inline-block">${text}</span>`;
   }
 
-  // ── Button state helpers ──────────────────────────────────────────────────
+  // ── State colours ─────────────────────────────────────────────────────────
+  const BG = {
+    idle:      '#6366f1',
+    hover:     '#4f46e5',
+    loading:   '#818cf8',
+    success:   '#16a34a',
+    duplicate: '#a16207',
+    error:     '#dc2626',
+  };
 
-  const STATE_CLASSES = ['cp-loading', 'cp-success', 'cp-duplicate', 'cp-error', 'cp-collapsed'];
-
-  function setState(btn, state, html) {
-    STATE_CLASSES.forEach(c => btn.classList.remove(c));
-    if (state) btn.classList.add(state);
-    if (html !== undefined) btn.innerHTML = html;
-  }
-
-  // ── Inject button — retries for up to ~10 s ───────────────────────────────
-  // Zillow is a heavy Next.js app; we retry to handle slow renders.
-
+  // ── Inject button ─────────────────────────────────────────────────────────
   let _attempts = 0;
 
   function tryInject() {
     _attempts++;
-
     if (document.getElementById(BTN_ID)) return;
-    if (!document.body) { if (_attempts < 15) setTimeout(tryInject, 800); return; }
-    if (!window.location.href.includes('/homedetails/')) { if (_attempts < 15) setTimeout(tryInject, 800); return; }
+    if (!document.body)                                     { if (_attempts < 20) setTimeout(tryInject, 800); return; }
+    if (!location.href.includes('/homedetails/'))           { if (_attempts < 20) setTimeout(tryInject, 800); return; }
+
+    // Inject keyframe for spinner via a <style> tag (inline style can't define @keyframes)
+    if (!document.getElementById('cp-spin-style')) {
+      const s = document.createElement('style');
+      s.id = 'cp-spin-style';
+      s.textContent = '@keyframes cp-spin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(s);
+    }
 
     const btn = document.createElement('button');
     btn.id = BTN_ID;
     btn.setAttribute('title', 'Save this listing to Choice Properties pipeline');
 
-    // Only positioning via inline styles — prevents Zillow overriding our fixed placement.
-    // All visual styles (color, font, shape, states) are handled by content.css.
-    Object.assign(btn.style, {
-      position: 'fixed',
-      bottom:   '24px',
-      right:    '24px',
-      zIndex:   '2147483647',
-      border:   'none',      // reset browser default button border
-      outline:  'none',
+    // Apply every base style inline — the only reliable way on Zillow
+    Object.assign(btn.style, BASE_STYLES);
+
+    btn.innerHTML = labelHtml(ICON_SAVE, 'Save to Pipeline');
+
+    btn.addEventListener('mouseenter', () => {
+      if (!btn.dataset.state || btn.dataset.state === 'idle') {
+        btn.style.background = BG.hover;
+        btn.style.transform  = 'translateY(-1px)';
+        btn.style.boxShadow  = '0 6px 24px rgba(99,102,241,0.55), 0 2px 6px rgba(0,0,0,0.2)';
+      }
+    });
+    btn.addEventListener('mouseleave', () => {
+      if (!btn.dataset.state || btn.dataset.state === 'idle') {
+        btn.style.background = BG.idle;
+        btn.style.transform  = '';
+        btn.style.boxShadow  = BASE_STYLES.boxShadow;
+      }
+      if (btn.dataset.state === 'collapsed') {
+        collapseBtn(btn);
+      }
+    });
+    btn.addEventListener('mouseenter', () => {
+      if (btn.dataset.state === 'collapsed') expandBtn(btn);
     });
 
-    btn.innerHTML = HTML_IDLE;
     btn.addEventListener('click', handleSave);
     document.body.appendChild(btn);
   }
 
-  setTimeout(tryInject, 600);
+  // Start immediately, then back-off retries for slow Next.js hydration
+  setTimeout(tryInject,  500);
   setTimeout(tryInject, 1500);
   setTimeout(tryInject, 3000);
+  setTimeout(tryInject, 6000);
 
-  // SPA navigation — Zillow changes URL without a full reload
+  // SPA navigation — Zillow changes URL without a full page reload
   let _lastUrl = location.href;
   setInterval(() => {
     if (location.href !== _lastUrl) {
@@ -97,32 +162,97 @@
       const old = document.getElementById(BTN_ID);
       if (old) old.remove();
       _attempts = 0;
-      setTimeout(tryInject, 800);
+      setTimeout(tryInject,  800);
       setTimeout(tryInject, 2000);
     }
   }, 500);
+
+  // ── Button state helpers ──────────────────────────────────────────────────
+
+  function setIdle(btn) {
+    btn.dataset.state   = 'idle';
+    btn.disabled        = false;
+    btn.style.background = BG.idle;
+    btn.style.cursor     = 'pointer';
+    btn.style.opacity    = '1';
+    btn.style.maxWidth   = '320px';
+    btn.style.padding    = '0 18px';
+    btn.innerHTML = labelHtml(ICON_SAVE, 'Save to Pipeline');
+  }
+
+  function setLoading(btn) {
+    btn.dataset.state    = 'loading';
+    btn.disabled         = true;
+    btn.style.background = BG.loading;
+    btn.style.cursor     = 'wait';
+    btn.innerHTML        = labelHtml(SPINNER_HTML, 'Saving…');
+  }
+
+  function setSuccess(btn, text) {
+    btn.dataset.state    = 'success';
+    btn.disabled         = false;
+    btn.style.background = BG.success;
+    btn.style.cursor     = 'default';
+    btn.style.boxShadow  = '0 4px 20px rgba(22,163,74,0.4), 0 2px 6px rgba(0,0,0,0.12)';
+    btn.innerHTML        = labelHtml(ICON_CHECK, text);
+    // Collapse to a small pill after 4 s
+    setTimeout(() => { if (btn.isConnected) collapseBtn(btn); }, 4000);
+  }
+
+  function setDuplicate(btn) {
+    btn.dataset.state    = 'duplicate';
+    btn.disabled         = false;
+    btn.style.background = BG.duplicate;
+    btn.style.cursor     = 'default';
+    btn.innerHTML        = labelHtml(ICON_CHECK, 'Already in pipeline');
+    setTimeout(() => { if (btn.isConnected) collapseBtn(btn); }, 4000);
+  }
+
+  function setError(btn, text) {
+    btn.dataset.state    = 'error';
+    btn.disabled         = false;
+    btn.style.background = BG.error;
+    btn.style.cursor     = 'pointer';
+    btn.style.boxShadow  = '0 4px 16px rgba(220,38,38,0.3), 0 2px 6px rgba(0,0,0,0.12)';
+    btn.innerHTML        = labelHtml(ICON_X, text);
+    setTimeout(() => { if (btn.isConnected) setIdle(btn); }, 3500);
+  }
+
+  function collapseBtn(btn) {
+    btn.dataset.state   = 'collapsed';
+    btn.style.maxWidth  = '46px';
+    btn.style.padding   = '0';
+    btn.style.opacity   = '0.75';
+    btn.style.cursor    = 'pointer';
+  }
+
+  function expandBtn(btn) {
+    btn.style.maxWidth = '320px';
+    btn.style.padding  = '0 18px';
+    btn.style.opacity  = '1';
+  }
 
   // ── Save handler ─────────────────────────────────────────────────────────
 
   async function handleSave() {
     const btn = document.getElementById(BTN_ID);
-    if (!btn || btn.disabled || btn.dataset.saved) return;
+    if (!btn || btn.disabled) return;
+    if (btn.dataset.state === 'success' || btn.dataset.state === 'duplicate') return;
 
-    btn.disabled = true;
-    setState(btn, 'cp-loading', HTML_LOADING);
+    setLoading(btn);
 
     // Extract listing data
     let payload;
     try {
       payload = extractListing();
     } catch (err) {
-      showError(btn, 'Error — not a listing page');
+      setError(btn, 'Extraction error');
       console.error('[CP] extraction error:', err);
       return;
     }
 
     if (!payload) {
-      showError(btn, 'Open a listing page first');
+      setError(btn, 'Open a full listing page');
       return;
     }
 
@@ -136,7 +266,7 @@
       });
       resp = await res.json();
     } catch (netErr) {
-      showError(btn, 'Network error — try again');
+      setError(btn, 'Network error — try again');
       console.error('[CP] network error:', netErr);
       return;
     }
@@ -144,43 +274,16 @@
     if (resp && resp.ok) {
       const photos = resp.photos || 0;
       const score  = resp.score  != null ? ` · Q:${resp.score}` : '';
-      btn.dataset.saved = '1';
-      btn.disabled = false;
-      setState(btn, 'cp-success', htmlResult(
-        '<polyline points="20 6 9 17 4 12"/>',
-        `Saved! ${photos} photo${photos !== 1 ? 's' : ''}${score}`
-      ));
-      // Collapse to a pill after 4 s so it stays accessible but unobtrusive
-      setTimeout(() => {
-        if (btn.dataset.saved) btn.classList.add('cp-collapsed');
-      }, 4000);
-      // Notify background service worker → increments badge count
+      setSuccess(btn, `Saved! ${photos} photo${photos !== 1 ? 's' : ''}${score}`);
       chrome.runtime.sendMessage({ type: 'SAVED' });
 
     } else if (resp && resp.duplicate) {
-      btn.dataset.saved = '1';
-      btn.disabled = false;
-      setState(btn, 'cp-duplicate', htmlResult(
-        '<polyline points="20 6 9 17 4 12"/>',
-        'Already in pipeline'
-      ));
+      setDuplicate(btn);
 
     } else {
-      const msg = (resp && resp.error) ? resp.error.slice(0, 40) : 'Server error';
-      showError(btn, 'Failed: ' + msg);
+      const msg = (resp && resp.error) ? resp.error.slice(0, 38) : 'Server error';
+      setError(btn, 'Failed: ' + msg);
     }
-  }
-
-  function showError(btn, text) {
-    btn.disabled = false;
-    setState(btn, 'cp-error', htmlResult(
-      '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
-      text
-    ));
-    setTimeout(() => {
-      delete btn.dataset.saved;
-      setState(btn, null, HTML_IDLE);
-    }, 3500);
   }
 
   // ── Data extraction from __NEXT_DATA__ ────────────────────────────────────
@@ -192,7 +295,6 @@
     let nd;
     try { nd = JSON.parse(el.textContent); } catch (e) { return null; }
 
-    // Find the property object inside gdpClientCache
     let prop = null;
     const cachePaths = [
       ['props','pageProps','componentProps','gdpClientCache'],
@@ -211,14 +313,13 @@
         for (const k of Object.keys(cache)) {
           const v = cache[k];
           if (!v || typeof v !== 'object') continue;
-          if (v.property && v.property.zpid)                                            { prop = v.property; break; }
-          if (v.data && v.data.property && v.data.property.zpid)                        { prop = v.data.property; break; }
-          if (v.zpid !== undefined && (v.bedrooms !== undefined || v.price !== undefined)) { prop = v; break; }
+          if (v.property && v.property.zpid)                                               { prop = v.property; break; }
+          if (v.data && v.data.property && v.data.property.zpid)                           { prop = v.data.property; break; }
+          if (v.zpid !== undefined && (v.bedrooms !== undefined || v.price !== undefined))  { prop = v; break; }
         }
       } catch (_) {}
     }
 
-    // Fallback
     if (!prop) {
       try {
         const cp = nd.props.pageProps.componentProps;
@@ -231,7 +332,6 @@
     const rf   = prop.resoFacts || {};
     const addr = prop.address   || {};
 
-    // ── Photos ────────────────────────────────────────────────────────────
     function bestJpeg(ms) {
       const jpegs = (ms && ms.jpeg) || [];
       let best = null, bestW = 0;
@@ -247,14 +347,12 @@
     addPhoto(prop.desktopWebHdpImageLink);
     addPhoto(prop.heroImage);
 
-    // ── Rent ──────────────────────────────────────────────────────────────
     const rawPrice = prop.price || prop.unformattedPrice;
     let rent = null;
     if (typeof rawPrice === 'number' && rawPrice > 0) rent = rawPrice;
     else if (rawPrice) { const d = String(rawPrice).replace(/[^0-9]/g,''); rent = d ? parseInt(d,10) : null; }
     if (!rent && prop.rentZestimate) rent = parseInt(String(prop.rentZestimate),10) || null;
 
-    // ── Core fields ───────────────────────────────────────────────────────
     const zpid   = String(prop.zpid || '');
     const street = addr.streetAddress || prop.streetAddress || '';
     const city   = addr.city    || prop.city    || '';
@@ -272,9 +370,11 @@
     const county = prop.county || addr.county || null;
     const vtour  = prop.virtualTourUrl || prop.threeDimensionalTourUrl || null;
 
-    const TYPE_MAP = { SINGLE_FAMILY:'SINGLE_FAMILY',MULTI_FAMILY:'MULTI_FAMILY',CONDO:'CONDOS',
-      CONDO_TOWNHOME:'CONDOS',TOWNHOUSE:'TOWNHOMES',APARTMENT:'APARTMENT',
-      MANUFACTURED:'MOBILE',MOBILE:'MOBILE',LOT:'LAND',LAND:'LAND',FARM:'FARM' };
+    const TYPE_MAP = {
+      SINGLE_FAMILY:'SINGLE_FAMILY', MULTI_FAMILY:'MULTI_FAMILY', CONDO:'CONDOS',
+      CONDO_TOWNHOME:'CONDOS', TOWNHOUSE:'TOWNHOMES', APARTMENT:'APARTMENT',
+      MANUFACTURED:'MOBILE', MOBILE:'MOBILE', LOT:'LAND', LAND:'LAND', FARM:'FARM',
+    };
     const propType = TYPE_MAP[(prop.homeType||'').toUpperCase()] || (prop.homeType||'').toUpperCase() || null;
 
     function parseDate(v) {
@@ -286,7 +386,6 @@
       try { const d=new Date(s); if(!isNaN(d.getTime())) return d.toISOString().slice(0,10); } catch(_){}
       return s.slice(0,40);
     }
-
     function safeI(v) { if(!v && v!==0) return null; const n=parseInt(String(v).replace(/[^0-9]/g,''),10); return isNaN(n)||n<=0?null:n; }
 
     const ctxParts = [];
