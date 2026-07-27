@@ -1,5 +1,5 @@
 // ============================================================
-// Import to Choice Properties — Content Script v1.2
+// Import to Choice Properties — Content Script v1.3
 // Injected on: https://www.zillow.com/homedetails/*
 // ============================================================
 
@@ -10,7 +10,50 @@
   const SECRET   = 'cp_import_7Kx3m9P2w5';
   const BTN_ID   = 'cp-save-btn';
 
-  // ── Inject button — retries every second for up to 10s ───────────────────
+  // ── Button HTML templates ─────────────────────────────────────────────────
+
+  const HTML_IDLE = `
+    <div class="cp-btn-inner">
+      <span class="cp-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v13M5 9l7 7 7-7"/>
+          <path d="M3 20h18"/>
+        </svg>
+      </span>
+      <span class="cp-label">Save to Pipeline</span>
+    </div>`;
+
+  const HTML_LOADING = `
+    <div class="cp-spinner">
+      <div class="cp-spin-ring"></div>
+      <span>Saving…</span>
+    </div>`;
+
+  function htmlResult(svgPath, text) {
+    return `
+    <div class="cp-result">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        ${svgPath}
+      </svg>
+      <span>${text}</span>
+    </div>`;
+  }
+
+  // ── Button state helpers ──────────────────────────────────────────────────
+
+  const STATE_CLASSES = ['cp-loading', 'cp-success', 'cp-duplicate', 'cp-error', 'cp-collapsed'];
+
+  function setState(btn, state, html) {
+    STATE_CLASSES.forEach(c => btn.classList.remove(c));
+    if (state) btn.classList.add(state);
+    if (html !== undefined) btn.innerHTML = html;
+  }
+
+  // ── Inject button — retries for up to ~10 s ───────────────────────────────
   // Zillow is a heavy Next.js app; we retry to handle slow renders.
 
   let _attempts = 0;
@@ -18,80 +61,35 @@
   function tryInject() {
     _attempts++;
 
-    // Already injected?
     if (document.getElementById(BTN_ID)) return;
+    if (!document.body) { if (_attempts < 15) setTimeout(tryInject, 800); return; }
+    if (!window.location.href.includes('/homedetails/')) { if (_attempts < 15) setTimeout(tryInject, 800); return; }
 
-    // Body must exist
-    if (!document.body) {
-      if (_attempts < 15) setTimeout(tryInject, 800);
-      return;
-    }
-
-    // Must be on a listing detail page (URL contains /homedetails/)
-    if (!window.location.href.includes('/homedetails/')) {
-      if (_attempts < 15) setTimeout(tryInject, 800);
-      return;
-    }
-
-    // ── Build the button ──────────────────────────────────────────────────
     const btn = document.createElement('button');
     btn.id = BTN_ID;
     btn.setAttribute('title', 'Save this listing to Choice Properties pipeline');
 
-    // Inline all styles so Zillow's CSS cannot interfere
+    // Only positioning via inline styles — prevents Zillow overriding our fixed placement.
+    // All visual styles (color, font, shape, states) are handled by content.css.
     Object.assign(btn.style, {
-      position:     'fixed',
-      bottom:       '24px',
-      right:        '24px',
-      zIndex:       '2147483647',
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '8px',
-      padding:      '0 18px',
-      height:       '46px',
-      background:   '#6366f1',
-      color:        '#fff',
-      border:       'none',
-      borderRadius: '23px',
-      boxShadow:    '0 4px 20px rgba(99,102,241,0.5), 0 2px 6px rgba(0,0,0,0.2)',
-      fontFamily:   '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      fontSize:     '14px',
-      fontWeight:   '700',
-      cursor:       'pointer',
-      whiteSpace:   'nowrap',
-      lineHeight:   '1',
-      transition:   'background 0.15s, transform 0.1s',
-      outline:      'none',
-      userSelect:   'none',
+      position: 'fixed',
+      bottom:   '24px',
+      right:    '24px',
+      zIndex:   '2147483647',
+      border:   'none',      // reset browser default button border
+      outline:  'none',
     });
 
-    btn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2.5"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2v13M5 9l7 7 7-7"/>
-        <path d="M3 20h18"/>
-      </svg>
-      <span id="cp-btn-label">Save to Pipeline</span>
-    `;
-
-    btn.addEventListener('mouseenter', () => {
-      if (!btn.disabled) btn.style.background = '#4f46e5';
-    });
-    btn.addEventListener('mouseleave', () => {
-      if (!btn.disabled && !btn.dataset.saved) btn.style.background = '#6366f1';
-    });
-
+    btn.innerHTML = HTML_IDLE;
     btn.addEventListener('click', handleSave);
     document.body.appendChild(btn);
   }
 
-  // Start trying immediately, then retry if needed
   setTimeout(tryInject, 600);
   setTimeout(tryInject, 1500);
   setTimeout(tryInject, 3000);
 
-  // Also inject on SPA navigation (Zillow changes URL without full reload)
+  // SPA navigation — Zillow changes URL without a full reload
   let _lastUrl = location.href;
   setInterval(() => {
     if (location.href !== _lastUrl) {
@@ -100,47 +98,31 @@
       if (old) old.remove();
       _attempts = 0;
       setTimeout(tryInject, 800);
+      setTimeout(tryInject, 2000);
     }
   }, 500);
-
-  // ── Button state ─────────────────────────────────────────────────────────
-
-  function setLabel(text, bg, disabled) {
-    const btn   = document.getElementById(BTN_ID);
-    const label = document.getElementById('cp-btn-label');
-    if (!btn || !label) return;
-    label.textContent  = text;
-    btn.style.background = bg || '#6366f1';
-    btn.disabled = !!disabled;
-    btn.style.cursor = disabled ? 'default' : 'pointer';
-    btn.style.opacity = disabled ? '0.9' : '1';
-  }
 
   // ── Save handler ─────────────────────────────────────────────────────────
 
   async function handleSave() {
     const btn = document.getElementById(BTN_ID);
-    if (!btn || btn.disabled) return;
+    if (!btn || btn.disabled || btn.dataset.saved) return;
 
-    // Don't re-trigger after a successful save
-    if (btn.dataset.saved) return;
-
-    setLabel('Saving…', '#818cf8', true);
+    btn.disabled = true;
+    setState(btn, 'cp-loading', HTML_LOADING);
 
     // Extract listing data
     let payload;
     try {
       payload = extractListing();
     } catch (err) {
-      setLabel('Error — not a listing page', '#dc2626', false);
+      showError(btn, 'Error — not a listing page');
       console.error('[CP] extraction error:', err);
-      setTimeout(() => setLabel('Save to Pipeline', '#6366f1', false), 3000);
       return;
     }
 
     if (!payload) {
-      setLabel('Open a listing page first', '#a16207', false);
-      setTimeout(() => setLabel('Save to Pipeline', '#6366f1', false), 3000);
+      showError(btn, 'Open a listing page first');
       return;
     }
 
@@ -154,37 +136,51 @@
       });
       resp = await res.json();
     } catch (netErr) {
-      setLabel('Network error — try again', '#dc2626', false);
+      showError(btn, 'Network error — try again');
       console.error('[CP] network error:', netErr);
-      setTimeout(() => setLabel('Save to Pipeline', '#6366f1', false), 3000);
       return;
     }
 
-    // Handle response
     if (resp && resp.ok) {
       const photos = resp.photos || 0;
       const score  = resp.score  != null ? ` · Q:${resp.score}` : '';
       btn.dataset.saved = '1';
-      btn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-        <span>Saved! ${photos} photos${score}</span>
-      `;
-      btn.style.background = '#16a34a';
       btn.disabled = false;
+      setState(btn, 'cp-success', htmlResult(
+        '<polyline points="20 6 9 17 4 12"/>',
+        `Saved! ${photos} photo${photos !== 1 ? 's' : ''}${score}`
+      ));
+      // Collapse to a pill after 4 s so it stays accessible but unobtrusive
+      setTimeout(() => {
+        if (btn.dataset.saved) btn.classList.add('cp-collapsed');
+      }, 4000);
+      // Notify background service worker → increments badge count
+      chrome.runtime.sendMessage({ type: 'SAVED' });
 
     } else if (resp && resp.duplicate) {
       btn.dataset.saved = '1';
-      setLabel('Already in pipeline ✓', '#a16207', false);
+      btn.disabled = false;
+      setState(btn, 'cp-duplicate', htmlResult(
+        '<polyline points="20 6 9 17 4 12"/>',
+        'Already in pipeline'
+      ));
 
     } else {
       const msg = (resp && resp.error) ? resp.error.slice(0, 40) : 'Server error';
-      setLabel('Failed: ' + msg, '#dc2626', false);
-      setTimeout(() => { delete btn.dataset.saved; setLabel('Save to Pipeline', '#6366f1', false); }, 4000);
+      showError(btn, 'Failed: ' + msg);
     }
+  }
+
+  function showError(btn, text) {
+    btn.disabled = false;
+    setState(btn, 'cp-error', htmlResult(
+      '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+      text
+    ));
+    setTimeout(() => {
+      delete btn.dataset.saved;
+      setState(btn, null, HTML_IDLE);
+    }, 3500);
   }
 
   // ── Data extraction from __NEXT_DATA__ ────────────────────────────────────
@@ -215,8 +211,8 @@
         for (const k of Object.keys(cache)) {
           const v = cache[k];
           if (!v || typeof v !== 'object') continue;
-          if (v.property && v.property.zpid)       { prop = v.property; break; }
-          if (v.data && v.data.property && v.data.property.zpid) { prop = v.data.property; break; }
+          if (v.property && v.property.zpid)                                            { prop = v.property; break; }
+          if (v.data && v.data.property && v.data.property.zpid)                        { prop = v.data.property; break; }
           if (v.zpid !== undefined && (v.bedrooms !== undefined || v.price !== undefined)) { prop = v; break; }
         }
       } catch (_) {}

@@ -3,7 +3,7 @@
   "name": "Import to Choice Properties",
   "version": "1.0.0",
   "description": "Save any Zillow listing to your Choice Properties pipeline with one click — all fields and photos captured instantly.",
-  "permissions": [],
+  "permissions": ["tabs", "storage"],
   "host_permissions": [
     "https://www.zillow.com/*",
     "https://tlfmwetmhthpyrytrcfo.supabase.co/*"

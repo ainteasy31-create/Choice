@@ -2,20 +2,40 @@
 // Import to Choice Properties — Background Service Worker
 // Tracks how many listings have been saved this session
 // and updates the extension badge count.
+// Uses chrome.storage.session so the count survives MV3
+// service-worker suspension/wake cycles.
 // ============================================================
 
-let sessionCount = 0;
+async function getCount() {
+  const data = await chrome.storage.session.get({ sessionCount: 0 });
+  return data.sessionCount;
+}
 
-chrome.runtime.onMessage.addListener((msg) => {
+async function setCount(n) {
+  await chrome.storage.session.set({ sessionCount: n });
+}
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'SAVED') {
-    sessionCount++;
-    chrome.action.setBadgeText({ text: String(sessionCount) });
-    chrome.action.setBadgeBackgroundColor({ color: '#16a34a' });
+    (async () => {
+      const n = (await getCount()) + 1;
+      await setCount(n);
+      chrome.action.setBadgeText({ text: String(n) });
+      chrome.action.setBadgeBackgroundColor({ color: '#16a34a' });
+      sendResponse({ ok: true, count: n });
+    })();
+    return true; // keep message channel open for async response
   }
 });
 
-// Clear badge when browser session starts
-chrome.runtime.onStartup.addListener(() => {
-  sessionCount = 0;
+// Restore badge on service-worker restart (e.g. browser reopen)
+chrome.runtime.onStartup.addListener(async () => {
+  await setCount(0);
+  chrome.action.setBadgeText({ text: '' });
+});
+
+// On install/update, clear any stale badge
+chrome.runtime.onInstalled.addListener(() => {
+  setCount(0);
   chrome.action.setBadgeText({ text: '' });
 });
