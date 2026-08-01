@@ -54,9 +54,7 @@ function resolvePropertyId() {
   const fromQuery = (params.get('id') || '').trim();
   if (fromQuery) return fromQuery;
   const m = window.location.pathname.match(/(prop-[a-z0-9]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
-  // DB stores ids uppercase (PROP-XXXXXXXX); always normalise to upper so
-  // the Supabase eq() filter matches regardless of URL casing.
-  return m ? m[1].toUpperCase() : '';
+  return m ? m[1].toLowerCase() : '';
 }
 const propertyId = resolvePropertyId();
 
@@ -120,7 +118,7 @@ async function loadProperty(id) {
     const { data, error } = await supabase
       .from('properties')
       .select('*, landlords(id, user_id, business_name, contact_name, avatar_url, tagline, verified), property_photos(id, url, file_id, display_order, is_hero)')
-      .eq('id', id)
+      .ilike('id', id)
       .single();
     if (error || !data) throw new Error('Not found');
     prop = data;

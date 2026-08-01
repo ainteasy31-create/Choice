@@ -144,35 +144,35 @@ export async function onRequestGet({ env, params, request }) {
   const slug = params.slug || '';
   const match = slug.match(ID_RE);
   if (!match) return notFound();
-  // Keep both cases: DB ids are stored uppercase (PROP-XXXXXXXX); URLs use lowercase.
-  const propertyIdRaw   = match[1];
-  const propertyIdUpper = propertyIdRaw.toUpperCase();
-  const propertyIdLower = propertyIdRaw.toLowerCase();
+  // Normalise to lowercase for the URL; use ilike for the DB lookup so both
+  // old lowercase IDs (prop-ajeh3ktf) and uppercase IDs (PROP-AC002CE4) match.
+  const propertyIdLower = match[1].toLowerCase();
 
-  // 2. Fetch property + photos in parallel
-  const [propRes, photosRes] = await Promise.all([
-    fetch(
-      `${SUPA}/rest/v1/properties?id=eq.${encodeURIComponent(propertyIdUpper)}` +
-        `&status=eq.active` +
-        `&select=id,title,description,address,city,state,zip,lat,lng,property_type,` +
-        `bedrooms,bathrooms,square_footage,monthly_rent,security_deposit,available_date,` +
-        `pets_allowed,year_built,created_at,updated_at`,
-      {
-        headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
-        cf: { cacheTtl: 60, cacheEverything: false },
-      }
-    ),
-    fetch(
-      `${SUPA}/rest/v1/property_photos?property_id=eq.${encodeURIComponent(propertyIdUpper)}` +
-        `&select=url,display_order&order=display_order.asc&limit=8`,
-      { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } }
-    ),
-  ]);
+  // 2. Fetch property first (ilike = case-insensitive eq with no wildcards),
+  //    then fetch photos using the exact id returned by the DB.
+  const propRes = await fetch(
+    `${SUPA}/rest/v1/properties?id=ilike.${encodeURIComponent(propertyIdLower)}` +
+      `&status=eq.active` +
+      `&select=id,title,description,address,city,state,zip,lat,lng,property_type,` +
+      `bedrooms,bathrooms,square_footage,monthly_rent,security_deposit,available_date,` +
+      `pets_allowed,year_built,created_at,updated_at`,
+    {
+      headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
+      cf: { cacheTtl: 60, cacheEverything: false },
+    }
+  );
 
   if (!propRes.ok) return notFound('Property lookup failed');
   const propArr = await propRes.json();
   if (!Array.isArray(propArr) || propArr.length === 0) return notFound();
   const p = propArr[0];
+
+  // Use the exact id from the DB row so the FK lookup always matches.
+  const photosRes = await fetch(
+    `${SUPA}/rest/v1/property_photos?property_id=eq.${encodeURIComponent(p.id)}` +
+      `&select=url,display_order&order=display_order.asc&limit=8`,
+    { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } }
+  );
   const photos = photosRes.ok ? await photosRes.json() : [];
 
   // 3. Canonical URL — always trailing slash, lower-cased state.
