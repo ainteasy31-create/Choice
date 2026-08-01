@@ -144,12 +144,15 @@ export async function onRequestGet({ env, params, request }) {
   const slug = params.slug || '';
   const match = slug.match(ID_RE);
   if (!match) return notFound();
-  const propertyId = match[1].toLowerCase();
+  // Keep both cases: DB ids are stored uppercase (PROP-XXXXXXXX); URLs use lowercase.
+  const propertyIdRaw   = match[1];
+  const propertyIdUpper = propertyIdRaw.toUpperCase();
+  const propertyIdLower = propertyIdRaw.toLowerCase();
 
   // 2. Fetch property + photos in parallel
   const [propRes, photosRes] = await Promise.all([
     fetch(
-      `${SUPA}/rest/v1/properties?id=eq.${encodeURIComponent(propertyId)}` +
+      `${SUPA}/rest/v1/properties?id=eq.${encodeURIComponent(propertyIdUpper)}` +
         `&status=eq.active` +
         `&select=id,title,description,address,city,state,zip,lat,lng,property_type,` +
         `bedrooms,bathrooms,square_footage,monthly_rent,security_deposit,available_date,` +
@@ -160,7 +163,7 @@ export async function onRequestGet({ env, params, request }) {
       }
     ),
     fetch(
-      `${SUPA}/rest/v1/property_photos?property_id=eq.${encodeURIComponent(propertyId)}` +
+      `${SUPA}/rest/v1/property_photos?property_id=eq.${encodeURIComponent(propertyIdUpper)}` +
         `&select=url,display_order&order=display_order.asc&limit=8`,
       { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } }
     ),
@@ -181,7 +184,7 @@ export async function onRequestGet({ env, params, request }) {
   const canonicalPath =
     `/rent/${(p.state || '').toLowerCase().slice(0, 2)}` +
     `/${slugSeg(p.city) || 'us'}` +
-    `/${beds}-${slugSeg(p.property_type) || 'home'}-${propertyId.toLowerCase()}/`;
+    `/${beds}-${slugSeg(p.property_type) || 'home'}-${propertyIdLower}/`;
   const canonicalUrl = `${SITE}${canonicalPath}`;
 
   // If the user landed on a non-canonical version of the slug, 301 to canonical.
@@ -275,7 +278,7 @@ export async function onRequestGet({ env, params, request }) {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400',
-      'cache-tag': `property:${propertyId.toLowerCase()}`,
+      'cache-tag': `property:${propertyIdLower}`,
     },
   });
 }

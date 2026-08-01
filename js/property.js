@@ -54,7 +54,9 @@ function resolvePropertyId() {
   const fromQuery = (params.get('id') || '').trim();
   if (fromQuery) return fromQuery;
   const m = window.location.pathname.match(/(prop-[a-z0-9]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
-  return m ? m[1].toLowerCase() : '';
+  // DB stores ids uppercase (PROP-XXXXXXXX); always normalise to upper so
+  // the Supabase eq() filter matches regardless of URL casing.
+  return m ? m[1].toUpperCase() : '';
 }
 const propertyId = resolvePropertyId();
 
