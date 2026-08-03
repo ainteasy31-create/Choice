@@ -3035,10 +3035,10 @@ body[data-portal="public"][data-page="property"] #detailPrice span {
   font-size: 16px; font-weight: 400; color: var(--m-muted-2); letter-spacing: 0;
 }
 body[data-portal="public"][data-page="property"] .prop-title {
-  font-family: 'Fraunces', serif;
-  font-size: 26px; font-weight: 600;
+  font-family: var(--m-font-base);
+  font-size: 26px; font-weight: 700;
   color: var(--m-ink); line-height: 1.2;
-  margin: 0 0 8px; letter-spacing: -.01em;
+  margin: 0 0 8px; letter-spacing: -.02em;
 }
 body[data-portal="public"][data-page="property"] .prop-address {
   font-size: 13.5px; color: var(--m-muted-2);
@@ -3708,7 +3708,7 @@ body[data-portal="public"] .mobile-cta-bar .mcta-ghost {
   --mv2-overlay-ink:    rgba(10, 23, 41, 0.72);  /* hero photo overlay */
 
   /* ── Typography tokens ─────────────────────────────────────────── */
-  --mv2-font-display:   'Fraunces', 'Georgia', 'Times New Roman', serif;
+  --mv2-font-display:   var(--mv2-font-body);
   --mv2-font-body:      'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --mv2-fs-eyebrow:     0.78rem;
   --mv2-fs-body:        clamp(1rem, 0.95rem + 0.2vw, 1.0625rem);   /* 16 → 17 px */
@@ -6193,9 +6193,9 @@ body[data-portal="public"][data-page="home"] .mv2-msearch-sheet__header {
   padding: 0 4px 14px;
 }
 body[data-portal="public"][data-page="home"] .mv2-msearch-sheet__title {
-  font-family: "Fraunces", "Inter", serif;
+  font-family: var(--mv2-font-body);
   font-style: normal;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 1.35rem;
   color: var(--mv2-ink, #1f2937);
   margin: 0;
@@ -6476,13 +6476,12 @@ body:has(#mobile-cta) .cp-saved-nudge {
    ║  eyebrows toward an "editorial / architectural" register.           ║
    ╚══════════════════════════════════════════════════════════════════════╝ */
 
-/* ── Display headlines: real Fraunces with proper optical sizing ──── */
+/* ── Display headlines: Inter with tight tracking ─────────────────── */
 body[data-portal="public"][data-page="home"] .mv2-headline,
 body[data-portal="public"][data-page="home"] .featured-title,
 body[data-portal="public"][data-page="home"] h2.mv2-headline--md {
-  font-family: 'Fraunces', 'Georgia', 'Times New Roman', serif;
-  font-optical-sizing: auto;
-  font-variation-settings: 'opsz' 96, 'SOFT' 50;
+  font-family: var(--mv2-font-body);
+  font-weight: 700;
   letter-spacing: -0.022em;
   line-height: 1.05;
   text-wrap: balance;
@@ -6490,8 +6489,7 @@ body[data-portal="public"][data-page="home"] h2.mv2-headline--md {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* The featured section headline was Inter 800 — promote to Fraunces 500
-   to unify the editorial voice. Slightly larger to earn the lighter weight. */
+/* Featured section headline — slightly larger for visual hierarchy. */
 body[data-portal="public"][data-page="home"] .featured-title {
   font-weight: 500;
   font-size: clamp(28px, 3.2vw, 44px);
@@ -6499,18 +6497,13 @@ body[data-portal="public"][data-page="home"] .featured-title {
   margin-bottom: 6px;
 }
 
-/* Gold accent words in home headlines — bold Fraunces + gold underline. */
+/* Gold accent words in home headlines — bold Inter + gold color. */
 body[data-portal="public"][data-page="home"] .mv2-headline em,
 body[data-portal="public"][data-page="home"] .featured-title em {
   font-style: normal;
-  font-weight: 700;
-  font-variation-settings: 'opsz' 96, 'SOFT' 50, 'WONK' 0;
+  font-weight: 800;
   letter-spacing: -0.015em;
   color: var(--mv2-gold);
-  text-decoration: underline;
-  text-decoration-color: rgba(212, 160, 23, 0.40);
-  text-underline-offset: 5px;
-  text-decoration-thickness: 2px;
 }
 
 /* ── Eyebrows: more tracking + slightly heavier; signals "editorial" ── */

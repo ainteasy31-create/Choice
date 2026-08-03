@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="/css/cp-design.css?v=1784145767610">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <style>
     /* ── mv2 boutique tokens (inlined to keep 404 self-contained) ── */
     :root {
@@ -24,7 +24,7 @@
       --mv2-hairline: rgba(26, 26, 26, 0.10);
       --mv2-gold: #d4a017;
       --mv2-brand-dark: #006AFF;
-      --mv2-display: 'Fraunces', 'Georgia', 'Times New Roman', serif;
+      --mv2-display: var(--mv2-body);
       --mv2-body: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
@@ -68,9 +68,9 @@
       margin-bottom: clamp(40px, 6vw, 64px);
       color: var(--mv2-ink);
       text-decoration: none;
-      font-family: var(--mv2-display);
-      font-style: italic;
-      font-weight: 500;
+      font-family: var(--mv2-body);
+      font-style: normal;
+      font-weight: 700;
       font-size: 1.15rem;
       letter-spacing: -0.005em;
       transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -92,9 +92,9 @@
 
     /* ── 404 numerals: huge italic Fraunces with gold-tinted stroke ── */
     .nf-code {
-      font-family: var(--mv2-display);
-      font-style: italic;
-      font-weight: 400;
+      font-family: var(--mv2-body);
+      font-style: normal;
+      font-weight: 800;
       font-size: clamp(96px, 18vw, 180px);
       line-height: 0.95;
       letter-spacing: -0.04em;
@@ -108,9 +108,9 @@
 
     /* ── Title: Fraunces with italic emphasis on 'lost' ── */
     .nf-title {
-      font-family: var(--mv2-display);
+      font-family: var(--mv2-body);
       font-style: normal;
-      font-weight: 400;
+      font-weight: 700;
       font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2.1rem);
       line-height: 1.2;
       letter-spacing: -0.01em;
@@ -119,9 +119,9 @@
       text-wrap: balance;
     }
     .nf-title em {
-      font-style: italic;
-      background: linear-gradient(180deg, transparent 65%, rgba(212, 160, 23, 0.20) 65%);
-      padding: 0 0.05em;
+      font-style: normal;
+      font-weight: 800;
+      color: var(--mv2-gold);
     }
 
     /* ── Subtitle ── */
