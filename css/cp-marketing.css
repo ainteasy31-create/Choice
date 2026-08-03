@@ -42,7 +42,7 @@
   --m-r-xl: 16px;
   --m-r-2xl: 22px;
   --m-r-full: 999px;
-  --m-font-display: 'Fraunces', 'Georgia', 'Times New Roman', serif;
+  --m-font-display: var(--m-font-base);
   --m-s-1: 4px;
   --m-s-2: 8px;
   --m-s-3: 12px;
@@ -886,14 +886,9 @@ body[data-portal="public"] .hero-title {
 }
 body[data-portal="public"] .hero-headline em,
 body[data-portal="public"] .hero-title em {
-  font-family: var(--m-font-display);
-  font-style: normal; font-weight: 700;
+  font-style: normal; font-weight: 800;
   color: #f4d27a;
   letter-spacing: -0.015em;
-  text-decoration: underline;
-  text-decoration-color: rgba(244, 210, 122, 0.45);
-  text-underline-offset: 5px;
-  text-decoration-thickness: 2px;
 }
 body[data-portal="public"] .hero-title .line-indent { display: block; padding-left: clamp(16px, 3vw, 60px); }
 body[data-portal="public"] .hero-sub,
@@ -3124,12 +3119,11 @@ body[data-portal="public"][data-page="property"] .prop-section-eyebrow {
   text-transform: uppercase; color: #006aff; margin-bottom: 6px;
 }
 body[data-portal="public"][data-page="property"] .prop-section-head {
-  font-family: 'Fraunces', serif;
-  font-size: 20px; font-weight: 600; color: var(--m-ink);
-  margin-bottom: 14px; line-height: 1.25;
+  font-size: 18px; font-weight: 700; color: var(--m-ink);
+  margin-bottom: 14px; line-height: 1.25; letter-spacing: -0.02em;
 }
 body[data-portal="public"][data-page="property"] .prop-section-head em {
-  font-style: italic; color: #006aff;
+  font-style: normal; font-weight: 800; color: #006aff;
 }
 
 /* ── Description ── */
