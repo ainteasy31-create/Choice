@@ -589,6 +589,9 @@ class PipelineOrchestrator:
             if uploaded >= MIN_PHOTOS:
                 self._log("      OK {}/{} photos on ImageKit".format(
                     uploaded, uploaded + failed))
+                # Clean up the temporary PP- pipeline folder now that photos
+                # have been successfully copied to the final /properties/<uuid> folder.
+                self._cleanup_ik_pipeline_folder(pid)
             else:
                 self._log("      WARNING: only {} photos uploaded (min {})".format(
                     uploaded, MIN_PHOTOS))
@@ -1067,6 +1070,43 @@ class PipelineOrchestrator:
         except Exception as e:
             self._log("   WARNING: _cleanup_staged failed for {}: {}".format(
                 pipeline_id, str(e)[:80]))
+
+    def _cleanup_ik_pipeline_folder(self, pipeline_id: str) -> None:
+        """
+        Delete the temporary /properties/<PP-XXXXXXXX> folder from ImageKit after
+        a listing has been successfully published and its photos re-uploaded to the
+        final /properties/<uuid> folder.
+
+        This prevents orphaned PP-* folders from accumulating in ImageKit storage.
+        Best-effort: logs a warning on failure but never raises.
+        """
+        if not pipeline_id or not self._ik_auth:
+            return
+        folder_path = "/properties/{}".format(pipeline_id)
+        try:
+            import json as _json
+            body = _json.dumps({"folderPath": folder_path}).encode()
+            import urllib.request as _urllib_req
+            req = _urllib_req.Request(
+                "https://api.imagekit.io/v1/folder",
+                data=body,
+                method="DELETE",
+                headers={
+                    "Authorization": self._ik_auth,
+                    "Content-Type": "application/json",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            with _urllib_req.urlopen(req, timeout=15) as r:
+                status = r.status
+            if status not in (200, 204, 404):
+                self._log("      WARNING: IK folder cleanup {} returned HTTP {}".format(
+                    folder_path, status))
+            else:
+                self._log("      IK pipeline folder cleaned up: {}".format(folder_path))
+        except Exception as e:
+            self._log("      WARNING: IK folder cleanup failed for {}: {}".format(
+                folder_path, str(e)[:80]))
 
     def _fetch_property_row(self, prop_id: str) -> Optional[Dict]:
         if not self._pub_session:
