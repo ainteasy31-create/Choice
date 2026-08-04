@@ -182,9 +182,68 @@ try {
 }
 
 // ── 3. Extract all listing data from __NEXT_DATA__ ────────────────────────────
+// Wait longer by default and expose JSON-script inspection to handle
+// Zillow hydration delays and alternate JSON embeddings.
+async function waitForListingPage(wv, maxAttempts) {
+  const attempts = typeof maxAttempts === 'number' ? maxAttempts : 12;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const stateRaw = await wv.evaluateJavaScript(`
+      (function() {
+        try {
+          return JSON.stringify({
+            readyState: document.readyState,
+            href: location.href,
+            hasNextDataElement: !!document.getElementById('__NEXT_DATA__'),
+            hasNextDataWindow: typeof window.__NEXT_DATA__ !== 'undefined',
+            jsonScripts: Array.from(document.querySelectorAll('script[type="application/json"]')).map(function(el){ return { id: el.id || null, len: (el.textContent || '').length }; }).filter(Boolean),
+            sampleJson: (function(){
+              try {
+                var s = document.querySelector('script[type="application/json"]');
+                return s ? String(s.textContent).slice(0,600) : null;
+              } catch(e) { return null; }
+            })()
+          });
+        } catch (e) {
+          return JSON.stringify({ error: String(e.message) });
+        }
+      })()
+    `);
+
+    let state = null;
+    try { state = JSON.parse(stateRaw); } catch (_) {}
+    if (state && !state.error && (
+      state.hasNextDataElement || state.hasNextDataWindow ||
+      (state.href || '').includes('/homedetails/')
+    )) {
+      return state;
+    }
+
+    if (attempt < attempts - 1) {
+      await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+    }
+  }
+  return null;
+}
+
 const extractionCode = `
 (function() {
   try {
+    // Helper: try parse any JSON script nodes and return the first one
+    function scanJsonScriptsForNextData() {
+      try {
+        var scripts = Array.from(document.querySelectorAll('script[type="application/json"]'));
+        for (var i = 0; i < scripts.length; i++) {
+          var txt = scripts[i].textContent;
+          if (!txt || txt.length < 10) continue;
+          try {
+            var candidate = JSON.parse(txt);
+            if (candidate) return candidate;
+          } catch (e) { /* ignore */ }
+        }
+      } catch (e) { /* ignore */ }
+      return null;
+    }
+
     function getNextData(source) {
       if (!source) return null;
       if (typeof source.getElementById === 'function') {
@@ -357,6 +416,9 @@ const extractionCode = `
 
     function extractZillow(doc, url) {
       var nd = getNextData(doc);
+      // Fallback: try window.__NEXT_DATA__ or scan JSON scripts
+      if (!nd && typeof window !== 'undefined' && typeof window.__NEXT_DATA__ !== 'undefined') nd = window.__NEXT_DATA__;
+      if (!nd) nd = scanJsonScriptsForNextData();
       if (!nd) return null;
       var prop = null;
       var cachePaths = [
@@ -508,12 +570,28 @@ async function showAlert(title, message) {
   await a.present();
 }
 
-let raw;
-try {
-  raw = await wv.evaluateJavaScript(extractionCode);
-} catch (evalErr) {
-  await showAlert('Script Error', 'JavaScript extraction failed:\n' + evalErr.message
-    + '\n\nMake sure you are on a Zillow DETAIL page (with a full address), not a search results page.');
+await waitForListingPage(wv, 3);
+
+let raw = null;
+let lastEvalErr = null;
+for (let attempt = 0; attempt < 3; attempt++) {
+  try {
+    raw = await wv.evaluateJavaScript(extractionCode);
+    if (raw && raw !== 'null' && raw !== 'undefined' && String(raw).trim() !== '') {
+      break;
+    }
+  } catch (evalErr) {
+    lastEvalErr = evalErr;
+  }
+
+  if (attempt < 2) {
+    await new Promise(function(resolve) { setTimeout(resolve, 1500); });
+  }
+}
+
+if (!raw || raw === 'null' || raw === 'undefined' || String(raw).trim() === '') {
+  const detail = lastEvalErr ? '\n\nJavaScript error: ' + lastEvalErr.message : '';
+  await showAlert('No Data Returned', 'The Zillow page loaded but did not return any listing data yet.' + detail + '\n\nThis usually means the page is still loading, was redirected, or you are on a search results page instead of a listing detail page.');
   Script.complete();
   return;
 }
