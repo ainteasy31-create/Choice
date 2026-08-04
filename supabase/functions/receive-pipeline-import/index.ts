@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
     pets_allowed:         safeBool(body.pets_allowed),
     pet_types_allowed:    safeStr(body.pet_types_allowed) ?? '[]',
     pet_weight_limit:     null,
-    pet_details:          null,
+    pet_details:          safeStr(body.pet_details),
     smoking_allowed:      safeBool(body.smoking_allowed),
 
     // Amenities & features
@@ -272,7 +272,7 @@ Deno.serve(async (req) => {
     amenities:            safeStr(body.amenities) ?? '[]',
     appliances:           safeStr(body.appliances) ?? '[]',
     utilities_included:   safeStr(body.utilities_included) ?? '[]',
-    flooring:             '[]',
+    flooring:             safeStr(body.flooring) ?? '[]',
     heating_type:         safeStr(body.heating_type),
     cooling_type:         safeStr(body.cooling_type),
     laundry_type:         safeStr(body.laundry_type),

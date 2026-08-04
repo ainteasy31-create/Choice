@@ -8,9 +8,7 @@
 (function () {
   'use strict';
 
-  const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
-  const SECRET   = 'cp_import_7Kx3m9P2w5';
-  const BTN_ID   = 'cp-save-btn';
+  const BTN_ID = 'cp-save-btn';
 
   // ── Base inline styles ────────────────────────────────────────────────────
   const BASE_STYLES = {
@@ -265,36 +263,24 @@
     // Download to PC first (best-effort; pipeline is primary)
     if (settings.downloadToPC) {
       try {
-        await downloadToPC(payload);
+        await chrome.runtime.sendMessage({ type: 'DOWNLOAD_PAYLOAD', payload });
       } catch (err) {
-        console.warn('[CP] download-to-PC failed:', err);
+        console.warn('[CP] download request error:', err);
       }
     }
 
-    // POST to edge function
+    // POST to edge function via the background service worker.
     let resp;
     try {
-      const res = await fetch(EDGE_URL, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'x-import-secret': SECRET },
-        body:    JSON.stringify(payload),
+      const uploadResp = await chrome.runtime.sendMessage({
+        type: 'UPLOAD_PAYLOAD',
+        payload,
+        settings,
       });
-      resp = await res.json();
+      resp = uploadResp || {};
     } catch (netErr) {
-      // Offline queue fallback
-      if (settings.offlineQueue) {
-        try {
-          await queuePayload(payload);
-          setSuccess(btn, 'Queued offline — will sync');
-          chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
-          return;
-        } catch (qErr) {
-          console.error('[CP] queue failed:', qErr);
-        }
-      }
-      setError(btn, 'Network error — try again');
-      console.error('[CP] network error:', netErr);
-      return;
+      console.error('[CP] upload request failed:', netErr);
+      resp = { ok: false, error: 'Network error' };
     }
 
     if (resp && resp.ok) {
@@ -306,60 +292,14 @@
     } else if (resp && resp.duplicate) {
       setDuplicate(btn);
 
+    } else if (resp && resp.queued) {
+      setSuccess(btn, 'Queued offline — will sync');
+      chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
+
     } else {
       const msg = (resp && resp.error) ? resp.error.slice(0, 38) : 'Server error';
       setError(btn, 'Failed: ' + msg);
     }
-  }
-
-  // ── Download to PC ────────────────────────────────────────────────────────
-
-  async function downloadToPC(payload) {
-    const id = payload.source_listing_id || String(Date.now());
-    const folder = `ChoiceImports/${id}`;
-
-    // 1. JSON payload
-    const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const jsonUrl = URL.createObjectURL(jsonBlob);
-    await chrome.downloads.download({
-      url: jsonUrl,
-      filename: `${folder}/listing.json`,
-      saveAs: false,
-    });
-    setTimeout(() => URL.revokeObjectURL(jsonUrl), 60000);
-
-    // 2. Photos (best-effort, sequential to avoid hammering the CDN)
-    let photos = [];
-    try { photos = JSON.parse(payload.original_image_urls || '[]'); } catch (_) {}
-    for (let i = 0; i < Math.min(photos.length, 50); i++) {
-      try {
-        const res = await fetch(photos[i]);
-        if (!res.ok) continue;
-        const blob = await res.blob();
-        const ext = (blob.type === 'image/png') ? 'png' : 'jpg';
-        const url = URL.createObjectURL(blob);
-        await chrome.downloads.download({
-          url,
-          filename: `${folder}/photos/photo-${String(i + 1).padStart(2, '0')}.${ext}`,
-          saveAs: false,
-        });
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-      } catch (err) {
-        console.warn('[CP] photo download failed:', photos[i], err);
-      }
-    }
-  }
-
-  // ── Offline queue ─────────────────────────────────────────────────────────
-
-  async function queuePayload(payload) {
-    const data = await chrome.storage.local.get({ cp_queue: [] });
-    const queue = data.cp_queue || [];
-    const exists = queue.some(q => q.source === payload.source && q.source_listing_id === payload.source_listing_id);
-    if (exists) return;
-    queue.push(Object.assign({}, payload, { _queued_at: Date.now() }));
-    await chrome.storage.local.set({ cp_queue: queue });
-    chrome.runtime.sendMessage({ type: 'QUEUE_UPDATED' }).catch(() => {});
   }
 
 })();
