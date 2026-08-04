@@ -4,8 +4,11 @@
 // and updates the extension badge.
 // ============================================================
 
-const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
-const SECRET   = 'cp_import_7Kx3m9P2w5';
+// Load project config (credentials & endpoints — see config.js)
+importScripts('config.js');
+
+const EDGE_URL = CP_CONFIG.EDGE_URL;
+const SECRET   = CP_CONFIG.IMPORT_SECRET;
 const ALARM_NAME = 'flushQueue';
 const MAX_QUEUE_ITEMS = 75;
 

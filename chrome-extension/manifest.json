@@ -25,7 +25,7 @@
         "https://www.apartments.com/*",
         "https://www.redfin.com/*"
       ],
-      "js": ["shared-extractors.js", "content.js"],
+      "js": ["config.js", "shared-extractors.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

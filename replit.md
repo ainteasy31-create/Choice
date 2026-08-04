@@ -1,65 +1,56 @@
-# Choice Properties — Replit Workspace
+# Import to Choice Properties — Chrome Extension
 
-## Project Overview
+One-click listing importer for Zillow, Realtor.com, Apartments.com, and Redfin.  
+Sends listing data (all fields + photos) directly to the Choice Properties pipeline.
 
-Choice Properties is a **pure static frontend** (HTML/CSS/JS) for a rental property marketplace. There is no Node.js/Python application server in this repo — all server-side logic runs on external hosted platforms.
+## Stack
 
-**Stack:**
-- **Frontend:** Static HTML + CSS + vanilla JS (no build step for the site itself)
-- **Database/API:** Supabase (PostgreSQL + Edge Functions) — project ref `tlfmwetmhthpyrytrcfo`
-- **CDN (photos):** ImageKit.io — endpoint `https://ik.imagekit.io/21rg7lvzo`
-- **Deployment target:** Cloudflare Pages (auto-deploys on `git push origin main`)
-- **Email relay:** Google Apps Script (`GAS-EMAIL-RELAY.gs`)
-- **Address autocomplete:** Geoapify (optional — disabled if key not set)
+- Pure Chrome Extension (Manifest V3) — no build step, no server
+- Supabase Edge Function (`receive-pipeline-import`) receives imports
+- ImageKit stores listing photos
+- `chrome.storage.local` for offline queue; `chrome.storage.session` for session count
 
-## How to Run Locally (Replit Preview)
+## Project Structure
 
-The workflow `Start application` runs `node _dev_preview.js` on port 5000.
-
-Before the server starts, `config.js` must be generated:
-
-```bash
-SUPABASE_URL="$SUPABASE_URL" \
-SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-IMAGEKIT_URL="$IMAGEKIT_URL" \
-IMAGEKIT_PUBLIC_KEY="$IMAGEKIT_PUBLIC_KEY" \
-SITE_URL="$SITE_URL" \
-node generate-config.js
+```
+chrome-extension/
+  config.js           ← ALL credentials & endpoints live here (committed to git)
+  manifest.json       ← Extension config — loads config.js first
+  background.js       ← Service worker: posts to Edge Function, manages queue & badge
+  content.js          ← Injected on listing pages: extracts data, renders Save button
+  shared-extractors.js← Per-site extraction logic (Zillow, Realtor, Apartments, Redfin)
+  content.css         ← Floating button styles
+  popup.html/js       ← Toolbar popup: session count, queue status, settings
+  generate-icons.js   ← One-time icon generator (Node.js, no deps)
+  icons/              ← Generated PNG icons (16/32/48/128px)
+CREDENTIALS.md        ← Full credential inventory + rotation guide
 ```
 
-`config.js` and `_dev_preview.js` are gitignored — they exist only in Replit, never pushed to GitHub.
+## Credentials
 
-## Deployment
+All extension credentials are in `chrome-extension/config.js` — committed and ready.  
+No setup required for anyone cloning or importing the repo.
 
-Push to `main` → GitHub CI validates → Cloudflare Pages builds (runs `node generate-config.js`) and deploys automatically. Production URL: `https://choice-properties-site.pages.dev`
+The **Supabase service role key** lives in Replit Secrets (`SUPABASE_SERVICE_ROLE_KEY`) — 
+server-side only, never in extension code.
 
-## Environment Variables (all set in Replit shared env)
+See `CREDENTIALS.md` for the full inventory, where to find each key, and how to rotate.
 
-| Variable | Purpose |
-|---|---|
-| `SUPABASE_URL` | Supabase project REST URL |
-| `SUPABASE_ANON_KEY` | Supabase key used by browser client |
-| `SUPABASE_SERVICE_ROLE_KEY` | Full-access key for admin/scraping tasks |
-| `IMAGEKIT_URL` | ImageKit CDN endpoint |
-| `IMAGEKIT_PUBLIC_KEY` | ImageKit public key |
-| `IMAGEKIT_PRIVATE_KEY` | ImageKit private key (for uploads) |
-| `IMAGEKIT_ID` | ImageKit account ID |
-| `SITE_URL` | Canonical production URL (for sitemap/robots) |
+## Loading the Extension (Developer)
 
-## Key Files
+```bash
+# One-time: generate icons
+cd chrome-extension && node generate-icons.js
 
-| File | Purpose |
-|---|---|
-| `generate-config.js` | Build script — generates `config.js` from env vars |
-| `_dev_preview.js` | Local static file server (Replit only, gitignored) |
-| `config.js` | Generated config injected into every page (gitignored) |
-| `js/cp-api.js` | Shared Supabase + API client used by all pages |
-| `js/components.js` | Shared nav/footer injected at build time |
-| `ARCHITECTURE.md` | Full system architecture reference |
-| `SETUP.md` | Guide for standing up a fresh Supabase/Cloudflare project |
-| `MIGRATION.md` | Database schema migrations |
+# Then load in Chrome:
+# chrome://extensions → Enable Developer mode → Load unpacked → select chrome-extension/
+```
+
+To update after code changes: click ↺ refresh on the extension card in `chrome://extensions`.
 
 ## User Preferences
 
-- Automate everything — do not ask to provide values that are already available in the environment or conversation.
-- Use the provided credentials directly; do not prompt for re-entry.
+- Keep all credentials in `chrome-extension/config.js` — never scattered across files
+- Service role key and ImageKit private key are server-side only (Replit Secrets / Edge Function env)
+- Do not introduce a build step unless explicitly requested
+- Maintain existing MV3 structure and per-file organization
