@@ -1,1 +1,1 @@
-{"version":"3.4","updated":"2026-08-04","changelog":"Fixed: Safari web page objects now correctly extract the URL when passed from the iOS Shortcut — no more paste prompt."}
+{"version":"3.5","updated":"2026-08-04","changelog":"Fixed: 'Get URLs from Input' array is now correctly unwrapped — no more Shortcut Setup Needed alert when using the recommended Shortcut layout."}
