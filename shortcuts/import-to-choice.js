@@ -21,7 +21,7 @@
 // you to tap Run once more — no manual reinstall ever needed.
 // ============================================================
 
-const VERSION      = '3.2';
+const VERSION      = '3.3';
 const VERSION_URL  = 'https://choice-properties-site.pages.dev/shortcuts/version.json';
 const SCRIPT_URL   = 'https://choice-properties-site.pages.dev/shortcuts/import-to-choice.js';
 const EDGE_URL     = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
@@ -95,15 +95,25 @@ if (!sharedUrl) {
 }
 
 if (!sharedUrl) {
-  const prompt = new Alert();
-  prompt.title   = 'Paste Zillow URL';
-  prompt.message = 'Copy the URL from the Safari address bar, then paste it below.';
-  prompt.addTextField('https://www.zillow.com/homedetails/...');
-  prompt.addAction('Import');
-  prompt.addCancelAction('Cancel');
-  const choice = await prompt.present();
+  // ── Shortcut misconfiguration detected ───────────────────────────────────
+  // The script received no URL from any source.  This almost always means the
+  // iOS Shortcut is not configured to pass the webpage URL to Scriptable.
+  // Show a diagnostic alert first, then fall back to the manual-paste prompt.
+  const fixAlert = new Alert();
+  fixAlert.title   = '⚙️ Shortcut Setup Needed';
+  fixAlert.message = 'The Shortcut did not pass the page URL to this script.\n\n'
+    + 'FIX (takes 60 seconds):\n'
+    + '1. Open the Shortcuts app\n'
+    + '2. Open the "Import to Choice" shortcut\n'
+    + '3. In the "Run Script" action → set Parameter to "Shortcut Input"\n'
+    + '4. Tap ⓘ on the shortcut → Share Sheet Types → Safari web pages ✓\n\n'
+    + 'Or paste the URL below to import right now:';
+  fixAlert.addTextField('https://www.zillow.com/homedetails/...');
+  fixAlert.addAction('Import');
+  fixAlert.addCancelAction('Cancel');
+  const choice = await fixAlert.present();
   if (choice === -1) { Script.complete(); return; }
-  sharedUrl = prompt.textFieldValue(0).trim();
+  sharedUrl = fixAlert.textFieldValue(0).trim();
 }
 
 if (!sharedUrl || !sharedUrl.startsWith('http')) {
