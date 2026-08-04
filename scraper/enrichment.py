@@ -1067,6 +1067,31 @@ def rule_based_enrich(record):
     No network calls.  Modifies record in-place; returns record.
     """
 
+    def _normalize_text(value):
+        if not value:
+            return ""
+        if isinstance(value, str):
+            return value.strip()
+        return str(value).strip()
+
+    def _normalize_amenity_tags(amenities_raw):
+        try:
+            alist = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+        except Exception:
+            alist = []
+        tags = []
+        seen = set()
+        for item in alist:
+            s = str(item).strip()
+            if not s:
+                continue
+            lowered = s.lower()
+            if lowered in seen:
+                continue
+            tags.append(s)
+            seen.add(lowered)
+        return tags
+
     # 1. Auto-title with key feature
     if not record.get("title"):
         beds = record.get("bedrooms")
@@ -1082,17 +1107,15 @@ def rule_based_enrich(record):
     if title and re.match(r"^\d+BR\s+\w+\s+in\s+\w+", title):
         feature = None
         amenities_raw = record.get("amenities") or "[]"
-        try:
-            alist = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
-        except Exception:
-            alist = []
-        atags = " ".join(str(a).lower() for a in alist)
+        atags = " ".join(str(a).lower() for a in _normalize_amenity_tags(amenities_raw))
         if re.search(r"garage|garage_\d", atags):
             feature = "w/ Garage"
         elif re.search(r"pool|swimming", atags):
             feature = "w/ Pool"
         elif re.search(r"fenced_yard|big_yard", atags):
             feature = "w/ Yard"
+        elif re.search(r"pet|pets", atags):
+            feature = "w/ Pets"
         if feature:
             record["title"] = title + " " + feature
 
@@ -1146,6 +1169,19 @@ def rule_based_enrich(record):
     if inferred_parking and not record.get("parking"):
         record["parking"] = inferred_parking
 
+    # 7b. Add a more explicit parking inference for amenity tags even when the
+    # description is sparse or absent.
+    if not record.get("parking"):
+        amenities_raw = record.get("amenities") or "[]"
+        tags = [str(tag).lower() for tag in _normalize_amenity_tags(amenities_raw)]
+        if any("garage" in tag for tag in tags):
+            if any("garage_2" in tag or "2_car_garage" in tag for tag in tags):
+                record["parking"] = "2-car garage"
+            elif any("garage_1" in tag or "1_car_garage" in tag for tag in tags):
+                record["parking"] = "1-car garage"
+            else:
+                record["parking"] = "Garage"
+
     # 8. Normalize amenities: strip raw MLS label prefixes, keep clean tags
     amenities_raw = record.get("amenities") or "[]"
     try:
@@ -1171,6 +1207,40 @@ def rule_based_enrich(record):
             seen_a.add(cleaned.lower())
     if clean_amenities:
         record["amenities"] = json.dumps(clean_amenities)
+
+    # 9. Create a richer fallback description when the source description is empty.
+    if not _normalize_text(record.get("description")):
+        parts = []
+        if record.get("bedrooms") not in (None, ""):
+            beds = record.get("bedrooms")
+            parts.append(f"{beds if beds != 0 else 'Studio'} bedroom" + ("s" if beds not in (0, 1) else ""))
+        if record.get("bathrooms") not in (None, ""):
+            baths = record.get("bathrooms")
+            parts.append(f"{baths} bathroom" + ("s" if baths != 1 else ""))
+        if record.get("monthly_rent") not in (None, ""):
+            parts.append(f"Rent ${int(record['monthly_rent']):,}/month")
+        city = _normalize_text(record.get("city"))
+        if city:
+            parts.append(f"located in {city}")
+        features = []
+        tags = [str(tag).lower() for tag in _normalize_amenity_tags(record.get("amenities") or "[]")]
+        if any("pool" in tag for tag in tags):
+            features.append("pool")
+        if any("pet" in tag for tag in tags):
+            features.append("pet-friendly")
+        if any("garage" in tag for tag in tags):
+            features.append("garage")
+        if any("washer" in tag or "dryer" in tag for tag in tags):
+            features.append("in-unit laundry")
+        if features:
+            parts.append("with " + ", ".join(features))
+        if not parts:
+            parts.append("A well-maintained rental opportunity")
+        record["description"] = (
+            f"This {record.get('property_type', 'rental').replace('_', ' ').title().lower()} offers a comfortable living space "
+            f"for renters seeking a convenient home. "
+            f"{' '.join(parts)}."
+        )
 
     return record
 

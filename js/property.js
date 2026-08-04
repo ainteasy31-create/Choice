@@ -498,7 +498,10 @@ function renderProperty(p) {
   const descEl = document.getElementById('detailDesc');
   const descText = p.description || 'No additional description provided.';
   const descParas = descText.split(/\n+/).map(s => s.trim()).filter(Boolean);
-  descEl.innerHTML = descParas.map(s => `<p>${s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('');
+  const bodyCopy = descParas.length
+    ? descParas.map(s => `<p>${s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('')
+    : `<p>${esc('This property is presented with a clear, application-first experience and a straightforward leasing process.')}</p>`;
+  descEl.innerHTML = bodyCopy;
   if (descText.length > 300) {
     descEl.classList.add('truncated');
     const rmBtn = document.createElement('button');
@@ -525,9 +528,15 @@ function renderProperty(p) {
 
   if (p.amenities?.length) {
     hasAmenities = true;
-    document.getElementById('amenitiesGrid').innerHTML = p.amenities
+    const amenityItems = p.amenities
       .filter(a => a && !/^(yes|no|true|false)$/i.test(a.trim()))
-      .map(a => `<div class="amenity-item"><i class="fas ${amenityIcon(a)} ${amenityIconColor(a)}"></i>${esc(amenityLabel(a))}</div>`).join('');
+      .slice(0, 12)
+      .map(a => `<div class="amenity-item"><i class="fas ${amenityIcon(a)} ${amenityIconColor(a)}"></i>${esc(amenityLabel(a))}</div>`);
+    if (amenityItems.length) {
+      document.getElementById('amenitiesGrid').innerHTML = amenityItems.join('');
+    } else {
+      document.getElementById('amenitiesGrid').innerHTML = '<div class="amenity-item"><i class="fas fa-info-circle"></i>Additional amenities will be listed here as they are confirmed.</div>';
+    }
   }
   if (p.appliances?.length) {
     hasAmenities = true;
@@ -559,11 +568,14 @@ function renderProperty(p) {
   if (p.utilities_included?.length) utilRows.push(...p.utilities_included.map(u =>
     `<div class="amenity-item"><i class="fas fa-bolt icon-amber"></i>${esc(u)} Included</div>`));
   if (p.parking) utilRows.push(`<div class="amenity-item"><i class="fas fa-car"></i>Parking: ${esc(p.parking)}</div>`);
-    if (p.laundry_type) utilRows.push(`<div class="amenity-item"><i class="fas fa-shirt"></i>Laundry: ${esc(p.laundry_type)}</div>`);
-    if (p.heating_type) utilRows.push(`<div class="amenity-item"><i class="fas fa-fire"></i>Heating: ${esc(p.heating_type)}</div>`);
-    if (p.cooling_type) utilRows.push(`<div class="amenity-item"><i class="fas fa-snowflake"></i>Cooling: ${esc(p.cooling_type)}</div>`);
-    if (p.garage_spaces) utilRows.push(`<div class="amenity-item"><i class="fas fa-car-side"></i>Parking Spaces: ${p.garage_spaces}</div>`);
-    if (p.parking_fee) utilRows.push(`<div class="amenity-item"><i class="fas fa-dollar-sign icon-amber"></i>Parking Fee: ${Number(p.parking_fee).toLocaleString()}/mo</div>`);
+  if (p.laundry_type) utilRows.push(`<div class="amenity-item"><i class="fas fa-shirt"></i>Laundry: ${esc(p.laundry_type)}</div>`);
+  if (p.heating_type) utilRows.push(`<div class="amenity-item"><i class="fas fa-fire"></i>Heating: ${esc(p.heating_type)}</div>`);
+  if (p.cooling_type) utilRows.push(`<div class="amenity-item"><i class="fas fa-snowflake"></i>Cooling: ${esc(p.cooling_type)}</div>`);
+  if (p.garage_spaces) utilRows.push(`<div class="amenity-item"><i class="fas fa-car-side"></i>Parking Spaces: ${p.garage_spaces}</div>`);
+  if (p.parking_fee) utilRows.push(`<div class="amenity-item"><i class="fas fa-dollar-sign icon-amber"></i>Parking Fee: ${Number(p.parking_fee).toLocaleString()}/mo</div>`);
+  if (!utilRows.length && (p.parking || p.laundry_type || p.heating_type || p.cooling_type)) {
+    utilRows.push(`<div class="amenity-item"><i class="fas fa-info-circle"></i>Additional utility details will appear here as the listing is confirmed.</div>`);
+  }
   if (utilRows.length) {
     hasUtilities = true;
     document.getElementById('utilitiesGrid').innerHTML = utilRows.join('');
@@ -573,6 +585,7 @@ function renderProperty(p) {
   if (p.lease_terms?.length) leaseItems.push(`<div class="amenity-item"><i class="fas fa-file-contract"></i>${p.lease_terms.map(esc).join(', ')}</div>`);
   if (p.minimum_lease_months) leaseItems.push(`<div class="amenity-item"><i class="fas fa-calendar-check"></i>Min. Lease: ${p.minimum_lease_months} month${p.minimum_lease_months !== 1 ? 's' : ''}</div>`);
   if (p.security_deposit) leaseItems.push(`<div class="amenity-item"><i class="fas fa-shield-alt"></i>Security Deposit: $${Number(p.security_deposit).toLocaleString()}</div>`);
+  if (!leaseItems.length && p.application_fee) leaseItems.push(`<div class="amenity-item"><i class="fas fa-receipt"></i>Application Fee: $${Number(p.application_fee).toLocaleString()}</div>`);
   if (p.last_months_rent) leaseItems.push(`<div class="amenity-item"><i class="fas fa-calendar-alt"></i>Last Month's Rent: $${Number(p.last_months_rent).toLocaleString()}</div>`);
   if (p.admin_fee) leaseItems.push(`<div class="amenity-item"><i class="fas fa-receipt"></i>Admin / Move-in Fee: $${Number(p.admin_fee).toLocaleString()}</div>`);
   if (p.move_in_special) leaseItems.push(`<div class="amenity-item" style="grid-column:1/-1"><i class="fas fa-tag icon-green"></i><span><strong>Move-in Special:</strong> ${esc(p.move_in_special)}</span></div>`);
