@@ -1,1 +1,1 @@
-{"version":"3.6","updated":"2026-08-04","changelog":"Fixed: Shortcut should pass 'Shortcut Input' directly — 'Get URLs from Input' returns empty on iOS 16+ for Safari pages. Also added more property fallbacks for Safari web page objects."}
+{"version":"3.7","updated":"2026-08-04","changelog":"Clipboard is now the primary URL delivery method. Rebuild your Shortcut: (1) Get Details of Safari Web Page → URL, (2) Copy to Clipboard, (3) Run Script with no parameter."}

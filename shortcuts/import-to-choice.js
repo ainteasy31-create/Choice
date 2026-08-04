@@ -21,7 +21,7 @@
 // you to tap Run once more — no manual reinstall ever needed.
 // ============================================================
 
-const VERSION      = '3.6';
+const VERSION      = '3.7';
 const VERSION_URL  = 'https://choice-properties-site.pages.dev/shortcuts/version.json';
 const SCRIPT_URL   = 'https://choice-properties-site.pages.dev/shortcuts/import-to-choice.js';
 const EDGE_URL     = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
@@ -117,28 +117,28 @@ if (!sharedUrl && args.plainTexts && args.plainTexts.length > 0 && args.plainTex
   sharedUrl = args.plainTexts[0].trim();
 }
 
-// Source D: Clipboard (reliable manual fallback — copy URL from Safari address bar)
+// Source D: Clipboard — primary delivery method for the recommended Shortcut setup.
+// The Shortcut copies the Zillow URL to clipboard before running this script,
+// so Pasteboard.paste() reliably returns it regardless of args.shortcutParameter quirks.
 if (!sharedUrl) {
   const clip = Pasteboard.paste();
-  if (clip && clip.trim().startsWith('http')) {
+  if (clip && typeof clip === 'string' && clip.trim().startsWith('http')) {
     sharedUrl = clip.trim();
   }
 }
 
 if (!sharedUrl) {
   // ── Shortcut misconfiguration detected ───────────────────────────────────
-  // The script received no URL from any source.  This almost always means the
-  // iOS Shortcut is not configured to pass the webpage URL to Scriptable.
-  // Show a diagnostic alert first, then fall back to the manual-paste prompt.
   const fixAlert = new Alert();
   fixAlert.title   = '⚙️ Shortcut Setup Needed';
-  fixAlert.message = 'The Shortcut did not pass the page URL to this script.\n\n'
-    + 'FIX (takes 60 seconds):\n'
-    + '1. Open the Shortcuts app\n'
-    + '2. Open the "Import to Choice" shortcut\n'
-    + '3. In the "Run Script" action → set Parameter to "Shortcut Input"\n'
-    + '4. Tap ⓘ on the shortcut → Share Sheet Types → Safari web pages ✓\n\n'
-    + 'Or paste the URL below to import right now:';
+  fixAlert.message = 'No URL was received. Rebuild the Shortcut exactly as follows:\n\n'
+    + '1. Open Shortcuts → open "Import to Choice"\n'
+    + '2. Delete all existing actions except "Receive input from Share Sheet"\n'
+    + '3. Add action: "Get Details of Safari Web Page" → set field to URL\n'
+    + '4. Add action: "Copy to Clipboard" → set input to the URL from step 3\n'
+    + '5. Add action: "Run Script" → Script: import-to-choice (Parameter: leave empty)\n'
+    + '6. Tap ⓘ → Share Sheet Types → Safari web pages ✓\n\n'
+    + 'Or paste the Zillow URL below to import right now:';
   fixAlert.addTextField('https://www.zillow.com/homedetails/...');
   fixAlert.addAction('Import');
   fixAlert.addCancelAction('Cancel');

@@ -48,27 +48,42 @@ Save any Zillow listing to your pipeline with one tap from Safari. Takes about 3
 
 ## Step 3 — Create the iOS Shortcut
 
-This is the part most people get wrong. Follow exactly:
+This is the part most people get wrong. Follow exactly — the Shortcut needs **4 actions** in this order:
 
 1. Open the **Shortcuts** app
 2. Tap **+** to create a new shortcut
-3. Tap **Add Action**
-4. Search for **Scriptable** (scroll down to apps or search)
-5. Tap **Run Script**
-6. In the "Run Script" action that appears:
-   - **Script** → tap "Choose" → select **import-to-choice**
-   - **Parameter** → tap the field → tap the blue **Shortcut Input** token (it must say "Shortcut Input", not a typed URL)
-   - Leave everything else as-is
-7. Tap the shortcut **name** at the very top of the screen → rename it:
+3. Tap **Add Action** and add these 4 actions in order:
+
+### Action 1 — Receive input
+- Search: **Receive**
+- Tap: **Receive [input] from Share Sheet**
+- Set input types to include: **Safari web pages** and **URLs**
+- "If there's no input" → **Continue**
+
+### Action 2 — Extract the URL
+- Tap **+** → search: **Get Details of Safari Web Page**
+- Tap it → set the detail field to **URL**
+- The input should be **Shortcut Input** (the magic variable from Action 1)
+
+### Action 3 — Copy URL to clipboard
+- Tap **+** → search: **Copy to Clipboard**
+- Set the input to the **Safari Web Page URL** magic variable from Action 2
+
+### Action 4 — Run the script
+- Tap **+** → search: **Scriptable** → tap **Run Script**
+- **Script** → select **import-to-choice**
+- Leave **Parameter**, **URLs**, **Images**, **Files** all empty
+
+4. Tap the shortcut **name** at the very top → rename it:
    ```
    Import to Choice
    ```
-8. Tap the **settings icon (ⓘ)** next to the name
-9. Scroll to **Add to Share Sheet** → toggle it **ON**
-10. Under **Share Sheet Types** → tap **+** and add:
-    - ✅ **Safari web pages**
-    - ✅ **URLs** (optional but helpful)
-11. Tap **Done** → tap **Done** again
+5. Tap the **settings icon (ⓘ)** next to the name
+6. Scroll to **Add to Share Sheet** → toggle it **ON**
+7. Under **Share Sheet Types** → make sure **Safari web pages** is listed
+8. Tap **Done** → tap **Done** again
+
+> **Why this works:** "Get Details of Safari Web Page → URL" correctly extracts the page URL from what Safari shares. Copying it to clipboard before running the script bypasses iOS type-conversion quirks — the script reads clipboard directly as its primary source.
 
 ---
 
@@ -91,10 +106,13 @@ This is the part most people get wrong. Follow exactly:
 ## Troubleshooting
 
 ### "Shortcut Setup Needed" alert appears
-The Shortcut is not passing the URL to the script. Fix:
-- Open Shortcuts → open "Import to Choice"
-- In the "Run Script" action, check the **Parameter** field
-- It must show the blue **Shortcut Input** token — if it's blank or shows typed text, tap it and select **Shortcut Input**
+The Shortcut is not correctly passing the URL. Rebuild it using the 4-action setup in Step 3:
+1. **Receive input from Share Sheet** (Safari web pages)
+2. **Get Details of Safari Web Page → URL**
+3. **Copy to Clipboard** (the URL from step 2)
+4. **Run Script → import-to-choice** (Parameter left empty)
+
+The script reads the URL from clipboard — no parameter wiring needed.
 
 ### "Import to Choice" doesn't appear in the Share Sheet
 - Open Shortcuts → open the shortcut → tap ⓘ
