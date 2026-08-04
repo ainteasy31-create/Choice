@@ -350,17 +350,18 @@ function renderProperty(p) {
   const sd = document.createElement('script');
   sd.type = 'application/ld+json';
   const amenities = [];
-  if (p.parking)      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Parking",        "value": true });
+  if (p.parking)      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Parking",        "value": p.parking });
   if (p.pets_allowed) amenities.push({ "@type": "LocationFeatureSpecification", "name": "Pets Allowed",   "value": true });
-  if (p.laundry)      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Laundry",        "value": p.laundry });
-  if (p.has_central_air || (p.cooling_type && p.cooling_type !== 'None' && p.cooling_type !== ''))
-                      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Air Conditioning","value": true });
+  if (p.laundry_type) amenities.push({ "@type": "LocationFeatureSpecification", "name": "Laundry",        "value": p.laundry_type });
+  if (p.heating_type) amenities.push({ "@type": "LocationFeatureSpecification", "name": "Heating",        "value": p.heating_type });
+  if (p.cooling_type && p.cooling_type !== 'None' && p.cooling_type !== '')
+                      amenities.push({ "@type": "LocationFeatureSpecification", "name": "Air Conditioning","value": p.cooling_type });
   sd.textContent = JSON.stringify({
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
     "name": p.title,
     "description": p.description || undefined,
-    "url": window.location.href,
+    "url": canonicalUrl,
     "image": p.photo_urls?.[0] ? CONFIG.img(p.photo_urls[0], 'og') : undefined,
     "datePosted": p.created_at ? p.created_at.split('T')[0] : undefined,
     "address": {
@@ -455,6 +456,24 @@ function renderProperty(p) {
   const _addrUnit = p.unit_number ? ` ${esc(p.unit_number)}` : '';
   document.getElementById('detailAddress').innerHTML = `<i class="fas fa-map-marker-alt"></i> ${esc(p.address)}${_addrUnit}, ${esc(p.city)}, ${esc(p.state)} ${esc(p.zip || '')}`;
 
+  const existingChipRow = document.getElementById('detailHeaderChips');
+  if (existingChipRow) existingChipRow.remove();
+
+  const headerChips = [];
+  if (p.pets_allowed != null) headerChips.push({ icon: 'fa-paw', label: p.pets_allowed ? 'Pets Allowed' : 'No Pets' });
+  if (p.laundry_type)     headerChips.push({ icon: 'fa-shirt', label: p.laundry_type });
+  if (p.parking)          headerChips.push({ icon: 'fa-car', label: p.parking });
+  if (p.move_in_special)  headerChips.push({ icon: 'fa-tag', label: p.move_in_special });
+  if (headerChips.length) {
+    const chipRow = document.createElement('div');
+    chipRow.id = 'detailHeaderChips';
+    chipRow.className = 'prop-req-list';
+    chipRow.style.marginTop = '10px';
+    chipRow.innerHTML = headerChips.map(c => `
+      <div class="prop-req-item"><i class="fas ${c.icon}"></i>${esc(c.label)}</div>`).join('');
+    document.getElementById('detailAddress').insertAdjacentElement('afterend', chipRow);
+  }
+
   // Listed-by attribution is shown via #landlordCard below — no duplicate text needed
 
   // Neighborhood / location context — shown below the address/attribution
@@ -481,9 +500,11 @@ function renderProperty(p) {
   if (p.square_footage)   metas.push({ label:'Sq. Ft.', value: p.square_footage.toLocaleString(), icon:'fa-ruler-combined' });
   if (p.property_type)    metas.push({ label:'Type', value: fmtPropType(p.property_type), icon:'fa-home' });
   if (p.pets_allowed != null) metas.push({ label:'Pets', value: p.pets_allowed ? 'Allowed' : 'No Pets', icon:'fa-paw' });
-  if (p.year_built)     metas.push({ label:'Year Built', value: p.year_built, icon:'fa-calendar-days' });
-  if (p.floors > 1)    metas.push({ label:'Floors', value: p.floors, icon:'fa-layer-group' });
-  if (p.lot_size_sqft)  metas.push({ label:'Lot Size', value: Number(p.lot_size_sqft).toLocaleString() + ' sqft', icon:'fa-ruler' });
+  if (p.laundry_type)     metas.push({ label:'Laundry', value: p.laundry_type, icon:'fa-shirt' });
+  if (p.parking)          metas.push({ label:'Parking', value: p.parking, icon:'fa-car' });
+  if (p.year_built)       metas.push({ label:'Year Built', value: p.year_built, icon:'fa-calendar-days' });
+  if (p.floors > 1)       metas.push({ label:'Floors', value: p.floors, icon:'fa-layer-group' });
+  if (p.lot_size_sqft)    metas.push({ label:'Lot Size', value: Number(p.lot_size_sqft).toLocaleString() + ' sqft', icon:'fa-ruler' });
   if (p.has_basement === true)    metas.push({ label:'Basement',    value:'Yes', icon:'fa-dungeon' });
   if (p.has_central_air === true) metas.push({ label:'Central Air', value:'Yes', icon:'fa-snowflake' });
   document.getElementById('detailMeta').innerHTML = metas.map(m => `
@@ -603,8 +624,12 @@ function renderProperty(p) {
   }
 
   // Show tabbed section and configure visible tabs
+  const detailTabsSection = document.getElementById('detailTabsSection');
+  const detailTabsBar = document.getElementById('detailTabs');
+  const panelAmenities = document.getElementById('panelAmenities');
   if (hasAmenities || hasUtilities || hasLease) {
-    document.getElementById('detailTabsSection').style.display = '';
+    detailTabsSection.style.display = '';
+    detailTabsBar.style.display = '';
     const tabConfig = [
       { tabId: 'tabAmenities', panelId: 'panelAmenities', has: hasAmenities },
       { tabId: 'tabUtilities', panelId: 'panelUtilities', has: hasUtilities },
@@ -628,6 +653,21 @@ function renderProperty(p) {
       firstActive.tabEl.classList.add('active');
       firstActive.tabEl.setAttribute('aria-selected', 'true');
       firstActive.panelEl.classList.add('active');
+    }
+  } else {
+    detailTabsSection.style.display = '';
+    detailTabsBar.style.display = 'none';
+    document.querySelectorAll('.detail-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+    document.querySelectorAll('.detail-tab-panel').forEach(pl => pl.classList.remove('active'));
+    if (panelAmenities) {
+      panelAmenities.classList.add('active');
+      panelAmenities.innerHTML = `
+        <div class="prop-denied-box" style="margin-top:0">
+          <strong>Details coming soon.</strong>
+          <p style="margin:10px 0 0;color:var(--m-muted);line-height:1.65">
+            This listing has no confirmed amenities, utilities, or lease details yet. The landlord may update this information shortly.
+          </p>
+        </div>`;
     }
   }
 

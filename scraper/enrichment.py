@@ -1012,7 +1012,8 @@ def _infer_parking(record):
     except Exception:
         amenities_list = []
 
-    amenity_tags = " ".join(str(a).lower() for a in amenities_list)
+    amenity_tags = " ".join(str(a).lower().replace(" ", "_").replace("-", "_") for a in amenities_list)
+    desc_and_tags = desc + " " + amenity_tags
 
     # Check amenity tags for garage info
     m = _GARAGE_TAGS_RE.search(amenity_tags)
@@ -1051,11 +1052,11 @@ def _infer_parking(record):
         return "Attached garage"
 
     # Driveway / off-street
-    if re.search(r"\bdriveway\b|\boff[- ]street\b", desc, re.IGNORECASE):
+    if re.search(r"\bdriveway\b|\boff[- ]street\b", desc_and_tags, re.IGNORECASE):
         return "Driveway"
 
     # Carport
-    if re.search(r"\bcarport\b", desc + " " + amenity_tags, re.IGNORECASE):
+    if re.search(r"\bcarport\b", desc_and_tags, re.IGNORECASE):
         return "Carport"
 
     return None
@@ -1144,7 +1145,7 @@ def rule_based_enrich(record):
             alist = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
         except Exception:
             alist = []
-        atags = " ".join(str(a).lower() for a in alist)
+        atags = " ".join(str(a).lower().replace(" ", "_").replace("-", "_") for a in alist)
         if "pets_allowed" in atags or "pet_friendly" in atags or "cats_allowed" in atags or "dogs_allowed" in atags:
             record["pets_allowed"] = True
         elif "no_pets" in atags or "pets_not_allowed" in atags:

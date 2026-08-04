@@ -54,6 +54,18 @@ def test_fallback_description_is_generated_from_features():
     assert "Pool" in enriched["description"] or "garage" in enriched["description"].lower()
 
 
+def test_pet_inference_from_spaced_amenity_tag():
+    record = {"pets_allowed": None, "amenities": ["Pet Friendly"], "description": ""}
+    enriched = module.rule_based_enrich(record)
+    assert enriched["pets_allowed"] is True
+
+
+def test_parking_inference_from_driveway_amenity_tag():
+    record = {"parking": None, "amenities": ["Driveway"], "description": ""}
+    enriched = module.rule_based_enrich(record)
+    assert enriched["parking"] == "Driveway"
+
+
 def test_price_consistency_rewrites_monthly_rent_mentions():
     text = "The rent is $1,200/month and the app fee is $50."
     updated = module.enforce_price_consistency(text, 1500)

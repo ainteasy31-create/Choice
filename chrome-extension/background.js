@@ -6,10 +6,86 @@
 
 const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
 const SECRET   = 'cp_import_7Kx3m9P2w5';
+const ALARM_NAME = 'flushQueue';
+const MAX_QUEUE_ITEMS = 75;
 
 async function getCount() {
   const data = await chrome.storage.session.get({ sessionCount: 0 });
   return data.sessionCount;
+}
+
+async function getQueue() {
+  const data = await chrome.storage.local.get({ cp_queue: [] });
+  return data.cp_queue || [];
+}
+
+async function setQueue(queue) {
+  await chrome.storage.local.set({ cp_queue: queue });
+}
+
+function queueItemKey(item) {
+  return `${item.source || 'unknown'}|${item.source_listing_id || 'unknown'}`;
+}
+
+function trimQueue(queue) {
+  if (queue.length <= MAX_QUEUE_ITEMS) return queue;
+  return queue.slice(-MAX_QUEUE_ITEMS);
+}
+
+async function addQueueItem(item) {
+  const queue = await getQueue();
+  const exists = queue.some(q => queueItemKey(q) === queueItemKey(item));
+  if (exists) return queue.length;
+  queue.push(Object.assign({}, item, { _queued_at: Date.now() }));
+  const trimmed = trimQueue(queue);
+  await setQueue(trimmed);
+  await updateBadge();
+  return trimmed.length;
+}
+
+function getPhotoUrls(payload) {
+  let urls = [];
+  if (Array.isArray(payload.original_image_urls)) {
+    urls = payload.original_image_urls;
+  } else if (typeof payload.original_image_urls === 'string') {
+    try { urls = JSON.parse(payload.original_image_urls); } catch (_) { urls = [payload.original_image_urls]; }
+  }
+  return Array.isArray(urls) ? urls.filter(u => typeof u === 'string' && u.startsWith('http')) : [];
+}
+
+function extractExtension(url) {
+  try {
+    const path = new URL(url).pathname;
+    const match = path.match(/\.(jpe?g|png|gif|webp|avif|bmp)(?:$|\?)/i);
+    return match ? match[1].toLowerCase() : 'jpg';
+  } catch (_) {
+    return 'jpg';
+  }
+}
+
+async function downloadToPC(payload) {
+  const id = payload.source_listing_id || String(Date.now());
+  const folder = `ChoiceImports/${id}`;
+
+  const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const jsonUrl = URL.createObjectURL(jsonBlob);
+  await chrome.downloads.download({ url: jsonUrl, filename: `${folder}/listing.json`, saveAs: false });
+  setTimeout(() => URL.revokeObjectURL(jsonUrl), 60000);
+
+  const photos = getPhotoUrls(payload).slice(0, 50);
+  for (let i = 0; i < photos.length; i++) {
+    const photoUrl = photos[i];
+    const ext = extractExtension(photoUrl);
+    try {
+      await chrome.downloads.download({
+        url: photoUrl,
+        filename: `${folder}/photos/photo-${String(i + 1).padStart(2, '0')}.${ext}`,
+        saveAs: false,
+      });
+    } catch (err) {
+      console.warn('[CP] background photo download failed:', photoUrl, err);
+    }
+  }
 }
 
 async function setCount(n) {
@@ -35,6 +111,15 @@ async function updateBadge() {
 
 // ── Offline queue flush ─────────────────────────────────────────────────────
 
+async function postPayload(payload) {
+  const res = await fetch(EDGE_URL, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'x-import-secret': SECRET },
+    body:    JSON.stringify(payload),
+  });
+  return await res.json();
+}
+
 async function flushQueue() {
   const data = await chrome.storage.local.get({ cp_queue: [] });
   const queue = data.cp_queue || [];
@@ -45,12 +130,7 @@ async function flushQueue() {
 
   for (const item of queue) {
     try {
-      const res = await fetch(EDGE_URL, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'x-import-secret': SECRET },
-        body:    JSON.stringify(item),
-      });
-      const resp = await res.json();
+      const resp = await postPayload(item);
       if (resp && (resp.ok || resp.duplicate)) {
         flushed++;
       } else {
@@ -93,6 +173,59 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'QUEUE_PAYLOAD') {
+    (async () => {
+      try {
+        const queueLength = await addQueueItem(msg.payload);
+        sendResponse({ ok: true, queued: true, queueLength });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'UPLOAD_PAYLOAD') {
+    (async () => {
+      try {
+        const resp = await postPayload(msg.payload);
+        if (resp && (resp.ok || resp.duplicate)) {
+          sendResponse(resp);
+          return;
+        }
+      } catch (err) {
+        if (!msg.settings?.offlineQueue) {
+          sendResponse({ ok: false, error: String(err) });
+          return;
+        }
+      }
+
+      if (msg.settings?.offlineQueue) {
+        try {
+          const queueLength = await addQueueItem(msg.payload);
+          sendResponse({ ok: false, queued: true, queueLength });
+        } catch (queueErr) {
+          sendResponse({ ok: false, error: String(queueErr) });
+        }
+      } else {
+        sendResponse({ ok: false, error: 'Network error' });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'DOWNLOAD_PAYLOAD') {
+    (async () => {
+      try {
+        await downloadToPC(msg.payload);
+        sendResponse({ ok: true });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
   if (msg.type === 'FLUSH_QUEUE') {
     (async () => {
       const flushed = await flushQueue();
@@ -102,18 +235,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
-// Retry queue when the browser comes back online
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === ALARM_NAME) {
+    flushQueue().catch(err => console.warn('[CP] alarm flushQueue failed:', err));
+  }
+});
+
 chrome.runtime.onStartup.addListener(async () => {
   await setCount(0);
   chrome.action.setBadgeText({ text: '' });
+  chrome.alarms.create(ALARM_NAME, { periodInMinutes: 15 });
   await updateBadge();
   await flushQueue();
 });
 
-// On install/update, clear any stale badge and flush
 chrome.runtime.onInstalled.addListener(async () => {
   await setCount(0);
   await updateBadge();
+  chrome.alarms.create(ALARM_NAME, { periodInMinutes: 15 });
   await flushQueue();
 });
 
@@ -121,6 +260,3 @@ chrome.runtime.onInstalled.addListener(async () => {
 if (typeof navigator !== 'undefined' && navigator.onLine !== undefined) {
   self.addEventListener('online', async () => { await flushQueue(); });
 }
-
-// Periodic retry (every 15 min) so queued items eventually sync
-setInterval(async () => { await flushQueue(); }, 15 * 60 * 1000);
