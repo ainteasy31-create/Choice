@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const api = require('./extractors.js');
+const api = require('./shared-extractors.js');
 
 let pass = 0, fail = 0;
 const t = (n, f) => { try { f(); pass++; console.log('OK   ' + n); } catch (e) { fail++; console.error('FAIL ' + n + ' - ' + e.message); } };
