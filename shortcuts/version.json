@@ -1,1 +1,1 @@
-{"version":"3.3","updated":"2026-08-04","changelog":"Better setup guidance — if the Shortcut isn't configured correctly, the script now tells you exactly what to fix instead of just asking you to paste a URL."}
+{"version":"3.4","updated":"2026-08-04","changelog":"Fixed: Safari web page objects now correctly extract the URL when passed from the iOS Shortcut — no more paste prompt."}

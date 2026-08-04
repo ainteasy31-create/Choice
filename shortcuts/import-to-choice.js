@@ -21,7 +21,7 @@
 // you to tap Run once more — no manual reinstall ever needed.
 // ============================================================
 
-const VERSION      = '3.3';
+const VERSION      = '3.4';
 const VERSION_URL  = 'https://choice-properties-site.pages.dev/shortcuts/version.json';
 const SCRIPT_URL   = 'https://choice-properties-site.pages.dev/shortcuts/import-to-choice.js';
 const EDGE_URL     = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
@@ -70,10 +70,25 @@ try {
 // Priority: iOS Shortcut input → Share Sheet args → clipboard → manual prompt
 let sharedUrl = null;
 
-// Source A: iOS Shortcuts "Run Script" action passes the URL as shortcutParameter
+// Source A: iOS Shortcuts "Run Script" action passes the URL as shortcutParameter.
+// The value may be a plain URL string OR a Safari web page object — handle both.
 if (args.shortcutParameter) {
-  const sp = String(args.shortcutParameter).trim();
-  if (sp.startsWith('http')) sharedUrl = sp;
+  const sp = args.shortcutParameter;
+  let candidate = null;
+  if (typeof sp === 'string') {
+    candidate = sp.trim();
+  } else if (typeof sp === 'object' && sp !== null) {
+    // Safari web page object: try common URL property names
+    candidate = sp.url || sp.URL || sp.href || sp.link || sp.pageUrl || null;
+    if (!candidate) {
+      // Last resort: coerce to string (sometimes gives the URL directly)
+      const s = String(sp).trim();
+      if (s.startsWith('http')) candidate = s;
+    }
+  }
+  if (candidate && typeof candidate === 'string' && candidate.startsWith('http')) {
+    sharedUrl = candidate;
+  }
 }
 
 // Source B: Share Sheet URL args (direct Scriptable share extension)
