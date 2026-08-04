@@ -103,6 +103,27 @@ This is the part most people get wrong. Follow exactly — the Shortcut needs **
 
 ---
 
+## Quick verification checklist
+
+Use this checklist after setup if the import fails on the first try:
+
+1. The Scriptable script name must be exactly `import-to-choice`.
+2. The Safari page URL must contain `/homedetails/` and show a real address and price.
+3. The Shortcut must include these four actions in order: Receive input → Get Details of Safari Web Page → Copy to Clipboard → Run Script.
+4. After tapping the shortcut, the Scriptable script should show either a success alert or a specific error message. If it says “No Data Returned”, wait a few seconds and try again on a fully loaded listing page.
+5. If the import still fails, open the Safari page, scroll until the address and price are visible, then run the shortcut again.
+
+## Optional: Verify-only test mode
+
+If you want to confirm extraction without actually sending data to the pipeline, run the Scriptable script and choose the "Verify only" option when prompted. This will:
+
+- Load the Zillow page and wait for hydration
+- Inspect `__NEXT_DATA__`, `window.__NEXT_DATA__`, and any `script[type="application/json"]` blocks
+- Report whether a `zpid` and key fields (address, price, photos) were found
+- Show a small sample of the JSON the script inspected
+
+Use this when setting up or debugging slow/blocked pages — it makes it easy to confirm that the Scriptable/WebView extraction will work before posting to the server.
+
 ## Troubleshooting
 
 ### "Shortcut Setup Needed" alert appears
