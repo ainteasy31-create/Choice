@@ -21,7 +21,7 @@
 // you to tap Run once more — no manual reinstall ever needed.
 // ============================================================
 
-const VERSION      = '3.5';
+const VERSION      = '3.6';
 const VERSION_URL  = 'https://choice-properties-site.pages.dev/shortcuts/version.json';
 const SCRIPT_URL   = 'https://choice-properties-site.pages.dev/shortcuts/import-to-choice.js';
 const EDGE_URL     = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
@@ -71,12 +71,19 @@ try {
 let sharedUrl = null;
 
 // Source A: iOS Shortcuts "Run Script" action passes the URL as shortcutParameter.
-// The value may be a plain URL string, a Safari web page object, or an ARRAY
-// of URL objects/strings (e.g. when "Get URLs from Input" result is passed).
+//
+// CORRECT SHORTCUT SETUP (pass "Shortcut Input" directly — do NOT use "Get URLs from Input"):
+//   Receive input from Share Sheet
+//   Run import-to-choice with [Shortcut Input]
+//
+// WHY: "Get URLs from Input" on a Safari web page returns an empty list on iOS 16+
+// because Safari web page is a different Shortcuts type from URL items.
+// Passing Shortcut Input directly gives Scriptable the Safari page object, which
+// has a .url property containing the actual page URL.
 if (args.shortcutParameter) {
   let sp = args.shortcutParameter;
 
-  // Unwrap array — "Get URLs from Input" passes a list; take the first item.
+  // Unwrap array — some Shortcut configurations pass a list; take the first item.
   if (Array.isArray(sp) && sp.length > 0) {
     sp = sp[0];
   }
@@ -85,10 +92,12 @@ if (args.shortcutParameter) {
   if (typeof sp === 'string') {
     candidate = sp.trim();
   } else if (typeof sp === 'object' && sp !== null) {
-    // Safari web page object or Shortcuts URL object: try common URL property names
-    candidate = sp.url || sp.URL || sp.href || sp.link || sp.pageUrl || null;
+    // Safari web page object passed as Shortcut Input: .url holds the page URL.
+    // Also try other common property names from different Shortcuts URL types.
+    candidate = sp.url || sp.URL || sp.href || sp.link || sp.pageUrl
+              || sp.URLString || sp.absoluteString || null;
     if (!candidate) {
-      // Last resort: coerce to string (sometimes gives the URL directly)
+      // Last resort: coerce to string — Safari web page objects often stringify to their URL
       const s = String(sp).trim();
       if (s.startsWith('http')) candidate = s;
     }
