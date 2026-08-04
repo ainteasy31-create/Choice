@@ -1,17 +1,26 @@
 {
   "manifest_version": 3,
   "name": "Import to Choice Properties",
-  "version": "1.0.0",
-  "description": "Save any Zillow listing to your Choice Properties pipeline with one click — all fields and photos captured instantly.",
-  "permissions": ["tabs", "storage"],
+  "version": "2.0.0",
+  "description": "Save any Zillow, Realtor.com, Apartments.com, or Redfin listing to your Choice Properties pipeline with one click — all fields and photos captured. Optional Download-to-PC and offline queue.",
+  "permissions": ["tabs", "storage", "downloads"],
   "host_permissions": [
     "https://www.zillow.com/*",
+    "https://www.realtor.com/*",
+    "https://www.apartments.com/*",
+    "https://www.redfin.com/*",
+    "https://photos.zillowstatic.com/*",
     "https://tlfmwetmhthpyrytrcfo.supabase.co/*"
   ],
   "content_scripts": [
     {
-      "matches": ["https://www.zillow.com/homedetails/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://www.zillow.com/homedetails/*",
+        "https://www.realtor.com/realestateandhomes-detail/*",
+        "https://www.apartments.com/*",
+        "https://www.redfin.com/*"
+      ],
+      "js": ["extractors.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

@@ -1,12 +1,19 @@
 # Import to Choice Properties — Chrome Extension
 
-One-click Zillow → Pipeline importer. No server fetch, no IP blocking, all photos captured.
+One-click listing → Pipeline importer for **Zillow, Realtor.com, Apartments.com, and Redfin**. No server fetch, no IP blocking, all photos captured.
 
 ## How it works
 
-When you open any Zillow listing detail page, the extension injects a purple **"Save to Pipeline"** button in the bottom-right corner. Click it and the listing — every field and every photo — is sent directly to your Choice Properties pipeline.
+When you open any supported listing detail page, the extension injects a purple **"Save to Pipeline"** button in the bottom-right corner. Click it and the listing — every field and every photo — is sent directly to your Choice Properties pipeline.
 
-**Why it never gets blocked:** The extension reads `__NEXT_DATA__` directly from the already-loaded page (same data your browser is already displaying). No outbound fetch to Zillow, no datacenter IP, nothing to block.
+**Why it never gets blocked:** The extension reads the page's embedded JSON (`__NEXT_DATA__` / Redux state) directly from the already-loaded page (same data your browser is already displaying). No outbound fetch to the listing site, no datacenter IP, nothing to block.
+
+## v2.0 features
+
+- **Multi-site support** — Zillow, Realtor.com, Apartments.com, Redfin (per-site extractors in `extractors.js`)
+- **Download to PC** — each save also writes `listing.json` + all photos to `~/Downloads/ChoiceImports/{id}/` (toggle in popup)
+- **Offline queue** — if the pipeline is unreachable, the listing is queued in `chrome.storage.local` and auto-synced when back online (badge shows amber count; "Sync now" button in popup)
+- **Settings** — enable/disable Download-to-PC and Offline queue from the popup
 
 ---
 
@@ -33,8 +40,8 @@ The extension icon appears in your Chrome toolbar.
 
 ### Step 3 — Use it
 
-1. Browse to any Zillow listing detail page  
-   *(URL pattern: `zillow.com/homedetails/…/12345_zpid`)*
+1. Browse to any supported listing detail page  
+   *(Zillow `zillow.com/homedetails/…`, Realtor.com, Apartments.com, or Redfin)*
 2. Click the purple **↓ Save to Pipeline** button (bottom-right corner)
 3. Button turns green: "✓ Saved! 24 photos · San Francisco · Q:88/100"
 4. Open your [admin pipeline](https://choice-properties-site.pages.dev/admin/pipeline.html) to review and publish
@@ -89,9 +96,11 @@ No reinstall needed for code changes — just refresh.
 | File | Purpose |
 |---|---|
 | `manifest.json` | Extension config (MV3) |
-| `content.js` | Injected on Zillow — extracts data + renders button |
+| `extractors.js` | Multi-site extractor registry (Zillow, Realtor, Apartments, Redfin) |
+| `content.js` | Injected on supported sites — extracts data + renders button |
 | `content.css` | Floating button styles |
-| `background.js` | Service worker — tracks session count, updates badge |
-| `popup.html` / `popup.js` | Toolbar popup — shows session count, pipeline link |
+| `background.js` | Service worker — session count, offline queue flush, badge |
+| `popup.html` / `popup.js` | Toolbar popup — session count, queue status, settings toggles |
+| `test-extractors.js` | Node test harness for the extractor registry |
 | `generate-icons.js` | One-time icon generator (pure Node.js, no deps) |
 | `icons/` | Generated PNG icons (16 / 32 / 48 / 128 px) |

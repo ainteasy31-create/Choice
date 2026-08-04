@@ -1,49 +1,47 @@
 {
-  "name": "Choice Properties",
-  "short_name": "Choice",
-  "description": "Nationwide property rental marketplace — find, apply, and lease your next home.",
-  "start_url": "/index.html",
-  "scope": "/",
-  "display": "standalone",
-  "orientation": "portrait-primary",
-  "theme_color": "#006aff",
-  "background_color": "#ffffff",
-  "lang": "en-US",
-  "icons": [
+  "manifest_version": 3,
+  "name": "Import to Choice Properties",
+  "version": "2.0.0",
+  "description": "Save any Zillow, Realtor.com, Apartments.com, or Redfin listing to your Choice Properties pipeline with one click — all fields and photos captured. Optional Download-to-PC and offline queue.",
+  "permissions": ["tabs", "storage", "downloads"],
+  "host_permissions": [
+    "https://www.zillow.com/*",
+    "https://www.realtor.com/*",
+    "https://www.apartments.com/*",
+    "https://www.redfin.com/*",
+    "https://photos.zillowstatic.com/*",
+    "https://tlfmwetmhthpyrytrcfo.supabase.co/*"
+  ],
+  "content_scripts": [
     {
-      "src": "/assets/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/assets/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "matches": [
+        "https://www.zillow.com/homedetails/*",
+        "https://www.realtor.com/realestateandhomes-detail/*",
+        "https://www.apartments.com/*",
+        "https://www.redfin.com/*"
+      ],
+      "js": ["extractors.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
     }
   ],
-  "shortcuts": [
-    {
-      "name": "Browse Listings",
-      "short_name": "Listings",
-      "description": "Search available rental properties",
-      "url": "/listings.html",
-      "icons": [{ "src": "/assets/favicon.svg", "sizes": "any" }]
-    },
-    {
-      "name": "Track Application",
-      "short_name": "Track",
-      "description": "Check your application status",
-      "url": "/apply/?path=dashboard",
-      "icons": [{ "src": "/assets/favicon.svg", "sizes": "any" }]
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Import to Choice Properties",
+    "default_icon": {
+      "16":  "icons/icon16.png",
+      "32":  "icons/icon32.png",
+      "48":  "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
-  ],
-  "categories": ["lifestyle", "utilities"]
+  },
+  "icons": {
+    "16":  "icons/icon16.png",
+    "32":  "icons/icon32.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }

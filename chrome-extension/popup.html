@@ -158,6 +158,106 @@
     background: rgba(255,255,255,0.07);
     color: rgba(255,255,255,0.35);
   }
+
+  .queue-row {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(217,119,6,0.1);
+    border: 1px solid rgba(217,119,6,0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+
+  .queue-row .q-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fbbf24;
+  }
+
+  .queue-row .q-count {
+    font-size: 13px;
+    font-weight: 800;
+    color: #fbbf24;
+  }
+
+  .flush-btn {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    background: #d97706;
+    color: #fff;
+    cursor: pointer;
+  }
+  .flush-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .settings {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+
+  .settings-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 8px;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+  }
+
+  .toggle {
+    position: relative;
+    width: 34px;
+    height: 19px;
+    flex-shrink: 0;
+  }
+  .toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .toggle .slider {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.15);
+    border-radius: 99px;
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  .toggle .slider::before {
+    content: '';
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    left: 2px;
+    top: 2px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.15s;
+  }
+  .toggle input:checked + .slider {
+    background: #6366f1;
+  }
+  .toggle input:checked + .slider::before {
+    transform: translateX(15px);
+  }
 </style>
 </head>
 <body>
@@ -173,7 +273,7 @@
   </div>
   <div class="header-text">
     <h1>Import to Choice</h1>
-    <p>Zillow → Pipeline importer</p>
+    <p>Listing → Pipeline importer</p>
   </div>
 </div>
 
@@ -184,15 +284,41 @@
       <div class="status-label">Saved this session</div>
       <div style="margin-top:2px;display:flex;align-items:center;gap:6px">
         <span class="status-value" id="session-count">—</span>
-        <span class="pill inactive" id="page-pill">Not on Zillow listing</span>
+        <span class="pill inactive" id="page-pill">Not on listing</span>
       </div>
+    </div>
+  </div>
+
+  <div class="queue-row" id="queue-row">
+    <div>
+      <div class="q-label">Offline queue</div>
+      <div class="q-count" id="queue-count">0</div>
+    </div>
+    <button class="flush-btn" id="flush-btn" disabled>Sync now</button>
+  </div>
+
+  <div class="settings">
+    <div class="settings-title">Capture settings</div>
+    <div class="setting-row">
+      <span>Download to PC</span>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-download" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <span>Offline queue</span>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-queue" checked>
+        <span class="slider"></span>
+      </label>
     </div>
   </div>
 
   <div id="tip-default">
     <div class="tip-step">
       <div class="step-num">1</div>
-      <div class="tip">Open any <strong>Zillow listing detail page</strong> (the one with a full address, photos, and price).</div>
+      <div class="tip">Open any <strong>listing detail page</strong> on Zillow, Realtor.com, Apartments.com, or Redfin.</div>
     </div>
     <div class="tip-step">
       <div class="step-num">2</div>
@@ -206,7 +332,7 @@
 
   <div id="tip-on-listing" style="display:none">
     <div class="tip" style="color:rgba(255,255,255,0.65)">
-      You're on a Zillow listing page. Look for the <strong style="color:#818cf8">purple button</strong> in the bottom-right corner of the page.
+      You're on a supported listing page. Look for the <strong style="color:#818cf8">purple button</strong> in the bottom-right corner of the page.
     </div>
   </div>
 
