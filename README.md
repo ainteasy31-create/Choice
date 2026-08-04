@@ -10,7 +10,7 @@ When you open any supported listing detail page, the extension injects a purple 
 
 ## v2.0 features
 
-- **Multi-site support** — Zillow, Realtor.com, Apartments.com, Redfin (per-site extractors in `extractors.js`)
+- **Multi-site support** — Zillow, Realtor.com, Apartments.com, Redfin (per-site extractors in `shared-extractors.js`)
 - **Download to PC** — each save also writes `listing.json` + all photos to `~/Downloads/ChoiceImports/{id}/` (toggle in popup)
 - **Offline queue** — if the pipeline is unreachable, the listing is queued in `chrome.storage.local` and auto-synced when back online (badge shows amber count; "Sync now" button in popup)
 - **Settings** — enable/disable Download-to-PC and Offline queue from the popup
@@ -96,7 +96,7 @@ No reinstall needed for code changes — just refresh.
 | File | Purpose |
 |---|---|
 | `manifest.json` | Extension config (MV3) |
-| `extractors.js` | Multi-site extractor registry (Zillow, Realtor, Apartments, Redfin) |
+| `shared-extractors.js` | Multi-site extractor registry (Zillow, Realtor, Apartments, Redfin) |
 | `content.js` | Injected on supported sites — extracts data + renders button |
 | `content.css` | Floating button styles |
 | `background.js` | Service worker — session count, offline queue flush, badge |

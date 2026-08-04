@@ -7,10 +7,23 @@
   'use strict';
 
   // ── DOM helpers ──────────────────────────────────────────────
-  function getNextData(doc) {
-    const el = doc.getElementById('__NEXT_DATA__');
-    if (!el) return null;
-    try { return JSON.parse(el.textContent); } catch (_) { return null; }
+  function getNextData(source) {
+    if (!source) return null;
+    if (typeof source.getElementById === 'function') {
+      const el = source.getElementById('__NEXT_DATA__');
+      if (!el) return null;
+      try { return JSON.parse(el.textContent); } catch (_) { return null; }
+    }
+
+    if (typeof source === 'string') {
+      try { return JSON.parse(source); } catch (_) { return null; }
+    }
+
+    if (typeof source === 'object') {
+      return source;
+    }
+
+    return null;
   }
 
   function walk(obj, path) {

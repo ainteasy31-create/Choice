@@ -1,7 +1,7 @@
 // ============================================================
 // Import to Choice Properties — Content Script v2.0
 // Injected on: zillow.com/homedetails/*, realtor.com, apartments.com, redfin.com
-// Uses CP_Extractors (extractors.js) for multi-site extraction.
+// Uses CP_Extractors (shared-extractors.js) for multi-site extraction.
 // Features: one-click save, Download-to-PC, offline queue.
 // ============================================================
 
