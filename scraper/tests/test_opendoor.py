@@ -375,7 +375,10 @@ def test_data_quality_score_increases_with_photos():
 # ── Walk / transit / bike score extraction ────────────────────────────────────
 
 def test_walk_scores_from_nextdata():
-    """Walk/transit/bike scores in __NEXT_DATA__ listing should be extracted."""
+    """Walk/transit/bike scores in __NEXT_DATA__ listing should be stored as
+    human-readable text matching the format used by scraper.py / zillow_scraper.py:
+    'Walk score: 88; Transit score: 72; Bike score: 60'
+    """
     nd = {
         "props": {"pageProps": {"listing": {
             "id": "w1",
@@ -394,11 +397,12 @@ def test_walk_scores_from_nextdata():
     html = _make_html(nextdata=nd)
     rec = module._parse_opendoor_html(html, "https://www.opendoor.com/homes/1-walk-st")
     assert rec is not None
-    import json
-    ctx = json.loads(rec.get("location_context") or "{}")
-    assert ctx.get("walk_score") == 88
-    assert ctx.get("transit_score") == 72
-    assert ctx.get("bike_score") == 60
+    ctx = rec.get("location_context") or ""
+    assert "Walk score: 88" in ctx
+    assert "Transit score: 72" in ctx
+    assert "Bike score: 60" in ctx
+    # Must NOT be raw JSON
+    assert not ctx.startswith("{"), "location_context must be human-readable, not JSON"
 
 
 def test_walk_scores_nested_scores_object():
@@ -419,10 +423,10 @@ def test_walk_scores_nested_scores_object():
     html = _make_html(nextdata=nd)
     rec = module._parse_opendoor_html(html, "https://www.opendoor.com/homes/2-transit")
     assert rec is not None
-    import json
-    ctx = json.loads(rec.get("location_context") or "{}")
-    assert ctx.get("walk_score") == 95
-    assert ctx.get("transit_score") == 80
+    ctx = rec.get("location_context") or ""
+    assert "Walk score: 95" in ctx
+    assert "Transit score: 80" in ctx
+    assert not ctx.startswith("{"), "location_context must be human-readable, not JSON"
 
 
 def test_no_walk_scores_leaves_location_context_none():
@@ -431,6 +435,35 @@ def test_no_walk_scores_leaves_location_context_none():
     rec = module._parse_opendoor_html(html, "https://www.opendoor.com/listing/123")
     assert rec is not None
     assert rec.get("location_context") is None
+
+
+def test_env_multiplier_overrides_state_table():
+    """OPENDOOR_RENT_MULTIPLIER env var must win over the state table when set."""
+    import os
+    import importlib
+    # Patch the explicit-override flag to simulate the env var being set
+    original = module._OPENDOOR_RENT_MULTIPLIER_EXPLICIT
+    original_mult = module._OPENDOOR_RENT_MULTIPLIER
+    try:
+        # Force override mode with a known multiplier (0.010 = 1%)
+        module._OPENDOOR_RENT_MULTIPLIER_EXPLICIT = True
+        module._OPENDOOR_RENT_MULTIPLIER = 0.010
+        # OH normally uses 0.0095; with override it must use 0.010
+        rent_with_override = module.estimate_rent_from_sale_price(200000, state="OH")
+        # 200000 * 0.010 = 2000 → rounds to nearest $25 → $2000
+        assert rent_with_override == 2000, (
+            "Expected $2000 with 1% override, got ${}".format(rent_with_override)
+        )
+        # Without override flag, OH uses 0.0095 → 200000*0.0095=1900 → $1900
+        module._OPENDOOR_RENT_MULTIPLIER_EXPLICIT = False
+        module._OPENDOOR_RENT_MULTIPLIER = 0.0085  # restore default
+        rent_state_table = module.estimate_rent_from_sale_price(200000, state="OH")
+        assert rent_state_table != 2000, (
+            "State-table rent should differ from override rent"
+        )
+    finally:
+        module._OPENDOOR_RENT_MULTIPLIER_EXPLICIT = original
+        module._OPENDOOR_RENT_MULTIPLIER = original_mult
 
 
 # ── Smart rental defaults ─────────────────────────────────────────────────────

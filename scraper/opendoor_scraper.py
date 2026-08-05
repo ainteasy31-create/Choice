@@ -48,6 +48,11 @@ _OPENDOOR_RENT_MIN = int(os.environ.get("OPENDOOR_RENT_MIN", "700"))
 _OPENDOOR_RENT_METHOD = os.environ.get("OPENDOOR_RENT_METHOD", "opendoor_rent_estimate")
 _OPENDOOR_RENT_ROUND = int(os.environ.get("OPENDOOR_RENT_ROUND", "25"))
 
+# True when the operator explicitly set OPENDOOR_RENT_MULTIPLIER in the
+# environment.  When True the explicit value takes precedence over the
+# per-state table so a bulk-run override (e.g. for a new market) always wins.
+_OPENDOOR_RENT_MULTIPLIER_EXPLICIT = "OPENDOOR_RENT_MULTIPLIER" in os.environ
+
 # ── State-level rent multiplier overrides ─────────────────────────────────────
 # The gross rent multiplier (monthly rent / sale price) varies by market.
 # High cost-of-living states have inflated home values relative to rent
@@ -169,10 +174,16 @@ def estimate_rent_from_sale_price(sale_price, state=None):
     price = _parse_price(sale_price)
     if price is None or price <= 0:
         return None
-    # State-specific multiplier overrides the global default
-    multiplier = _STATE_RENT_MULTIPLIERS.get(
-        (state or "").strip().upper(), _OPENDOOR_RENT_MULTIPLIER
-    )
+    # Explicit OPENDOOR_RENT_MULTIPLIER env var always wins — lets operators
+    # override the state table for a specific bulk run without editing code.
+    # When the env var is absent, fall back to the per-state table, then to
+    # the compiled-in default (0.0085).
+    if _OPENDOOR_RENT_MULTIPLIER_EXPLICIT:
+        multiplier = _OPENDOOR_RENT_MULTIPLIER
+    else:
+        multiplier = _STATE_RENT_MULTIPLIERS.get(
+            (state or "").strip().upper(), _OPENDOOR_RENT_MULTIPLIER
+        )
     raw_rent = price * multiplier
     # Round to nearest increment (default $25) for human-looking prices
     step = max(1, _OPENDOOR_RENT_ROUND)
@@ -1297,13 +1308,17 @@ def _parse_opendoor_html(html, url, verbose=False):
     has_central_air = _parse_has_central_air(jsonld, cleaned_description, cooling)
     walk_score, transit_score, bike_score = _parse_walk_scores(nd_listing)
 
-    # Build location_context JSON from walk/transit/bike scores if any were found
-    _lc_data = {k: v for k, v in {
-        "walk_score": walk_score,
-        "transit_score": transit_score,
-        "bike_score": bike_score,
-    }.items() if v is not None}
-    location_context = json.dumps(_lc_data) if _lc_data else None
+    # Build location_context as human-readable text matching the format used
+    # by scraper.py and zillow_scraper.py:
+    #   "Walk score: 88; Transit score: 72; Bike score: 60"
+    _score_parts = []
+    if walk_score is not None:
+        _score_parts.append("Walk score: " + str(walk_score))
+    if transit_score is not None:
+        _score_parts.append("Transit score: " + str(transit_score))
+    if bike_score is not None:
+        _score_parts.append("Bike score: " + str(bike_score))
+    location_context = "; ".join(_score_parts) if _score_parts else None
 
     # ── Title ─────────────────────────────────────────────────────────────────
     title = str(jsonld.get("name") or "").strip()
