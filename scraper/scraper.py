@@ -79,6 +79,19 @@ except ImportError as _e:
     _ZW_AVAILABLE = False
     _ZW_IMPORT_ERR = str(_e)
 
+# ── Guard: Opendoor scraper module — opt-in only for explicit URLs ───────────
+try:
+    import sys as _sys_op
+    import os as _os_op
+    _sys_op.path.insert(0, _os_op.path.dirname(_os_op.path.abspath(__file__)))
+    from opendoor_scraper import is_opendoor_url as _is_opendoor_url
+    from opendoor_scraper import scrape_opendoor_url as _scrape_opendoor_url
+    from opendoor_scraper import scrape_opendoor_urls as _scrape_opendoor_urls
+    _OPENDOOR_AVAILABLE = True
+except ImportError as _e:
+    _OPENDOOR_AVAILABLE = False
+    _OPENDOOR_IMPORT_ERR = str(_e)
+
 # ── Guard: requests ───────────────────────────────────────────────────────────
 try:
     import requests as _requests
@@ -1914,9 +1927,28 @@ def _run_urls(urls, args, started_at):
         return 0, 0, 0
 
     zillow_urls  = [u for u in urls if "zillow.com" in u]
-    generic_urls = [u for u in urls if "zillow.com" not in u]
+    generic_urls = [u for u in urls if "zillow.com" not in u and not _is_opendoor_url(u)]
+    opendoor_urls = [u for u in urls if _is_opendoor_url(u)]
 
     all_records = []
+
+    # ── Opendoor URLs ──────────────────────────────────────────────────────────
+    if opendoor_urls:
+        if not _OPENDOOR_AVAILABLE:
+            print("❌  Opendoor module unavailable — cannot scrape Opendoor URLs.")
+        elif not args.allow_opendoor:
+            print("❌  Opendoor scraping requires --allow-opendoor. Skipping Opendoor URLs.")
+        else:
+            print("\n" + ("─" * 55))
+            print("🏠  Opendoor URL scrape: " + str(len(opendoor_urls)) + " listing(s)")
+            print("─" * 55)
+            try:
+                o_records = _scrape_opendoor_urls(opendoor_urls, verbose=True)
+                all_records.extend(o_records)
+                if len(o_records) < len(opendoor_urls):
+                    print("  ⚠  " + str(len(opendoor_urls) - len(o_records)) + " Opendoor URL(s) failed to scrape.")
+            except Exception as e:
+                print("❌  Opendoor URL scrape error: " + str(e))
 
     # ── Zillow URLs ───────────────────────────────────────────────────────────
     if zillow_urls:
@@ -2380,6 +2412,14 @@ Search mode (Realtor.com is safe from Replit; Zillow needs residential IP):
     p.add_argument(
         "--dry-run", action="store_true",
         help="Preview what would be staged without writing to the database.",
+    )
+    p.add_argument(
+        "--allow-opendoor", action="store_true", dest="allow_opendoor",
+        help=(
+            "Allow Opendoor URL scraping in URL mode. "
+            "Opendoor listings are sale-to-rent conversion candidates and are "
+            "only scraped when explicitly permitted."
+        ),
     )
     return p
 
