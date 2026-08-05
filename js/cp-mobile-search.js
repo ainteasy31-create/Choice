@@ -183,12 +183,25 @@
   }
 
   /* ── Wire up everything ─────────────────────────────────────── */
+  /* ── Live sync: hero form changes push to the mobile sheet ──── */
+  function bindLiveSync() {
+    var oLoc  = document.getElementById('searchInput');
+    var oBeds = document.getElementById('bedroomsFilter');
+    var oPrice = document.getElementById('maxRentFilter');
+    var sync = function () { syncFromOriginal(); };
+    if (oLoc)  oLoc.addEventListener('input',  sync);
+    if (oLoc)  oLoc.addEventListener('change', sync);
+    if (oBeds) oBeds.addEventListener('change', sync);
+    if (oPrice) oPrice.addEventListener('change', sync);
+  }
+
   function bindEvents() {
     pill.addEventListener('click', openSheet);
     if (mClose) mClose.addEventListener('click', closeSheet);
     if (sheetBackdrop) sheetBackdrop.addEventListener('click', closeSheet);
     if (mForm) mForm.addEventListener('submit', submitSearch);
     bindSwipeClose();
+    bindLiveSync();
   }
 
   if (document.readyState === 'loading') {

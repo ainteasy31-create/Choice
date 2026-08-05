@@ -8246,6 +8246,97 @@ html[data-theme="dark"] body[data-portal="public"]:not([data-page="home"]):not([
   background: linear-gradient(180deg, var(--mv2-bg-warm) 0%, var(--mv2-bg-warm-2) 100%); color: var(--m-ink); border-bottom-color: var(--m-border);
 }
 
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  Property Card — pet policy chip + sqft spec item (audit fix)       ║
+   ║  Adds a compact pet-policy indicator and sqft to the specs row.     ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+body[data-portal="public"] .property-card-spec-item i.fa-ruler-combined { font-size: 10px; color: var(--m-brand); }
+
+body[data-portal="public"] .property-card-pet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+body[data-portal="public"] .property-card-pet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.10);
+  color: #15803d;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+body[data-portal="public"] .property-card-pet-chip--no {
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+}
+
+body[data-portal="public"] .property-card-pet-chip i {
+  font-size: 9px;
+}
+
+/* Dark theme overrides for pet chip */
+html[data-theme="dark"] body[data-portal="public"] .property-card-pet-chip {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+}
+html[data-theme="dark"] body[data-portal="public"] .property-card-pet-chip--no {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+}
+
+/* ── Property card carousel arrows (desktop) ─────────────────────
+   Revealed on hover for pointer users; hidden on touch devices
+   where swipe is the native interaction. */
+@media (hover: hover) and (pointer: fine) {
+  body[data-portal="public"] .property-card-img:hover .property-card-arrow {
+    opacity: 1;
+  }
+}
+body[data-portal="public"] .property-card-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  opacity: 0;
+  transition: opacity 160ms ease, background 160ms ease;
+  z-index: 5;
+}
+body[data-portal="public"] .property-card-arrow:hover {
+  background: #ffffff;
+}
+body[data-portal="public"] .property-card-arrow--prev { left: 8px; }
+body[data-portal="public"] .property-card-arrow--next { right: 8px; }
+html[data-theme="dark"] body[data-portal="public"] .property-card-arrow {
+  background: rgba(17, 24, 39, 0.85);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: #f1f5f9;
+}
+html[data-theme="dark"] body[data-portal="public"] .property-card-arrow:hover {
+  background: #1f2937;
+}
+@media (max-width: 768px) {
+  body[data-portal="public"] .property-card-arrow { display: none; }
+}
+
 html[data-theme="dark"] body[data-portal="public"]:not([data-page="home"]):not([data-page="listings"]):not([data-page="property"]) .info-hero h1,
 html[data-theme="dark"] body[data-portal="public"]:not([data-page="home"]):not([data-page="listings"]):not([data-page="property"]) .page-header h1,
 html[data-theme="dark"] body[data-portal="public"]:not([data-page="home"]):not([data-page="listings"]):not([data-page="property"]) .doc-header h1,
@@ -8660,7 +8751,6 @@ html[data-theme="dark"] body[data-portal="public"]:not([data-page="home"]):not([
   @media (max-width: 767px) {
     .theme-toggle.mv2-theme-toggle { display: none; }
   }
-}
 
 /* ══ Property List View — one row per property (listings.html) ══════════════
    Applied when #propertyGrid has the .property-list-view class.

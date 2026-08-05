@@ -141,10 +141,11 @@
       );
     }).join('');
 
-    // ── Specs row — beds + baths only (sqft lives on detail page) ─
+    // ── Specs row — beds + baths + sqft (sqft is a key decision factor) ─
     var specParts = [];
     if (p.bedrooms != null) specParts.push('<span class="property-card-spec-item"><i class="fas fa-bed"></i>' + (p.bedrooms === 0 ? 'Studio' : p.bedrooms + ' Bed') + '</span>');
     if (p.bathrooms)        specParts.push('<span class="property-card-spec-item"><i class="fas fa-bath"></i>' + p.bathrooms + ' Bath</span>');
+    if (p.square_footage)   specParts.push('<span class="property-card-spec-item"><i class="fas fa-ruler-combined"></i>' + Number(p.square_footage).toLocaleString() + ' sqft</span>');
     var specsHtml = specParts.map(function (s, i) {
       return i === 0 ? s : '<span class="property-card-spec-sep">·</span>' + s;
     }).join('');
@@ -186,6 +187,14 @@
     // ── Availability chip ─────────────────────────────────────
     var avail = availChipHtml(p);
 
+    // ── Pet policy chip — shown when pets are allowed ─────────
+    var petChip = '';
+    if (p.pets_allowed === true) {
+      petChip = '<span class="property-card-pet-chip"><i class="fas fa-paw"></i> Pets OK</span>';
+    } else if (p.pets_allowed === false) {
+      petChip = '<span class="property-card-pet-chip property-card-pet-chip--no"><i class="fas fa-ban"></i> No Pets</span>';
+    }
+
     // ── Price ─────────────────────────────────────────────────
     var rentHtml = fmtRent(p.monthly_rent);
     var rentUnit = Number(p.monthly_rent) > 0 ? '<span class="property-card-price-unit">/mo</span>' : '';
@@ -210,6 +219,11 @@
               '<i class="far fa-heart"></i>' +
             '</button>' +
           '</div>' +
+          // Carousel arrows — desktop only (hidden on touch via CSS)
+          (photos.length > 1
+            ? '<button class="property-card-arrow property-card-arrow--prev" type="button" aria-label="Previous photo"><i class="fas fa-chevron-left"></i></button>' +
+              '<button class="property-card-arrow property-card-arrow--next" type="button" aria-label="Next photo"><i class="fas fa-chevron-right"></i></button>'
+            : '') +
         '</div>' +
 
         // ── Body — full-width link for click-through ───────────
@@ -222,8 +236,10 @@
             (avail ? '<span class="property-card-addr-sep">·</span>' + avail : '') +
             (listedLabel ? '<span class="property-card-addr-sep">·</span><span class="property-card-listed-date">' + listedLabel + '</span>' : '') +
           '</div>' +
-          // 3. Specs — beds + baths only
+          // 3. Specs — beds + baths + sqft
           (specsHtml ? '<div class="property-card-specs">' + specsHtml + '</div>' : '') +
+          // 3b. Pet policy chip
+          (petChip ? '<div class="property-card-pet-row">' + petChip + '</div>' : '') +
           // 4. Footer — price pinned to bottom (no divider)
           '<div class="property-card-footer">' +
             '<div class="property-card-price">' + rentHtml + rentUnit + '</div>' +
@@ -268,6 +284,12 @@
       var diff = touchX - e.changedTouches[0].clientX;
       if (Math.abs(diff) > 40) goTo(idx + (diff > 0 ? 1 : -1));
     }, { passive: true });
+
+    // Desktop arrow buttons
+    var prevBtn = card.querySelector('.property-card-arrow--prev');
+    var nextBtn = card.querySelector('.property-card-arrow--next');
+    if (prevBtn) prevBtn.addEventListener('click', function (e) { e.stopPropagation(); goTo(idx - 1); });
+    if (nextBtn) nextBtn.addEventListener('click', function (e) { e.stopPropagation(); goTo(idx + 1); });
 
     // P3-B: Keyboard navigation — ArrowLeft/ArrowRight when card has focus
     function onKeyDown(e) {

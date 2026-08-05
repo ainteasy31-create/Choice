@@ -219,13 +219,28 @@
   function propertyUrl(p) {
     if (!p || !p.id) return '/listings.html';
     var id = String(p.id);
-    if (!/^PROP-[A-Z0-9]{8}$/i.test(id)) return '/property.html?id=' + encodeURIComponent(id);
+    // Accept both legacy PROP-XXXXXXXX and UUID formats.
+    // The edge function (functions/rent/[state]/[city]/[slug].js) matches
+    // either a short prop-xxxxxxxx token or a full UUID at the end of the path.
+    if (!/^(PROP-[A-Z0-9]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(id)) {
+      return '/property.html?id=' + encodeURIComponent(id);
+    }
     var state = String(p.state || '').toLowerCase().slice(0, 2);
     var city = _slugSeg(p.city);
     if (!state || !city) return '/property.html?id=' + encodeURIComponent(id);
     var beds = (p.bedrooms == null) ? 'home'
              : (Number(p.bedrooms) === 0 ? 'studio' : Number(p.bedrooms) + 'br');
-    var type = _slugSeg(p.property_type) || 'home';
+    // Normalize property_type to a clean slug segment (handles SINGLE_FAMILY,
+    // TOWNHOMES, house, apartment, etc. consistently).
+    var rawType = String(p.property_type || '').toLowerCase().replace(/[\s_]+/g, '-');
+    var typeMap = {
+      'single-family': 'house', 'single_family': 'house',
+      'townhomes': 'townhouse', 'townhome': 'townhouse',
+      'condos': 'condo', 'apartment': 'apartment', 'house': 'house',
+      'condo': 'condo', 'townhouse': 'townhouse', 'duplex': 'duplex',
+      'studio': 'studio', 'multi-family': 'multi-family', 'mobile-home': 'mobile-home',
+    };
+    var type = typeMap[rawType] || rawType || 'home';
     return '/rent/' + state + '/' + city + '/' + beds + '-' + type + '-' + id.toLowerCase() + '/';
   }
 

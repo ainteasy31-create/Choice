@@ -282,6 +282,45 @@ function _attachPhotoArrays(row) {
 const PROPERTIES_SELECT_FULL =
   '*, landlords(contact_name, business_name, avatar_url, verified), property_photos(url, file_id, display_order, is_hero)';
 
+// ── Property type normalization ─────────────────────────────────────────────
+// The scraper writes UPPER_SNAKE values (SINGLE_FAMILY, TOWNHOMES, APARTMENT,
+// CONDOS) while manual publishes write lowercase (house, apartment, townhouse).
+// The frontend filter bar sends canonical lowercase (house, apartment, condo,
+// townhouse). This map translates a canonical filter value into the set of
+// DB values that should match it.
+const _TYPE_FILTER_MAP = {
+  house:     ['house', 'single_family', 'SINGLE_FAMILY', 'single-family'],
+  apartment: ['apartment', 'APARTMENT'],
+  condo:     ['condo', 'condos', 'CONDOS', 'CONDO'],
+  townhouse: ['townhouse', 'townhomes', 'TOWNHOMES', 'TOWNHOUSE'],
+  duplex:    ['duplex', 'DUPLEX'],
+  multi_family: ['multi_family', 'MULTI_FAMILY', 'multi-family'],
+  mobile_home:  ['mobile_home', 'MOBILE_HOME', 'mobile-home'],
+  studio:    ['studio', 'STUDIO'],
+};
+
+// Normalize a single property_type value to a canonical lowercase slug.
+function _normalizePropertyType(t) {
+  if (!t) return '';
+  const s = String(t).toLowerCase().replace(/[\s-]+/g, '_');
+  const map = {
+    single_family: 'single_family', house: 'single_family',
+    apartment: 'apartment', townhome: 'townhouse', townhomes: 'townhouse',
+    townhouse: 'townhouse', condo: 'condo', condos: 'condo',
+    duplex: 'duplex', studio: 'studio', mobile_home: 'mobile_home',
+    multi_family: 'multi_family', land: 'land', commercial: 'commercial',
+    other: 'other',
+  };
+  return map[s] || s;
+}
+
+// Build an .or() filter string for a canonical type filter value.
+function _typeFilterOr(canonicalType) {
+  const variants = _TYPE_FILTER_MAP[canonicalType];
+  if (!variants || !variants.length) return null;
+  return variants.map(v => `property_type.eq.${v}`).join(',');
+}
+
 const Properties = {
   // getListings - server-side filtered, sorted, paginated query for the listings page.
   // filters: { q, type, beds, min_beds, min_baths, min_rent, max_rent, pets, parking, available, sort, page, per_page }
@@ -311,8 +350,12 @@ const Properties = {
     }
 
     // Property type pill (apartment / house / condo / townhouse)
+    // Normalizes the canonical filter value to match ALL DB variants
+    // (e.g. "house" matches "house", "SINGLE_FAMILY", "single_family").
     if (filters.type && filters.type !== 'all' && !['pets','parking','available'].includes(filters.type)) {
-      q = q.eq('property_type', filters.type);
+      const typeOr = _typeFilterOr(filters.type);
+      if (typeOr) q = q.or(typeOr);
+      else        q = q.eq('property_type', filters.type);
     }
     // Special pills
     if (filters.type === 'pets')      q = q.eq('pets_allowed', true);

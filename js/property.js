@@ -699,13 +699,17 @@ function renderProperty(p) {
   }
   document.getElementById('sidebarRent').textContent    = `${p.monthly_rent != null ? '$' + Number(p.monthly_rent).toLocaleString() : 'TBD'}`;
   document.getElementById('sidebarDeposit').textContent = p.security_deposit ? `$${Number(p.security_deposit).toLocaleString()}` : 'Contact landlord';
-  document.getElementById('sidebarFee').textContent     = (p.application_fee != null && p.application_fee > 0) ? `$${Number(p.application_fee).toLocaleString()}` : 'Free';
+  // Flat $50 application fee is the platform standard. If a property has no
+  // explicit fee, default to $50 rather than showing "Free" (which contradicts
+  // the marketing promise and the scraper normalization rules).
+  const _appFee = (p.application_fee != null && p.application_fee > 0)
+    ? Number(p.application_fee)
+    : 50;
+  document.getElementById('sidebarFee').textContent = `$${_appFee.toLocaleString()}`;
   // Update apply disclaimer fee amount dynamically
   const _feeAmtEl = document.getElementById('applyFeeAmt');
   if (_feeAmtEl) {
-    _feeAmtEl.textContent = (p.application_fee != null && p.application_fee > 0)
-      ? `$${Number(p.application_fee).toLocaleString()} application fee`
-      : 'a free application';
+    _feeAmtEl.textContent = `$${_appFee.toLocaleString()} application fee`;
   }
   // Only show "Available From" in the Costs table when the date is in the future.
   // If the property is already available (availNow), showing a past date alongside
