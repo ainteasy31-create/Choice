@@ -46,6 +46,49 @@ _PROPERTY_TYPE_MAP = {
 _OPENDOOR_RENT_MULTIPLIER = float(os.environ.get("OPENDOOR_RENT_MULTIPLIER", "0.0085"))
 _OPENDOOR_RENT_MIN = int(os.environ.get("OPENDOOR_RENT_MIN", "700"))
 _OPENDOOR_RENT_METHOD = os.environ.get("OPENDOOR_RENT_METHOD", "opendoor_rent_estimate")
+_OPENDOOR_RENT_ROUND = int(os.environ.get("OPENDOOR_RENT_ROUND", "25"))
+
+# ── State-level rent multiplier overrides ─────────────────────────────────────
+# The gross rent multiplier (monthly rent / sale price) varies by market.
+# High cost-of-living states have inflated home values relative to rent
+# → lower multiplier.  Affordable Midwest/South markets have lower sale prices
+# but rents are not proportionally lower → higher multiplier.
+# These are median estimates; override per-run with OPENDOOR_RENT_MULTIPLIER.
+_STATE_RENT_MULTIPLIERS = {
+    # High cost-of-living (price/rent ratio ~150-200x)
+    "HI": 0.0058,
+    "CA": 0.0063,
+    "MA": 0.0066,
+    "NY": 0.0066,
+    "NJ": 0.0067,
+    "CT": 0.0067,
+    "WA": 0.0069,
+    "OR": 0.0070,
+    "CO": 0.0072,
+    "MD": 0.0072,
+    "VA": 0.0074,
+    "IL": 0.0076,
+    # Mid-cost markets (price/rent ratio ~120-150x) → default 0.0085 applies
+    # Affordable/Midwest/South (price/rent ratio ~100-120x)
+    "MO": 0.0090,
+    "TN": 0.0090,
+    "LA": 0.0090,
+    "NC": 0.0090,
+    "SC": 0.0090,
+    "GA": 0.0090,
+    "AL": 0.0092,
+    "AR": 0.0092,
+    "KY": 0.0092,
+    "NE": 0.0092,
+    "IA": 0.0094,
+    "IN": 0.0094,
+    "MI": 0.0094,
+    "OH": 0.0095,
+    "KS": 0.0095,
+    "OK": 0.0095,
+    "MS": 0.0095,
+    "WV": 0.0096,
+}
 
 _TRACKABLE_MISSING = [
     "lat", "lng", "county", "neighborhood", "year_built", "square_footage",
@@ -106,12 +149,34 @@ def _parse_price(value):
         return None
 
 
-def estimate_rent_from_sale_price(sale_price):
-    """Estimate monthly rent from a sale price using a configurable multiplier."""
+def estimate_rent_from_sale_price(sale_price, state=None):
+    """
+    Estimate monthly rent from a sale price using a state-aware multiplier.
+
+    The gross rent multiplier varies significantly by market:
+      - High cost-of-living states (CA, NY, HI, MA) have inflated prices
+        relative to rents, so the multiplier is lower.
+      - Affordable Midwest/South markets (OH, OK, MI) have relatively
+        higher rent-to-price ratios, so the multiplier is higher.
+
+    The result is rounded to the nearest _OPENDOOR_RENT_ROUND dollars
+    (default $25) so the published rent looks human-set rather than
+    machine-generated (e.g. $2,300 instead of $2,295).
+
+    Override the default multiplier entirely via OPENDOOR_RENT_MULTIPLIER
+    env var; override the rounding increment via OPENDOOR_RENT_ROUND.
+    """
     price = _parse_price(sale_price)
     if price is None or price <= 0:
         return None
-    rent = int(round(price * _OPENDOOR_RENT_MULTIPLIER))
+    # State-specific multiplier overrides the global default
+    multiplier = _STATE_RENT_MULTIPLIERS.get(
+        (state or "").strip().upper(), _OPENDOOR_RENT_MULTIPLIER
+    )
+    raw_rent = price * multiplier
+    # Round to nearest increment (default $25) for human-looking prices
+    step = max(1, _OPENDOOR_RENT_ROUND)
+    rent = int(round(raw_rent / step) * step)
     if rent < _OPENDOOR_RENT_MIN:
         rent = _OPENDOOR_RENT_MIN
     return rent
@@ -727,6 +792,47 @@ def _parse_neighborhood(jsonld, nd_listing):
     return None
 
 
+def _parse_walk_scores(nd_listing):
+    """
+    Extract walk / transit / bike scores from an Opendoor __NEXT_DATA__
+    listing object.  Returns (walk_score, transit_score, bike_score) with
+    each element being an int 0-100 or None.
+
+    Opendoor sometimes embeds Walk Score data directly in the listing
+    object or in a nested ``scores`` / ``walkScores`` sub-object.
+    """
+    if not isinstance(nd_listing, dict):
+        return None, None, None
+
+    def _extract_score(obj, *keys):
+        for key in keys:
+            v = obj.get(key)
+            if isinstance(v, (int, float)) and 0 <= v <= 100:
+                return int(v)
+            if isinstance(v, dict):
+                inner = v.get("score") or v.get("value") or v.get("walkScore")
+                if isinstance(inner, (int, float)) and 0 <= inner <= 100:
+                    return int(inner)
+        return None
+
+    walk    = _extract_score(nd_listing, "walkScore",    "walk_score",    "walkability")
+    transit = _extract_score(nd_listing, "transitScore", "transit_score")
+    bike    = _extract_score(nd_listing, "bikeScore",    "bike_score")
+
+    # Nested scores object (e.g. {"scores": {"walk": 72, "transit": 45}})
+    for scores_key in ("scores", "walkScores", "transportationScores"):
+        sub = nd_listing.get(scores_key)
+        if isinstance(sub, dict):
+            if walk    is None:
+                walk    = _extract_score(sub, "walkScore", "walk")
+            if transit is None:
+                transit = _extract_score(sub, "transitScore", "transit")
+            if bike    is None:
+                bike    = _extract_score(sub, "bikeScore", "bike")
+
+    return walk, transit, bike
+
+
 def _parse_virtual_tour(jsonld, nd_listing):
     """Extract virtual tour URL from JSON-LD or __NEXT_DATA__."""
     if isinstance(jsonld, dict):
@@ -1089,7 +1195,7 @@ def _parse_opendoor_html(html, url, verbose=False):
     if raw_price is None and nd_listing:
         raw_price = nd_listing.get("price") or nd_listing.get("listPrice") or nd_listing.get("salePrice")
     sale_price = _parse_price(raw_price)
-    monthly_rent = estimate_rent_from_sale_price(sale_price)
+    monthly_rent = estimate_rent_from_sale_price(sale_price, state=state)
 
     # ── Beds / Baths ──────────────────────────────────────────────────────────
     # Fix: use _safe_int/_safe_float to handle values like 3.0 or "3"
@@ -1189,6 +1295,15 @@ def _parse_opendoor_html(html, url, verbose=False):
     virtual_tour  = _parse_virtual_tour(jsonld, nd_listing)
     has_basement  = _parse_has_basement(jsonld, cleaned_description)
     has_central_air = _parse_has_central_air(jsonld, cleaned_description, cooling)
+    walk_score, transit_score, bike_score = _parse_walk_scores(nd_listing)
+
+    # Build location_context JSON from walk/transit/bike scores if any were found
+    _lc_data = {k: v for k, v in {
+        "walk_score": walk_score,
+        "transit_score": transit_score,
+        "bike_score": bike_score,
+    }.items() if v is not None}
+    location_context = json.dumps(_lc_data) if _lc_data else None
 
     # ── Title ─────────────────────────────────────────────────────────────────
     title = str(jsonld.get("name") or "").strip()
@@ -1220,7 +1335,7 @@ def _parse_opendoor_html(html, url, verbose=False):
         "neighborhood": neighborhood,
         "lat": lat,
         "lng": lng,
-        "location_context": None,
+        "location_context": location_context,
         "property_type": property_type,
         "bedrooms": bedrooms,
         "bathrooms": bathrooms,
@@ -1246,14 +1361,17 @@ def _parse_opendoor_html(html, url, verbose=False):
         "tax_value": None,
         "description": cleaned_description,
         "showing_instructions": None,
-        "available_date": available_date,
-        "minimum_lease_months": None,
+        # Default available_date to today — Opendoor homes are vacant/unoccupied
+        # (they buy homes directly), so immediate availability is the safe default.
+        "available_date": available_date or date.today().isoformat(),
+        # Standard 12-month lease for single-family conversions
+        "minimum_lease_months": 12,
         "lease_terms": "[]",
         "pets_allowed": pets_allowed,
         "pet_types_allowed": "[]",
         "pet_weight_limit": None,
         "pet_details": None,
-        "smoking_allowed": None,
+        "smoking_allowed": False,   # standard for residential rentals
         "parking": parking,
         "amenities": json.dumps(amenities),
         "appliances": json.dumps(appliances),

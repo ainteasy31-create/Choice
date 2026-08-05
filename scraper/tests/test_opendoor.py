@@ -90,11 +90,41 @@ def test_is_opendoor_url():
 # ── Rent estimation ───────────────────────────────────────────────────────────
 
 def test_estimate_rent_from_sale_price():
-    assert module.estimate_rent_from_sale_price(200000) == 1700
-    assert module.estimate_rent_from_sale_price("$300,000") == 2550
-    assert module.estimate_rent_from_sale_price(50000) == 700   # enforces minimum
+    # Base multiplier 0.0085 with $25 rounding
+    assert module.estimate_rent_from_sale_price(200000) == 1700    # 200k*0.0085=1700 → $1700
+    assert module.estimate_rent_from_sale_price("$300,000") == 2550  # 300k*0.0085=2550 → $2550
+    assert module.estimate_rent_from_sale_price(50000) == 700      # enforces minimum
     assert module.estimate_rent_from_sale_price(None) is None
     assert module.estimate_rent_from_sale_price(0) is None
+
+
+def test_estimate_rent_state_aware():
+    """State-level multipliers should produce market-appropriate rents."""
+    # Ohio (affordable market) uses a higher multiplier than default
+    oh_rent = module.estimate_rent_from_sale_price(200000, state="OH")
+    default_rent = module.estimate_rent_from_sale_price(200000)
+    assert oh_rent > default_rent, "OH rent should be higher than default for same price"
+
+    # California (expensive market) uses a lower multiplier
+    ca_rent = module.estimate_rent_from_sale_price(400000, state="CA")
+    default_ca = module.estimate_rent_from_sale_price(400000)
+    assert ca_rent < default_ca, "CA rent should be lower than default for same price"
+
+    # State codes should be case-insensitive
+    assert module.estimate_rent_from_sale_price(300000, state="oh") == \
+           module.estimate_rent_from_sale_price(300000, state="OH")
+
+
+def test_estimate_rent_rounding():
+    """Rent should be rounded to the nearest $25 (human-looking price)."""
+    # 187500 * 0.0085 = 1593.75 → rounds to $1600 (nearest $25 = 1593.75/25=63.75 → 64 × 25 = 1600)
+    rent = module.estimate_rent_from_sale_price(187500)
+    assert rent % 25 == 0, "Rent should be a multiple of $25, got {}".format(rent)
+
+    # 270000 * 0.0085 = 2295 → rounds to $2300 (nearest $25)
+    rent = module.estimate_rent_from_sale_price(270000)
+    assert rent == 2300
+    assert rent % 25 == 0
 
 
 # ── Basic JSON-LD extraction ───────────────────────────────────────────────────
@@ -110,7 +140,9 @@ def test_parse_opendoor_html_jsonld():
     assert rec["bathrooms"] == 2        # integer part
     assert rec["half_bathrooms"] == 1   # fractional part → half bath
     assert rec["square_footage"] == 1800
-    assert rec["monthly_rent"] == 2295
+    # 270k * 0.0085 = 2295 → rounds to nearest $25 = $2300
+    assert rec["monthly_rent"] == 2300
+    assert rec["monthly_rent"] % 25 == 0, "Rent must be a $25 multiple"
     # application_fee and security_deposit must NOT be hardcoded
     assert rec["application_fee"] is None
     assert rec["security_deposit"] is None
@@ -338,6 +370,95 @@ def test_data_quality_score_increases_with_photos():
     rec_no = module._parse_opendoor_html(html_no_photos, "https://www.opendoor.com/homes/1a")
     rec_ph = module._parse_opendoor_html(html_with_photos, "https://www.opendoor.com/listing/123")
     assert rec_ph["data_quality_score"] > rec_no["data_quality_score"]
+
+
+# ── Walk / transit / bike score extraction ────────────────────────────────────
+
+def test_walk_scores_from_nextdata():
+    """Walk/transit/bike scores in __NEXT_DATA__ listing should be extracted."""
+    nd = {
+        "props": {"pageProps": {"listing": {
+            "id": "w1",
+            "address": {"streetAddress": "1 Walk St", "addressLocality": "Portland",
+                        "addressRegion": "OR", "postalCode": "97201"},
+            "price": 350000,
+            "bedrooms": 3,
+            "bathrooms": 2,
+            "walkScore": 88,
+            "transitScore": 72,
+            "bikeScore": 60,
+            "photos": [{"url": "https://cdn.opendoor.com/a.jpg"},
+                       {"url": "https://cdn.opendoor.com/b.jpg"}],
+        }}}
+    }
+    html = _make_html(nextdata=nd)
+    rec = module._parse_opendoor_html(html, "https://www.opendoor.com/homes/1-walk-st")
+    assert rec is not None
+    import json
+    ctx = json.loads(rec.get("location_context") or "{}")
+    assert ctx.get("walk_score") == 88
+    assert ctx.get("transit_score") == 72
+    assert ctx.get("bike_score") == 60
+
+
+def test_walk_scores_nested_scores_object():
+    """Walk scores nested under a 'scores' sub-object should also be extracted."""
+    nd = {
+        "props": {"pageProps": {"listing": {
+            "id": "w2",
+            "address": {"streetAddress": "2 Transit Ave", "addressLocality": "Seattle",
+                        "addressRegion": "WA", "postalCode": "98101"},
+            "price": 500000,
+            "bedrooms": 2,
+            "bathrooms": 1,
+            "scores": {"walk": 95, "transit": 80},
+            "photos": [{"url": "https://cdn.opendoor.com/c.jpg"},
+                       {"url": "https://cdn.opendoor.com/d.jpg"}],
+        }}}
+    }
+    html = _make_html(nextdata=nd)
+    rec = module._parse_opendoor_html(html, "https://www.opendoor.com/homes/2-transit")
+    assert rec is not None
+    import json
+    ctx = json.loads(rec.get("location_context") or "{}")
+    assert ctx.get("walk_score") == 95
+    assert ctx.get("transit_score") == 80
+
+
+def test_no_walk_scores_leaves_location_context_none():
+    """When no scores are present, location_context should be None."""
+    html = _make_html(jsonld=_SAMPLE_JSONLD)
+    rec = module._parse_opendoor_html(html, "https://www.opendoor.com/listing/123")
+    assert rec is not None
+    assert rec.get("location_context") is None
+
+
+# ── Smart rental defaults ─────────────────────────────────────────────────────
+
+def test_available_date_defaults_to_today():
+    """If Opendoor page has no availability info, record should default to today."""
+    import datetime
+    html = _make_html(jsonld=_SAMPLE_JSONLD)
+    rec = module._parse_opendoor_html(html, "https://www.opendoor.com/listing/123")
+    assert rec is not None
+    assert rec["available_date"] is not None
+    # Should be parseable as a date and not in the past beyond today
+    parsed = datetime.date.fromisoformat(rec["available_date"])
+    assert parsed >= datetime.date.today()
+
+
+def test_minimum_lease_months_defaults_to_12():
+    html = _make_html(jsonld=_SAMPLE_JSONLD)
+    rec = module._parse_opendoor_html(html, "https://www.opendoor.com/listing/123")
+    assert rec is not None
+    assert rec["minimum_lease_months"] == 12
+
+
+def test_smoking_allowed_defaults_to_false():
+    html = _make_html(jsonld=_SAMPLE_JSONLD)
+    rec = module._parse_opendoor_html(html, "https://www.opendoor.com/listing/123")
+    assert rec is not None
+    assert rec["smoking_allowed"] is False
 
 
 # ── non-Opendoor URL guard ────────────────────────────────────────────────────
