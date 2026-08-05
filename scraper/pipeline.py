@@ -616,6 +616,266 @@ class PipelineOrchestrator:
         self._log("\n" + result.summary())
         return result
 
+    def run_records(self, records: List[Dict], dry_run: bool = False, batch_name: str = "record batch") -> PipelineResult:
+        """Process an existing list of records through the full pipeline."""
+        criteria = BatchCriteria(
+            locations=[batch_name],
+            beds_exact=None,
+            beds_min=None,
+            beds_max=None,
+            baths_min=0.0,
+            baths_max=None,
+            rent_min=0,
+            rent_max=10_000_000,
+            rent_floor=None,
+            rent_cap=None,
+            allowed_types=set(),
+            zip_codes=[],
+            target=max(1, len(records)),
+            past_days=0,
+            limit=max(1, len(records)),
+            min_score=0,
+            fallback_locations=[],
+            pricing_fn=None,
+            batch_name=batch_name,
+        )
+        return self._run_records(records, criteria, dry_run)
+
+    def _run_records(self, records: List[Dict], criteria: BatchCriteria, dry_run: bool) -> PipelineResult:
+        """Internal runner for a list of already-scraped records."""
+        result = PipelineResult(batch_name=criteria.batch_name)
+        result.scraped = len(records)
+
+        self._log("\n" + "=" * 65)
+        self._log("Choice Properties Pipeline — {}".format(criteria.batch_name))
+        self._log("Target: {} | Past {} days | Dry run: {}".format(
+            criteria.target, criteria.past_days, dry_run))
+        self._log("=" * 65)
+
+        if not records:
+            self._log("ERROR: No listings provided for pipeline processing.")
+            return result
+
+        # ── Step 2: Active/available filter + within-batch dedup ─────────
+        self._log("\n── Step 2: Availability + dedup ──")
+        records = self._step2_availability_dedup(records)
+        result.after_dedup = len(records)
+        self._log("   After dedup: {}".format(result.after_dedup))
+
+        if not records:
+            self._log("ERROR: No listings remained after availability/dedup.")
+            return result
+
+        # ── Step 3: Criteria filter + watermark filter ────────────────────
+        self._log("\n── Step 3: Filtering against criteria + competitor watermark ──")
+        records, dropped = self._step3_filter(records, criteria)
+        result.passed_filter = len(records)
+        result.watermarked_dropped = sum(1 for _, reasons in dropped
+                                         if any("watermark" in r or "competitor" in r for r in reasons))
+        self._log("   Kept: {} | Dropped: {}".format(result.passed_filter, len(dropped)))
+        for addr, reasons in dropped[:15]:
+            self._log("   [DROP] {} — {}".format(addr, ", ".join(reasons)))
+        if len(dropped) > 15:
+            self._log("   ... and {} more".format(len(dropped) - 15))
+
+        if len(records) < criteria.target and criteria.fallback_locations:
+            self._log("\n   Short on target — trying {} fallback location(s)...".format(
+                len(criteria.fallback_locations)))
+            fb_criteria = BatchCriteria(
+                locations=criteria.fallback_locations,
+                beds_exact=criteria.beds_exact,
+                beds_min=criteria.beds_min,
+                beds_max=criteria.beds_max,
+                baths_min=criteria.baths_min,
+                baths_max=criteria.baths_max,
+                rent_min=criteria.rent_min,
+                rent_max=criteria.rent_max,
+                allowed_types=criteria.allowed_types,
+                past_days=criteria.past_days,
+                limit=criteria.limit,
+                batch_name=criteria.batch_name + " (fallback)",
+            )
+            fb_recs = self._step1_scrape(fb_criteria)
+            fb_recs = self._step2_availability_dedup(fb_recs)
+            existing_sids = {r.get("source_listing_id") for r in records}
+            fb_recs = [r for r in fb_recs if r.get("source_listing_id") not in existing_sids]
+            fb_recs, _ = self._step3_filter(fb_recs, criteria)
+            self._log("   Fallback added: {}".format(len(fb_recs)))
+            records.extend(fb_recs)
+
+        # Quality floor
+        pre = len(records)
+        records = [r for r in records if r.get("data_quality_score", 0) >= criteria.min_score]
+        self._log("   After quality floor ({}): {}/{}".format(criteria.min_score, len(records), pre))
+
+        if not records:
+            self._log("ERROR: No listings passed quality floor. Lower --min-score or expand criteria.")
+            return result
+
+        # ── Step 4: Pricing ───────────────────────────────────────────────
+        self._log("\n── Step 4: Pricing ──")
+        records = self._step4_pricing(records, criteria)
+
+        # ── Step 5: Image download + ImageKit upload ───────────────────────
+        self._log("\n── Step 5: Image pre-check (source URL gate) ──")
+        records = self._step5_image_precheck(records)
+        self._log("   {} records have sufficient source images".format(len(records)))
+
+        if not records:
+            self._log("ERROR: No records have enough source images (min {}).".format(MIN_PHOTOS))
+            return result
+
+        # ── Step 6: Enrichment pipeline (cleanup, branding, fee, pricing) ─
+        self._log("\n── Step 6: Enrichment pipeline ──")
+        if _ENRICH_OK:
+            records, wm_count = apply_enrichment_pipeline(records, verbose=self.verbose)
+            result.watermarked_dropped += wm_count
+        else:
+            self._log("   WARNING: enrichment module unavailable — skipping")
+
+        # ── Step 7: Pre-publish validation ───────────────────────────────
+        self._log("\n── Step 7: Pre-publish validation ──")
+        valid, invalid = [], []
+        for rec in records:
+            ok, fails = validate_for_publish(rec) if _ENRICH_OK else (True, [])
+            if ok:
+                valid.append(rec)
+            else:
+                addr = "{} {}".format(rec.get("address", ""), rec.get("city", "")).strip()
+                invalid.append((addr, fails))
+                self._log("   [FAIL] {}: {}".format(addr, ", ".join(fails)))
+        result.passed_validation = len(valid)
+        self._log("   Valid: {} | Invalid: {}".format(len(valid), len(invalid)))
+
+        if not valid:
+            self._log("ERROR: No listings passed validation.")
+            return result
+
+        if self._pipe_session:
+            candidate_sids = [r.get("source_listing_id", "") for r in valid if r.get("source_listing_id")]
+            pub_map = self._fetch_pipeline_id_map(candidate_sids)
+            published_sids = {sid for sid in candidate_sids if pub_map.get("__published__" + sid)}
+            if published_sids:
+                before = len(valid)
+                valid = [r for r in valid if r.get("source_listing_id", "") not in published_sids]
+                self._log("   Excluded {} already-published listing(s) from candidates".format(
+                    before - len(valid)))
+
+        if not valid:
+            self._log("ERROR: All candidates already published. Try a different market or expand criteria.")
+            return result
+
+        valid.sort(key=lambda r: -r.get("data_quality_score", 0))
+
+        seen_floorplans: set = set()
+        deduped = []
+        for rec in valid:
+            key = (
+                (rec.get("city") or "").lower().strip(),
+                (rec.get("address") or "").lower().strip(),
+                rec.get("square_footage") or rec.get("square_feet"),
+                rec.get("monthly_rent"),
+            )
+            if all(k is not None for k in key) and key[1] and key[2] and key[3]:
+                if key in seen_floorplans:
+                    addr = "{} {}".format(rec.get("address", ""), rec.get("city", "")).strip()
+                    self._log("   [SKIP] {} — exact duplicate already selected ({} sqft @ ${}/mo)".format(
+                        addr, key[2], key[3]))
+                    continue
+                seen_floorplans.add(key)
+            deduped.append(rec)
+        valid = deduped
+
+        to_publish = valid[: criteria.target]
+        result.selected = len(to_publish)
+        self._log("\n   Selecting top {}/{} for publishing:".format(len(to_publish), len(valid)))
+        for i, rec in enumerate(to_publish, 1):
+            addr = "{} {}".format(rec.get("address", ""), rec.get("city", "")).strip()
+            self._log("   {:2}. {} | ${}/mo | score={}".format(
+                i, addr, rec.get("monthly_rent"), rec.get("data_quality_score", 0)))
+
+        if dry_run:
+            self._log("\n[DRY RUN] Stopping before any database writes.")
+            return result
+
+        self._log("\n── Steps 8–12: Stage → Publish → Activate → Photos ──")
+        to_publish = self._step9_stage(to_publish)
+        self._step10_patch_pipeline(to_publish)
+
+        for rec in to_publish:
+            addr = "{}, {} {}".format(
+                rec.get("address", ""), rec.get("city", ""), rec.get("state", "")).strip()
+            pid = rec.get("id")
+            if not pid:
+                self._log("   ERROR: No pipeline ID for: {}".format(addr))
+                result.errors.append("No pipeline ID: " + addr)
+                continue
+
+            if rec.get("__already_published__"):
+                self._log("   SKIP (already published): {}".format(addr))
+                continue
+
+            src_urls = []
+            try:
+                src_urls = json.loads(rec.get("original_image_urls") or "[]")
+            except Exception:
+                pass
+
+            if len(src_urls) < MIN_PHOTOS:
+                self._log("   SKIP: {} — only {} clean photo(s) available (min {}). Not publishing.".format(
+                    addr, len(src_urls), MIN_PHOTOS))
+                result.errors.append(
+                    "Skipped (insufficient photos): " + addr)
+                self._cleanup_staged(pid)
+                continue
+
+            rec["original_image_urls"] = json.dumps(src_urls)
+
+            prop_id, err = self._step11_publish(pid)
+            if err:
+                self._log("   ERROR: PUBLISH FAILED: {} — {}".format(addr, err))
+                result.errors.append("Publish failed {}: {}".format(addr, err))
+                self._cleanup_staged(pid)
+                continue
+            self._log("   OK Published: {} -> {}".format(addr, prop_id))
+
+            activated = self._step12_activate(prop_id)
+            if activated:
+                self._log("      -> activated (status=active)")
+            else:
+                self._log("      WARNING: activation PATCH failed")
+
+            self._log("      Importing photos ({} clean source URLs)...".format(len(src_urls)))
+            uploaded, failed = self._step13b_import_photos(prop_id, src_urls)
+            result.photos_ok += uploaded
+            result.photos_failed += failed
+
+            if uploaded >= MIN_PHOTOS:
+                self._log("      OK {}/{} photos on ImageKit".format(
+                    uploaded, uploaded + failed))
+                self._cleanup_ik_pipeline_folder(pid)
+            else:
+                self._log("      WARNING: only {} photos uploaded (min {})".format(
+                    uploaded, MIN_PHOTOS))
+
+            result.published += 1
+
+            prop_row = self._fetch_property_row(prop_id)
+            if prop_row:
+                url = self._build_url(prop_row)
+            else:
+                url = self._build_url({
+                    "id": prop_id,
+                    "city": rec.get("city", ""),
+                    "state": rec.get("state", ""),
+                    "property_type": rec.get("property_type", "SINGLE_FAMILY"),
+                    "bedrooms": rec.get("bedrooms", 2),
+                })
+            result.published_urls.append(url)
+
+        self._log("\n" + result.summary())
+        return result
+
     # -----------------------------------------------------------------------
     # Step implementations
     # -----------------------------------------------------------------------

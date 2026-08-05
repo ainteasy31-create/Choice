@@ -114,6 +114,17 @@ except Exception as _enrich_err:
     _ENRICH_AVAILABLE = False
     _ENRICH_ERR = str(_enrich_err)
 
+# ── Dynamic pipeline publisher import helper ──────────────────────────────────
+def _get_pipeline_orchestrator():
+    try:
+        import sys as _sys3
+        import os as _os3
+        _sys3.path.insert(0, _os3.path.dirname(_os3.path.abspath(__file__)))
+        from pipeline import PipelineOrchestrator
+        return PipelineOrchestrator, None
+    except Exception as _pipeline_err:
+        return None, str(_pipeline_err)
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SUPABASE_URL     = os.environ.get("SUPABASE_URL", "https://tlfmwetmhthpyrytrcfo.supabase.co").rstrip("/")
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -1924,7 +1935,7 @@ def _run_urls(urls, args, started_at):
     Zillow URLs get full Phase 2 enrichment; other URLs get best-effort generic extraction.
     """
     if not urls:
-        return 0, 0, 0
+        return [], 0, 0, 0
 
     zillow_urls  = [u for u in urls if "zillow.com" in u]
     generic_urls = [u for u in urls if "zillow.com" not in u and not _is_opendoor_url(u)]
@@ -1988,7 +1999,7 @@ def _run_urls(urls, args, started_at):
 
     if not all_records:
         print("\n❌  No records extracted from any URL.")
-        return 0, 0, 0
+        return [], 0, 0, 0
 
     # ── Dry run ───────────────────────────────────────────────────────────────
     if args.dry_run:
@@ -2001,7 +2012,10 @@ def _run_urls(urls, args, started_at):
             src   = r.get("source", "?")
             print("  [" + src + "] " + (addr or "?") + " — " + rent
                   + "  Q=" + str(score) + "  photos=" + str(imgs))
-        return len(all_records), 0, 0
+        return all_records, len(all_records), 0, 0
+
+    if args.publish:
+        return all_records, len(all_records), 0, 0
 
     # ── Insert into pipeline ──────────────────────────────────────────────────
     new_count = dup_count = err_count = 0
@@ -2014,6 +2028,15 @@ def _run_urls(urls, args, started_at):
         else:
             err_count += 1
 
+    if args.publish:
+        print("\n" + ("═" * 55))
+        print("  URL scrape results:")
+        print("  Extracted   : " + str(len(all_records)))
+        print("  Errors      : " + str(err_count))
+        print("═" * 55)
+        _log_run("url-list", "url", len(all_records), len(all_records), 0, None, started_at)
+        return all_records, len(all_records), dup_count, err_count
+
     print("\n" + ("═" * 55))
     print("  URL scrape results:")
     print("  Staged new  : " + str(new_count))
@@ -2022,7 +2045,7 @@ def _run_urls(urls, args, started_at):
     print("═" * 55)
 
     _log_run("url-list", "url", new_count, dup_count, err_count, None, started_at)
-    return new_count, dup_count, err_count
+    return all_records, new_count, dup_count, err_count
 
 
 # ── Zillow scrape for one location ────────────────────────────────────────────
@@ -2185,6 +2208,7 @@ def run(args):
     print("\n🏠  Choice Properties — Scraper v5")
     print(f"   Dry run      : {args.dry_run}")
     print(f"   Upsert       : {args.upsert}")
+    print(f"   Publish      : {args.publish}")
 
     started_at = _now()
 
@@ -2206,7 +2230,21 @@ def run(args):
         print(f"   Mode         : URL scrape ({len(urls)} URL(s))")
         if not _ZW_AVAILABLE:
             print(f"⚠   Zillow module unavailable: {_ZW_IMPORT_ERR}")
-        new, dup, err = _run_urls(urls, args, started_at)
+        records, new, dup, err = _run_urls(urls, args, started_at)
+        if args.publish and records:
+            orchestrator_cls, err = _get_pipeline_orchestrator()
+            if not orchestrator_cls:
+                print(f"❌  Pipeline module unavailable: {err}")
+                return 1
+            if not _requests:
+                print("❌  requests is required to publish through the pipeline.")
+                return 1
+            print("\n" + ("─" * 55))
+            print("🚀  Publishing URL-scraped listings through the pipeline")
+            print(("─" * 55))
+            orchestrator = orchestrator_cls(verbose=True)
+            result = orchestrator.run_records(records, dry_run=args.dry_run, batch_name="URL scrape")
+            return 0
         return 0
 
     # ── Location mode — city / ZIP / region search ────────────────────────────
@@ -2412,6 +2450,14 @@ Search mode (Realtor.com is safe from Replit; Zillow needs residential IP):
     p.add_argument(
         "--dry-run", action="store_true",
         help="Preview what would be staged without writing to the database.",
+    )
+    p.add_argument(
+        "--publish", action="store_true", dest="publish",
+        help=(
+            "Automatically publish URL-scraped listings through the pipeline. "
+            "Use this for Opendoor URL conversion candidates when you want end-to-end "
+            "publish flow without admin approval."
+        ),
     )
     p.add_argument(
         "--allow-opendoor", action="store_true", dest="allow_opendoor",
