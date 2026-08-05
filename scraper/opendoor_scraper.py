@@ -769,6 +769,227 @@ def _parse_has_central_air(jsonld, description, cooling):
     return None
 
 
+def _build_rental_description(rec, scraped_text=None):
+    """
+    Build a rich, natural-prose rental description from the structured fields
+    on an Opendoor-converted record.
+
+    If ``scraped_text`` is provided and is long enough (>= 200 chars) it is
+    used as the opening paragraph; the generated content is appended as an
+    additional "Features at a glance" paragraph so nothing is lost.
+
+    If ``scraped_text`` is absent or short (<200 chars), the generated text
+    is the entire description (with the scraped text prepended if it exists).
+    """
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+    def _fmt_type(t):
+        return (t or "home").replace("_", " ").replace("SINGLE FAMILY", "single-family home").title()
+
+    def _beds_label(n):
+        if n is None:
+            return None
+        if n == 0:
+            return "studio"
+        return "{}-bedroom".format(int(n))
+
+    def _baths_label(full, half):
+        if full is None:
+            return None
+        label = "{} bath{}".format(int(full), "s" if full != 1 else "")
+        if half:
+            label += " + half bath"
+        return label
+
+    def _money(n):
+        return "${:,.0f}".format(n) if n else None
+
+    beds   = rec.get("bedrooms")
+    baths  = rec.get("bathrooms")
+    half   = rec.get("half_bathrooms")
+    sqft   = rec.get("square_footage")
+    yr     = rec.get("year_built")
+    city   = rec.get("city") or ""
+    state  = rec.get("state") or ""
+    hood   = rec.get("neighborhood")
+    ptype  = rec.get("property_type")
+    rent   = rec.get("monthly_rent")
+    lot    = rec.get("lot_size_sqft")
+    heat   = rec.get("heating_type")
+    cool   = rec.get("cooling_type")
+    laundry = rec.get("laundry_type")
+    parking = rec.get("parking")
+    pets    = rec.get("pets_allowed")
+    avail   = rec.get("available_date")
+    basement = rec.get("has_basement")
+    central_air = rec.get("has_central_air")
+    vtour   = rec.get("virtual_tour_url")
+
+    try:
+        appliances = json.loads(rec.get("appliances") or "[]")
+    except Exception:
+        appliances = []
+    try:
+        amenities = json.loads(rec.get("amenities") or "[]")
+    except Exception:
+        amenities = []
+
+    paragraphs = []
+
+    # ── Paragraph 1: opening / overview ──────────────────────────────────────
+    if scraped_text and len(scraped_text.strip()) >= 200:
+        # Keep the original; we'll append features below
+        paragraphs.append(scraped_text.strip())
+    else:
+        # Compose an opening sentence
+        location_parts = []
+        if hood:
+            location_parts.append("the {} neighborhood".format(hood))
+        if city and state:
+            location_parts.append("{}, {}".format(city, state))
+        elif city:
+            location_parts.append(city)
+        location_str = " in " + " of ".join(location_parts) if location_parts else ""
+
+        type_label = _fmt_type(ptype)
+        beds_str   = _beds_label(beds)
+        baths_str  = _baths_label(baths, half)
+
+        opening_parts = []
+        if beds_str and baths_str:
+            opening_parts.append("This {}, {} {}{}".format(
+                beds_str, baths_str, type_label, location_str
+            ))
+        elif beds_str:
+            opening_parts.append("This {} {}{}".format(beds_str, type_label, location_str))
+        else:
+            opening_parts.append("This {}{}".format(type_label, location_str))
+
+        detail_parts = []
+        if yr:
+            detail_parts.append("built in {}".format(yr))
+        if sqft:
+            detail_parts.append("offering {:,} sq ft of living space".format(sqft))
+        if lot:
+            if lot >= 43560:
+                detail_parts.append("on a {:.2f}-acre lot".format(lot / 43560))
+            else:
+                detail_parts.append("on a {:,} sq ft lot".format(lot))
+
+        sentence = opening_parts[0]
+        if detail_parts:
+            sentence += ", " + ", ".join(detail_parts)
+        sentence += " is now available for rent"
+        if rent:
+            sentence += " at {}/month".format(_money(rent))
+        sentence += "."
+
+        # Include short scraped text as a second sentence if present
+        if scraped_text and scraped_text.strip():
+            paragraphs.append(sentence + " " + scraped_text.strip())
+        else:
+            paragraphs.append(sentence)
+
+    # ── Paragraph 2: interior features ────────────────────────────────────────
+    interior = []
+
+    # HVAC
+    if heat and cool:
+        if heat.lower() == cool.lower():
+            interior.append("{} heating and cooling".format(heat))
+        else:
+            interior.append("{} heating".format(heat))
+            interior.append("{} cooling".format(cool))
+    elif heat:
+        interior.append("{} heating".format(heat))
+    elif cool:
+        interior.append("{} cooling".format(cool))
+    elif central_air:
+        interior.append("central air conditioning")
+
+    # Laundry
+    if laundry:
+        laundry_map = {
+            "In-unit": "in-unit washer/dryer",
+            "Washer/dryer hookups": "washer/dryer hookups",
+            "Shared laundry": "shared laundry facilities",
+        }
+        interior.append(laundry_map.get(laundry, laundry.lower()))
+
+    # Basement
+    if basement:
+        interior.append("a full basement")
+
+    # Appliances
+    clean_appliances = [a.replace("_", " ") for a in appliances if a]
+    if clean_appliances:
+        if len(clean_appliances) == 1:
+            interior.append(clean_appliances[0])
+        elif len(clean_appliances) <= 4:
+            interior.append(", ".join(clean_appliances[:-1]) + " and " + clean_appliances[-1])
+        else:
+            interior.append(", ".join(clean_appliances[:4]) + ", and more")
+
+    if interior:
+        para = "Interior highlights include " + ", ".join(interior) + "."
+        paragraphs.append(para)
+
+    # ── Paragraph 3: parking & outdoor ────────────────────────────────────────
+    outdoor = []
+    if parking:
+        outdoor.append(parking.lower())
+    # Check amenities for pool, yard, deck, patio
+    amenity_lower = " ".join(str(a).lower() for a in amenities)
+    if re.search(r"\bpool\b|\bswimming\b", amenity_lower):
+        outdoor.append("a swimming pool")
+    if re.search(r"\bfenced.{0,5}yard\b|\bbackyard\b|\bback yard\b", amenity_lower):
+        outdoor.append("a fenced backyard")
+    elif re.search(r"\byard\b", amenity_lower):
+        outdoor.append("a yard")
+    if re.search(r"\bpatio\b|\bdeck\b|\bporch\b", amenity_lower):
+        outdoor.append("outdoor patio/deck space")
+
+    if outdoor:
+        if len(outdoor) == 1:
+            para = "The property includes {}.".format(outdoor[0])
+        else:
+            para = "The property includes " + ", ".join(outdoor[:-1]) + " and " + outdoor[-1] + "."
+        paragraphs.append(para)
+
+    # ── Paragraph 4: policies & availability ─────────────────────────────────
+    policy_parts = []
+    if pets is True:
+        policy_parts.append("Pets are welcome")
+    elif pets is False:
+        policy_parts.append("No pets allowed")
+
+    if avail:
+        if avail == "now" or re.match(r"^\d{4}-\d{2}-\d{2}$", str(avail)):
+            from datetime import date as _date
+            try:
+                avail_date = _date.fromisoformat(str(avail))
+                today = _date.today()
+                if avail_date <= today:
+                    policy_parts.append("available for immediate move-in")
+                else:
+                    policy_parts.append("available from {}".format(
+                        avail_date.strftime("%B %-d, %Y")
+                    ))
+            except Exception:
+                policy_parts.append("availability: {}".format(avail))
+
+    if vtour:
+        policy_parts.append("a virtual tour is available")
+
+    if policy_parts:
+        para = ". ".join(p[0].upper() + p[1:] for p in policy_parts) + "."
+        paragraphs.append(para)
+
+    # ── Final assembly ────────────────────────────────────────────────────────
+    description = "\n\n".join(p for p in paragraphs if p.strip())
+    return description if description.strip() else None
+
+
 def _parse_opendoor_html(html, url, verbose=False):
     """
     Parse an Opendoor listing HTML page into a normalised pipeline record.
@@ -1069,12 +1290,22 @@ def _parse_opendoor_html(html, url, verbose=False):
         "scraped_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+    # ── Description: build a rich rental description from structured data ────
+    # If the cleaned scraped text is absent or thin (< 200 chars), generate
+    # a full multi-paragraph description from every structured field we have.
+    # If the scraped text is rich enough, _build_rental_description appends a
+    # features paragraph after it so nothing is lost.
+    generated = _build_rental_description(rec, scraped_text=cleaned_description)
+    if generated:
+        rec["description"] = generated
+
     rec["missing_fields"] = json.dumps(_missing_fields(rec))
     rec["data_quality_score"] = _data_quality_score(rec)
 
     if verbose:
-        print("[opendoor_scraper] extracted {} images, rent=${}, quality={}".format(
-            len(images), monthly_rent, rec["data_quality_score"]
+        print("[opendoor_scraper] extracted {} images, rent=${}, quality={}, desc_len={}".format(
+            len(images), monthly_rent, rec["data_quality_score"],
+            len(rec.get("description") or ""),
         ))
 
     return rec

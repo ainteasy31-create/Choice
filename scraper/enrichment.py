@@ -1209,41 +1209,184 @@ def rule_based_enrich(record):
     if clean_amenities:
         record["amenities"] = json.dumps(clean_amenities)
 
-    # 9. Create a richer fallback description when the source description is empty.
-    if not _normalize_text(record.get("description")):
-        parts = []
-        if record.get("bedrooms") not in (None, ""):
-            beds = record.get("bedrooms")
-            parts.append(f"{beds if beds != 0 else 'Studio'} bedroom" + ("s" if beds not in (0, 1) else ""))
-        if record.get("bathrooms") not in (None, ""):
-            baths = record.get("bathrooms")
-            parts.append(f"{baths} bathroom" + ("s" if baths != 1 else ""))
-        if record.get("monthly_rent") not in (None, ""):
-            parts.append(f"Rent ${int(record['monthly_rent']):,}/month")
-        city = _normalize_text(record.get("city"))
-        if city:
-            parts.append(f"located in {city}")
-        features = []
-        tags = [str(tag).lower() for tag in _normalize_amenity_tags(record.get("amenities") or "[]")]
-        if any("pool" in tag for tag in tags):
-            features.append("pool")
-        if any("pet" in tag for tag in tags):
-            features.append("pet-friendly")
-        if any("garage" in tag for tag in tags):
-            features.append("garage")
-        if any("washer" in tag or "dryer" in tag for tag in tags):
-            features.append("in-unit laundry")
-        if features:
-            parts.append("with " + ", ".join(features))
-        if not parts:
-            parts.append("A well-maintained rental opportunity")
-        record["description"] = (
-            f"This {record.get('property_type', 'rental').replace('_', ' ').title().lower()} offers a comfortable living space "
-            f"for renters seeking a convenient home. "
-            f"{' '.join(parts)}."
-        )
+    # 9. Create a rich fallback description when the source description is empty
+    #    (or very thin). Uses all structured fields rather than just beds/baths.
+    desc = _normalize_text(record.get("description"))
+    if not desc or len(desc) < 80:
+        record["description"] = _build_fallback_description(record, existing=desc)
 
     return record
+
+
+def _build_fallback_description(record, existing=None):
+    """
+    Generate a multi-paragraph rental description from the structured fields
+    on any pipeline record. Called when the scraped description is absent or
+    too thin to be useful (< 80 chars).
+
+    ``existing`` -- any short scraped text to prepend as a seed sentence.
+    """
+    beds   = record.get("bedrooms")
+    baths  = record.get("bathrooms")
+    half   = record.get("half_bathrooms")
+    sqft   = record.get("square_footage")
+    yr     = record.get("year_built")
+    city   = (record.get("city") or "").strip()
+    state  = (record.get("state") or "").strip()
+    hood   = (record.get("neighborhood") or "").strip()
+    ptype  = (record.get("property_type") or "rental").replace("_", " ").title()
+    rent   = record.get("monthly_rent")
+    lot    = record.get("lot_size_sqft")
+    heat   = record.get("heating_type")
+    cool   = record.get("cooling_type")
+    laundry = record.get("laundry_type")
+    parking = record.get("parking")
+    pets    = record.get("pets_allowed")
+    avail   = record.get("available_date")
+    basement = record.get("has_basement")
+    central_air = record.get("has_central_air")
+
+    try:
+        appliances = json.loads(record.get("appliances") or "[]")
+    except Exception:
+        appliances = []
+    try:
+        amenities_raw = record.get("amenities") or "[]"
+        amenities = json.loads(amenities_raw) if isinstance(amenities_raw, str) else amenities_raw
+    except Exception:
+        amenities = []
+
+    amenity_lower = " ".join(str(a).lower() for a in amenities)
+    paragraphs = []
+
+    # ── Paragraph 1: overview ────────────────────────────────────────────────
+    loc_parts = []
+    if hood:
+        loc_parts.append("the {} neighborhood".format(hood))
+    if city and state:
+        loc_parts.append("{}, {}".format(city, state))
+    elif city:
+        loc_parts.append(city)
+    loc_str = " in " + " of ".join(loc_parts) if loc_parts else ""
+
+    beds_str = None
+    if beds == 0:
+        beds_str = "studio"
+    elif beds:
+        beds_str = "{}-bedroom".format(int(beds))
+
+    baths_str = None
+    if baths:
+        baths_str = "{} bath{}".format(int(baths), "s" if baths != 1 else "")
+        if half:
+            baths_str += " + half bath"
+
+    if beds_str and baths_str:
+        opener = "This {}, {} {}{}".format(beds_str, baths_str, ptype.lower(), loc_str)
+    elif beds_str:
+        opener = "This {} {}{}".format(beds_str, ptype.lower(), loc_str)
+    else:
+        opener = "This {}{}".format(ptype.lower(), loc_str)
+
+    details = []
+    if yr:
+        details.append("built in {}".format(yr))
+    if sqft:
+        details.append("offering {:,} sq ft of living space".format(int(sqft)))
+    if lot:
+        if lot >= 43560:
+            details.append("on a {:.2f}-acre lot".format(lot / 43560))
+        else:
+            details.append("on a {:,} sq ft lot".format(int(lot)))
+
+    sentence = opener
+    if details:
+        sentence += ", " + ", ".join(details)
+    sentence += " is available for rent"
+    if rent:
+        sentence += " at ${:,.0f}/month".format(rent)
+    sentence += "."
+
+    if existing and existing.strip():
+        paragraphs.append(existing.strip() + " " + sentence)
+    else:
+        paragraphs.append(sentence)
+
+    # ── Paragraph 2: interior features ──────────────────────────────────────
+    interior = []
+    if heat and cool and heat.lower() != cool.lower():
+        interior.append("{} heating and {} cooling".format(heat, cool.lower()))
+    elif heat:
+        interior.append("{} heating".format(heat))
+    elif cool:
+        interior.append("{} cooling".format(cool))
+    elif central_air:
+        interior.append("central air conditioning")
+
+    laundry_map = {
+        "In-unit": "in-unit washer/dryer",
+        "Washer/dryer hookups": "washer/dryer hookups",
+        "Shared laundry": "shared laundry facilities",
+    }
+    if laundry:
+        interior.append(laundry_map.get(laundry, laundry.lower()))
+
+    if basement:
+        interior.append("a full basement")
+
+    clean_apps = [str(a).replace("_", " ") for a in appliances if a]
+    if clean_apps:
+        if len(clean_apps) <= 3:
+            interior.append(", ".join(clean_apps[:-1] or []) + (" and " if len(clean_apps) > 1 else "") + clean_apps[-1])
+        else:
+            interior.append(", ".join(clean_apps[:3]) + ", and more")
+
+    if interior:
+        paragraphs.append("Interior highlights include " + ", ".join(interior) + ".")
+
+    # ── Paragraph 3: parking & outdoor ──────────────────────────────────────
+    outdoor = []
+    if parking:
+        outdoor.append(parking.lower())
+    if re.search(r"\bpool\b|\bswimming pool\b", amenity_lower):
+        outdoor.append("a swimming pool")
+    if re.search(r"\bfenced.{0,5}yard\b|\bbackyard\b", amenity_lower):
+        outdoor.append("a fenced backyard")
+    elif re.search(r"\byard\b", amenity_lower):
+        outdoor.append("a yard")
+    if re.search(r"\bpatio\b|\bdeck\b|\bporch\b", amenity_lower):
+        outdoor.append("outdoor patio or deck space")
+
+    if outdoor:
+        if len(outdoor) == 1:
+            paragraphs.append("The property features {}.".format(outdoor[0]))
+        else:
+            paragraphs.append(
+                "The property features " + ", ".join(outdoor[:-1]) + " and " + outdoor[-1] + "."
+            )
+
+    # ── Paragraph 4: policies & availability ────────────────────────────────
+    policy = []
+    if pets is True:
+        policy.append("Pets are welcome")
+    elif pets is False:
+        policy.append("No pets allowed")
+
+    if avail:
+        try:
+            from datetime import date as _d
+            avail_date = _d.fromisoformat(str(avail))
+            if avail_date <= _d.today():
+                policy.append("Available for immediate move-in")
+            else:
+                policy.append("Available from {}".format(avail_date.strftime("%B %-d, %Y")))
+        except Exception:
+            policy.append("Availability: {}".format(avail))
+
+    if policy:
+        paragraphs.append(". ".join(policy) + ".")
+
+    return "\n\n".join(p for p in paragraphs if p.strip()) or "A well-maintained rental property available now."
 
 
 # =============================================================================
