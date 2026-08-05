@@ -22,9 +22,14 @@ from datetime import date, datetime, timezone
 from urllib.parse import urlparse
 
 try:
-    import requests as _req
-except ImportError as _e:
-    raise ImportError("requests is required for opendoor_scraper: {}".format(_e))
+    from curl_cffi import requests as _req
+    _CURL_CFFI_OK = True
+except ImportError:
+    try:
+        import requests as _req
+        _CURL_CFFI_OK = False
+    except ImportError as _e:
+        raise ImportError("requests or curl_cffi is required for opendoor_scraper: {}".format(_e))
 
 _OPENDOOR_URL_RE = re.compile(r"^https?://(?:www\.)?opendoor\.com/.*", re.IGNORECASE)
 
@@ -1445,11 +1450,23 @@ def _parse_opendoor_html(html, url, verbose=False):
 
 
 def _fetch_with_retry(url, verbose=False):
-    """Fetch a URL with up to _FETCH_RETRIES attempts and exponential backoff."""
+    """Fetch a URL with up to _FETCH_RETRIES attempts and exponential backoff.
+
+    Uses curl_cffi with Chrome TLS impersonation when available so that
+    Opendoor's bot-detection does not block the request.
+    """
     last_exc = None
     for attempt in range(1, _FETCH_RETRIES + 1):
         try:
-            resp = _req.get(url, timeout=_FETCH_TIMEOUT, headers=_FETCH_HEADERS)
+            if _CURL_CFFI_OK:
+                resp = _req.get(
+                    url,
+                    timeout=_FETCH_TIMEOUT,
+                    headers=_FETCH_HEADERS,
+                    impersonate="chrome110",
+                )
+            else:
+                resp = _req.get(url, timeout=_FETCH_TIMEOUT, headers=_FETCH_HEADERS)
             resp.raise_for_status()
             return resp
         except Exception as e:
