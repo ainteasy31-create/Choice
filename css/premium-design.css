@@ -1,0 +1,116 @@
+/* Premium mobile-first property design overrides
+   - Mobile-first (<=900px) optimized styles for cards and property detail
+   - Clean, modern, high-contrast typography, rounded photo hero, Zillow-like gallery
+   - Use existing utility variables where possible from cp-design.css
+*/
+
+:root{
+  --premium-accent:#0b84ff;
+  --premium-card-bg:#ffffff;
+  --premium-muted:#6b7280;
+  --premium-surface:#f8fafc;
+}
+
+/* Card improvements */
+.property-card{
+  border-radius:18px;
+  overflow:hidden;
+  background:var(--premium-card-bg);
+  box-shadow:0 8px 30px rgba(10,20,40,0.06);
+  transition:transform .18s ease,box-shadow .18s ease;
+  display:flex;flex-direction:column;
+}
+.property-card:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(10,20,40,0.12)}
+.property-card-img{position:relative;aspect-ratio:16/10;overflow:hidden;background:#eef3fb}
+.property-card-slide img{width:100%;height:100%;object-fit:cover;display:block;}
+.property-card-badge{position:absolute;left:12px;top:12px;padding:8px 12px;border-radius:12px;font-weight:700;background:rgba(255,255,255,0.95);color:var(--premium-accent);box-shadow:0 4px 14px rgba(12,30,70,0.08);font-size:13px}
+.property-card-fresh-chip{position:absolute;left:12px;top:52px;background:linear-gradient(180deg,#fff,#f7fbff);padding:6px 10px;border-radius:10px;font-weight:700;color:#0b4b8a;font-size:12px;box-shadow:0 6px 18px rgba(10,20,40,0.06)}
+.property-card-photo-count{position:absolute;right:12px;top:12px;background:rgba(0,0,0,0.45);color:#fff;padding:6px 10px;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:8px}
+.property-card-actions{position:absolute;right:12px;top:52px}
+.property-card-save{background:linear-gradient(180deg,#fff,#fff);border:none;border-radius:10px;padding:8px;box-shadow:0 6px 18px rgba(12,30,70,0.06);cursor:pointer}
+
+.property-card-body{display:block;padding:14px 16px 18px;color:inherit;text-decoration:none}
+.property-card-title{font-size:16px;font-weight:800;line-height:1.15;color:#071127;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.property-card-addr{font-size:13px;color:var(--premium-muted);display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.property-card-specs{font-size:13px;color:var(--premium-muted);margin-bottom:10px}
+.property-card-pet-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:#f1f5f9;color:#0a1729;font-weight:700;font-size:12px}
+
+.property-card-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px}
+.property-card-price{font-weight:900;color:#071127;font-size:18px}
+.property-card-price-dollar{color:var(--premium-accent);font-weight:900;margin-right:2px}
+.property-card-price-unit{font-size:12px;color:var(--premium-muted);margin-left:6px}
+
+/* Dots and thumbnail row */
+.property-card-dots{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px}
+.property-card-dot{width:7px;height:7px;border-radius:999px;background:rgba(255,255,255,0.7);box-shadow:0 1px 2px rgba(0,0,0,0.2)}
+.property-card-dot.active{width:26px;border-radius:8px;background:linear-gradient(90deg,var(--premium-accent),#0b60d6);box-shadow:0 6px 18px rgba(11,60,214,0.18)}
+
+/* Property detail gallery (Zillow-like) */
+#gallery{position:relative;overflow:hidden;border-radius:16px;background:#eef6ff}
+#gallery .gallery-main{width:100%;height:64vw;max-height:520px;display:flex;align-items:center;justify-content:center}
+#gallery img{width:100%;height:100%;object-fit:cover}
+#gallery .thumb-strip{display:flex;gap:8px;overflow-x:auto;padding:10px 6px;margin-top:10px}
+#gallery .thumb{flex:0 0 86px;height:64px;border-radius:8px;overflow:hidden;border:3px solid transparent;cursor:pointer}
+#gallery .thumb img{width:100%;height:100%;object-fit:cover}
+#gallery .thumb.active{border-color:var(--premium-accent)}
+#gallery .gallery-count{position:absolute;right:14px;top:14px;background:rgba(255,255,255,0.92);padding:6px 10px;border-radius:999px;font-weight:700;color:#071127;box-shadow:0 6px 18px rgba(12,30,70,0.08)}
+#gallery .gallery-actions{position:absolute;left:12px;top:14px;display:flex;gap:8px}
+#gallery .gallery-actions button{background:rgba(255,255,255,0.9);border:none;padding:8px;border-radius:10px;box-shadow:0 6px 18px rgba(12,30,70,0.06);cursor:pointer}
+
+/* Detail header */
+.prop-header{display:flex;flex-direction:column;gap:8px}
+#detailTitle{font-size:20px;font-weight:800;color:#071127}
+#detailAddress{font-size:14px;color:var(--premium-muted)}
+#detailPrice{font-size:28px;font-weight:900;color:#071127;margin-top:6px}
+
+/* meta grid - premium */
+.prop-meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.detail-meta-item{background:var(--premium-surface);padding:12px;border-radius:12px;display:flex;flex-direction:column;gap:6px}
+.detail-meta-value{font-weight:800;color:#071127}
+.detail-meta-label{font-size:12px;color:var(--premium-muted);text-transform:uppercase}
+
+/* mobile first layout tweaks */
+@media(min-width:901px){
+  #gallery .thumb-strip{display:block;max-width:220px;height:auto;flex-direction:column}
+  .prop-meta-grid{grid-template-columns:repeat(6,1fr)}
+}
+
+/* Ensure carousel slides align correctly */
+.property-card-slides{display:flex;transition:transform .35s ease;width:100%;height:100%}
+.property-card-slide{min-width:100%;flex:0 0 100%;position:relative}
+.property-card-slide img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* Map premium rules to existing mosaic IDs/classes used by property.js */
+#mosaicMain{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+#mosaicMainImg{width:100%;height:100%;object-fit:cover;border-radius:12px}
+#mosaicSide{display:grid;gap:8px;margin-top:12px}
+.mosaic-cell{position:relative;overflow:hidden;border-radius:10px}
+.mosaic-cell img{width:100%;height:100%;object-fit:cover}
+.mosaic-cell .mosaic-cell-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(0,0,0,0.2),rgba(0,0,0,0.35));color:#fff;font-weight:700}
+#galleryStrip{display:flex;gap:8px;overflow-x:auto;padding:10px 6px;margin-top:10px}
+.gallery-strip-thumb{flex:0 0 86px;height:64px;border-radius:8px;overflow:hidden;border:3px solid transparent;cursor:pointer}
+.gallery-strip-thumb img{width:100%;height:100%;object-fit:cover}
+.gallery-strip-thumb.active{border-color:var(--premium-accent)}
+#mosaicMobileCount{position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); color: #0a1729; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 999px}
+
+/* Zoom hint overlay for lightbox */
+.zoom-hint {
+  position: absolute;
+  left: 50%; top: 12px;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 220;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.zoom-hint.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Cursor affordances when zoomed */
+#lightboxImgWrap.zoomable { cursor: grab; }
+#lightboxImgWrap.zoomable.grabbing { cursor: grabbing; }

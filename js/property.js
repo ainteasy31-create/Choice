@@ -1288,6 +1288,165 @@ document.getElementById('lightbox').addEventListener('click', e => {
       e.target === document.getElementById('lightboxImgWrap')) closeLightbox();
 });
 
+/* ── Lightbox gestures: pinch-to-zoom, double-tap to zoom, wheel zoom ── */
+(function initLightboxGestures() {
+  const wrap = document.getElementById('lightboxImgWrap');
+  const img  = document.getElementById('lightboxImg');
+  if (!wrap || !img) return;
+
+  let lastTap = 0;
+  let startDist = 0;
+  let baseScale = 1;
+  let currScale = 1;
+  let translateX = 0, translateY = 0;
+  let lastX = 0, lastY = 0;
+  let isPanning = false;
+
+  function applyTransform() {
+    img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currScale})`;
+  }
+  function clampTranslateValues() {
+    // Temporarily remove transform to measure base rendered size
+    const prev = img.style.transform;
+    img.style.transform = '';
+    const baseRect = img.getBoundingClientRect();
+    img.style.transform = prev;
+    const baseW = baseRect.width || wrap.clientWidth;
+    const baseH = baseRect.height || wrap.clientHeight;
+    const displayW = baseW * currScale;
+    const displayH = baseH * currScale;
+    const maxX = Math.max(0, (displayW - baseW) / 2);
+    const maxY = Math.max(0, (displayH - baseH) / 2);
+    const clampedX = Math.max(-maxX, Math.min(maxX, translateX));
+    const clampedY = Math.max(-maxY, Math.min(maxY, translateY));
+    return { clampedX, clampedY, maxX, maxY };
+  }
+  function resetTransform() {
+    currScale = 1; translateX = 0; translateY = 0; img.style.transform = ''; img.style.transformOrigin = '50% 50%';
+    wrap.classList.remove('zoomable'); wrap.classList.remove('grabbing');
+  }
+
+  function getDist(t0, t1) { const dx = t0.clientX - t1.clientX; const dy = t0.clientY - t1.clientY; return Math.hypot(dx, dy); }
+
+  // Create zoom hint overlay (once)
+  let zoomHint = document.querySelector('.zoom-hint');
+  if (!zoomHint) {
+    zoomHint = document.createElement('div');
+    zoomHint.className = 'zoom-hint';
+    zoomHint.textContent = 'Pinch to zoom • Drag to pan';
+    wrap.appendChild(zoomHint);
+  }
+  function showZoomHint() { zoomHint.classList.add('visible'); clearTimeout(zoomHint._t); zoomHint._t = setTimeout(() => zoomHint.classList.remove('visible'), 1800); }
+
+  // Touchstart: double-tap detection + pinch start + pan start
+  wrap.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 1) {
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        // double-tap toggle
+        const t = e.touches[0];
+        const rect = img.getBoundingClientRect();
+        const ox = ((t.clientX - rect.left) / rect.width) * 100;
+        const oy = ((t.clientY - rect.top) / rect.height) * 100;
+        if (currScale > 1.05) {
+          resetTransform();
+        } else {
+          currScale = 2; img.style.transformOrigin = `${ox}% ${oy}%`;
+          applyTransform(); wrap.classList.add('zoomable'); showZoomHint();
+        }
+        lastTap = 0;
+        e.preventDefault();
+        return;
+      } else lastTap = now;
+
+      // start pan candidate
+      if (currScale > 1.01) {
+        isPanning = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; wrap.classList.add('zoomable'); wrap.classList.remove('grabbing');
+      }
+    }
+    if (e.touches.length === 2) {
+      // pinch start
+      startDist = getDist(e.touches[0], e.touches[1]);
+      baseScale = currScale || 1;
+      const rect = img.getBoundingClientRect();
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const ox = ((cx - rect.left) / rect.width) * 100;
+      const oy = ((cy - rect.top) / rect.height) * 100;
+      img.style.transformOrigin = `${ox}% ${oy}%`;
+      img.style.transition = 'transform 0s';
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchmove', function (e) {
+    if (e.touches.length === 2) {
+      const d = getDist(e.touches[0], e.touches[1]);
+      const scale = Math.max(1, Math.min(4, baseScale * (d / startDist)));
+      currScale = scale;
+      // When resizing, keep translate within reasonable limits
+      applyTransform(); showZoomHint(); e.preventDefault();
+    } else if (e.touches.length === 1 && isPanning) {
+      const dx = e.touches[0].clientX - lastX; const dy = e.touches[0].clientY - lastY;
+      lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+      translateX += dx; translateY += dy;
+      applyTransform(); wrap.classList.add('grabbing'); e.preventDefault();
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchend', function (e) {
+    isPanning = false; wrap.classList.remove('grabbing');
+    // Clamp and animate back if out-of-bounds
+    const { clampedX, clampedY } = clampTranslateValues();
+    if (Math.abs(clampedX - translateX) > 0.5 || Math.abs(clampedY - translateY) > 0.5) {
+      img.style.transition = 'transform 260ms cubic-bezier(.2,.9,.2,1)';
+      translateX = clampedX; translateY = clampedY; applyTransform();
+      setTimeout(() => { img.style.transition = ''; }, 300);
+    } else if (currScale <= 1.05) {
+      resetTransform();
+    }
+  });
+
+  // Mouse pan (desktop) — click & drag when zoomed
+  wrap.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'mouse' && currScale > 1.01) {
+      isPanning = true; lastX = e.clientX; lastY = e.clientY; wrap.setPointerCapture(e.pointerId); wrap.classList.add('grabbing');
+    }
+  });
+  wrap.addEventListener('pointermove', function (e) {
+    if (isPanning && e.pointerType === 'mouse') {
+      const dx = e.clientX - lastX; const dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; translateX += dx; translateY += dy; applyTransform();
+    }
+  });
+  wrap.addEventListener('pointerup', function (e) {
+    if (e.pointerType === 'mouse') {
+      isPanning = false; wrap.classList.remove('grabbing');
+      const { clampedX, clampedY } = clampTranslateValues();
+      if (Math.abs(clampedX - translateX) > 0.5 || Math.abs(clampedY - translateY) > 0.5) {
+        img.style.transition = 'transform 260ms cubic-bezier(.2,.9,.2,1)';
+        translateX = clampedX; translateY = clampedY; applyTransform();
+        setTimeout(() => { img.style.transition = ''; }, 300);
+      }
+    }
+  });
+
+  // Wheel zoom on desktop lightbox
+  wrap.addEventListener('wheel', function (e) {
+    if (!document.getElementById('lightbox').classList.contains('open')) return;
+    const rect = img.getBoundingClientRect();
+    const ox = ((e.clientX - rect.left) / rect.width) * 100;
+    const oy = ((e.clientY - rect.top) / rect.height) * 100;
+    img.style.transformOrigin = `${ox}% ${oy}%`;
+    const delta = -e.deltaY * 0.0015;
+    currScale = Math.max(1, Math.min(4, (currScale || 1) + delta));
+    wrap.classList.toggle('zoomable', currScale > 1.01);
+    // After scaling, ensure translate is within bounds
+    const { clampedX, clampedY } = clampTranslateValues();
+    translateX = clampedX; translateY = clampedY;
+    applyTransform(); showZoomHint(); e.preventDefault();
+  }, { passive: false });
+
+})();
+
 /* ── Inquiry ── */
 document.getElementById('inqMessage').addEventListener('input', function() {
   document.getElementById('inqCharCount').textContent = this.value.length;

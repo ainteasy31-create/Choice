@@ -173,9 +173,9 @@
     if (photos.length > 1) {
       if (photos.length <= 6) {
         var dotItems = photos.map(function(_, i) {
-          return '<span class="property-card-dot' + (i === 0 ? ' active' : '') + '"></span>';
+          return '<button class="property-card-dot' + (i === 0 ? ' active' : '') + '" type="button" data-idx="' + i + '" aria-pressed="' + (i === 0 ? 'true' : 'false') + '" aria-label="View photo ' + (i + 1) + '"></button>';
         }).join('');
-        dotsHtml = '<div class="property-card-dots">' + dotItems + '</div>';
+        dotsHtml = '<div class="property-card-dots" role="tablist">' + dotItems + '</div>';
       } else {
         photoCountHtml = '<div class="property-card-photo-count"><i class="fas fa-camera"></i> ' + photos.length + '</div>';
       }
@@ -268,14 +268,23 @@
     if (total < 2) return;
 
     var idx  = 0;
-    var dots = card.querySelectorAll('.property-card-dot');
+    var dots = Array.prototype.slice.call(card.querySelectorAll('.property-card-dot'));
 
     function goTo(n) {
       idx = (n + total) % total;
       slides.style.transform = 'translateX(-' + (idx * 100) + '%)';
-      // P2-B: Update active dot
-      dots.forEach(function(dot, i) { dot.classList.toggle('active', i === idx); });
+      // P2-B: Update active dot (buttons are focusable + clickable)
+      dots.forEach(function(dot, i) {
+        var active = i === idx;
+        dot.classList.toggle('active', active);
+        dot.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
     }
+
+    // Click handlers for dots
+    dots.forEach(function(dot) {
+      dot.addEventListener('click', function (e) { e.stopPropagation(); goTo(parseInt(this.dataset.idx, 10)); });
+    });
 
     // Touch swipe
     var touchX = 0;
