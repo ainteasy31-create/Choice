@@ -1,5 +1,16 @@
 # Choice Properties — Scraper v5
 
+> ⚠️ **For new city scraping jobs, use `pipeline.py` + a city batch script — not `scraper.py` directly.**
+> `scraper.py` is the internal scrape/map module called by `pipeline.py`. Running it standalone stages records without enrichment, validation, ImageKit upload, or auto-publish.
+>
+> **Correct entry point for all production scraping:**
+> ```bash
+> python3 scraper/<city>_batch.py --target 10
+> ```
+> See `PIPELINE_USAGE.md` for the city batch template. See `PLATFORM_RULES.md` for mandatory rules.
+
+---
+
 Scrapes **for-rent** listings from **Realtor.com** (HomeHarvest + Phase 2 detail enrichment) and/or **Zillow** (`__NEXT_DATA__` two-phase scraper) and stages them in `pipeline.pipeline_properties` for admin review and one-click publishing.
 
 ---
