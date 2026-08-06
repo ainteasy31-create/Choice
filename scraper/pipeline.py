@@ -1390,8 +1390,22 @@ class PipelineOrchestrator:
             s = re.sub(r"[^a-z0-9]+", "-", s)
             return s.strip("-")[:60]
 
-        prop_id = (prop_row.get("id") or "").lower()
-        return "{}/property.html?id={}".format(SITE_BASE_URL, prop_id)
+        prop_id  = (prop_row.get("id") or "").lower()
+        state    = (prop_row.get("state") or "").lower()[:2]
+        city     = _slug(prop_row.get("city") or "") or "us"
+        beds     = prop_row.get("bedrooms")
+        beds_seg = (
+            "home"   if beds is None else
+            "studio" if int(beds) == 0 else
+            "{}br".format(int(beds))
+        )
+        ptype = _slug(prop_row.get("property_type") or "") or "home"
+
+        # Canonical slug URL — matches the edge function in
+        # functions/rent/[state]/[city]/[slug].js exactly.
+        # Format: /rent/<state>/<city>/<beds>-<type>-<id>/
+        path = "/rent/{}/{}/{}-{}-{}/".format(state, city, beds_seg, ptype, prop_id)
+        return "{}{}".format(SITE_BASE_URL, path)
 
     @staticmethod
     def _safe_int(v) -> Optional[int]:
