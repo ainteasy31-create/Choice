@@ -58,7 +58,10 @@ Copy the block below, fill in your criteria, and paste it to the AI.
 ## Output Format
 After scraping, return ONLY the live published property URLs as a numbered list:
 
-1. https://choice-properties-site.pages.dev/property.html?id=XXXXXXXX — [Full Address], [Beds]bd · $[Price]/mo
+1. https://choice-properties-site.pages.dev/rent/[state]/[city]/[beds]br-[type]-[id]/ — [Full Address], [Beds]bd · $[Price]/mo
+
+Example:
+1. https://choice-properties-site.pages.dev/rent/oh/columbus/3br-single-family-64a3944d-63d6-421d-9772-fdc6f58dbe34/ — 4900 Kresge Dr, Columbus OH · 3bd · $2,195/mo
 
 Do not include explanations or summaries.
 ```
