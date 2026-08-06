@@ -1,5 +1,46 @@
 #!/usr/bin/env python3
 """
+# ============================================================
+# AI ASSISTANT QUICK REFERENCE — READ THIS FIRST
+# ============================================================
+# This file enforces ALL mandatory platform rules automatically.
+# You do NOT need to implement them manually in any batch script.
+# Just call: PipelineOrchestrator(verbose=True).run(criteria)
+#
+# WHAT THIS FILE DOES (in order):
+#   1. Drops listings branded by competitors (FirstKey, Invitation Homes,
+#      Progress Residential, Tricon, Coldwell Banker, Keller Williams,
+#      RE/MAX, Century 21, Berkshire Hathaway, Main Street Renewal, etc.)
+#   2. Strips tour/showing/contact CTAs from descriptions
+#   3. Strips external portal application instructions (TurboTenant,
+#      Zillow/Apartments.com applications, Property ID references)
+#   4. Strips agent/owner/manager name references
+#   5. Strips brokerage/MLS branding
+#   6. Strips corporate fee schedules
+#   7. Removes individual branded/agent photos from the image list
+#   8. Normalizes heating/cooling from raw MLS blobs
+#   9. Infers missing: laundry, parking, pets, title, deposit
+#  10. Fetches listing page HTML to fill low-score records
+#  11. Enforces rent consistency (description must match monthly_rent)
+#  12. Normalizes application fee to $50 in description
+#  13. Appends "Apply now at Choice Properties" CTA
+#  14. Validates before publish: ≥6 photos, rent set, no banned language
+#  15. Re-scores every record (0–100 quality score)
+#
+# MANDATORY RULES (never bypass):
+#   - Application fee = $50 always
+#   - Security deposit = 1× monthly rent
+#   - Pets allowed = Yes (always published as pet-friendly)
+#   - Min 6 photos required before publishing
+#   - All photos must be on ImageKit (never external URLs)
+#   - Description must NOT contain: tour language, portal links,
+#     agent names, competitor branding, wrong fee amounts
+#   - Description MUST end with a Choice Properties apply CTA
+#
+# QUICK REFERENCE: see scraper/RULES.md (short, scannable version)
+# FULL RULES:      see scraper/PLATFORM_RULES.md
+# ============================================================
+
 Choice Properties -- Enrichment Pipeline (v2)
 =============================================
 Post-processing applied to every scraped record before DB insert:

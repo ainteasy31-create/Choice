@@ -108,3 +108,21 @@ All credentials are already in `scraper/.env` — committed to this repo. No sec
 - **The live site is on Cloudflare Pages** (https://choice-properties-site.pages.dev) — Replit only runs the scraper.
 - **`main.py` at the root is unused.** Ignore it.
 - **Root `manifest.json` is the Chrome extension manifest.** Ignore it for scraping.
+
+## Enrichment Rules — Quick Reference
+
+**Read `scraper/RULES.md`** for a full scannable table of what is and isn't allowed.
+**Read `scraper/enrichment.py` lines 1–60** for the AI quick-reference block embedded at the top.
+
+The short version — these are enforced automatically, but you should know them:
+
+| Always strip from descriptions | Always enforce |
+|---|---|
+| Tour / showing / "schedule a viewing" | Application fee = $50 |
+| TurboTenant / portal application links | Security deposit = 1× rent |
+| Agent / owner / manager names | Pets allowed = Yes |
+| Brokerage / MLS branding | ≥ 6 photos per listing |
+| Corporate fee schedules | Photos on ImageKit only |
+| Wrong application fee amounts | Apply CTA at end of description |
+
+**Competitor brands = drop the ENTIRE listing** (not just strip): FirstKey, Invitation Homes, Progress Residential, Tricon, Coldwell Banker, Keller Williams, RE/MAX, Century 21, Berkshire Hathaway, Main Street Renewal, AMH.
