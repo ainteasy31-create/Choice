@@ -1613,8 +1613,20 @@ function initAdminPropertyPanel(prop) {
       .adw-label{font-size:11px;font-weight:700;color:#374151;letter-spacing:.02em}
       .adw-input{border:1.5px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:#1e293b;background:#fff;outline:none;transition:border-color 150ms;width:100%;box-sizing:border-box}
       .adw-input:focus{border-color:#006aff;box-shadow:0 0 0 3px rgba(0,106,255,.1)}
-      textarea.adw-input{resize:vertical;min-height:80px;line-height:1.5}
+      textarea.adw-input{resize:none;overflow:hidden;line-height:1.65;min-height:120px}
       select.adw-input{cursor:pointer}
+      /* ── Description box ── */
+      .adw-desc-ta{resize:none;overflow:hidden;min-height:160px;line-height:1.7;font-size:14px;padding:14px 16px;border-width:2px;background:#fafcff;border-color:#c7d7f5;border-radius:10px;letter-spacing:.01em;color:#1a2133;caret-color:#006aff;-webkit-text-size-adjust:100%}
+      .adw-desc-ta:focus{border-color:#006aff;background:#fff;box-shadow:0 0 0 4px rgba(0,106,255,.08)}
+      .adw-desc-meta{display:flex;align-items:center;justify-content:space-between;margin-top:6px;gap:8px}
+      .adw-desc-bar-wrap{flex:1;height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden}
+      .adw-desc-bar{height:100%;width:0%;background:#006aff;border-radius:2px;transition:width 120ms,background 120ms}
+      .adw-desc-bar.warn{background:#f59e0b}
+      .adw-desc-bar.over{background:#ef4444}
+      .adw-desc-count{font-size:11px;color:#94a3b8;white-space:nowrap;flex-shrink:0}
+      .adw-desc-draft{font-size:10px;font-weight:700;color:#f59e0b;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);display:none}
+      .adw-desc-draft.show{display:inline-block}
+      @media(max-width:600px){.adw-desc-ta{font-size:16px;min-height:200px;padding:14px}}
       .adw-photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:4px}
       .adw-photo-item{position:relative;aspect-ratio:4/3;border-radius:8px;overflow:hidden;border:2px solid #e2e8f0;background:#f8fafc}
       .adw-photo-item img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
@@ -1652,7 +1664,16 @@ function initAdminPropertyPanel(prop) {
       .adw-slider::before{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
       .adw-toggle input:checked+.adw-slider{background:#006aff}
       .adw-toggle input:checked+.adw-slider::before{transform:translateX(18px)}
-      @media(max-width:480px){#adminEditDrawer{width:100%}.adw-row.c3{grid-template-columns:1fr 1fr}}
+      @media(max-width:480px){
+        #adminEditDrawer{width:100%}
+        .adw-row.c3{grid-template-columns:1fr 1fr}
+        .adw-footer{flex-wrap:wrap;gap:8px}
+        .adw-save-btn{order:-1;width:100%;flex:unset;padding:13px 0;font-size:14px}
+        .adw-cancel-btn,.adw-full-link{flex:1}
+        .adw-input{font-size:16px}
+        .adw-section{padding:14px 16px}
+        .adw-label{font-size:12px}
+      }
     `;
     document.head.appendChild(style);
   }
@@ -1995,10 +2016,16 @@ function buildAdminEditDrawer(prop) {
       </div>
 
       <div class="adw-section">
-        <div class="adw-section-title"><i class="fas fa-align-left"></i> Description</div>
+        <div class="adw-section-title" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <span><i class="fas fa-align-left"></i> Description</span>
+          <span class="adw-desc-draft" id="adwDescDraft">Draft restored</span>
+        </div>
         <div class="adw-field">
-          <textarea class="adw-input" id="adwDesc" rows="5" maxlength="5000" placeholder="Describe the property…">${esc(p.description||'')}</textarea>
-          <div style="text-align:right;font-size:11px;color:#94a3b8;margin-top:3px"><span id="adwDescCount">${(p.description||'').length}</span> / 5000</div>
+          <textarea class="adw-input adw-desc-ta" id="adwDesc" maxlength="5000" placeholder="Describe the property…">${esc(p.description||'')}</textarea>
+          <div class="adw-desc-meta">
+            <div class="adw-desc-bar-wrap"><div class="adw-desc-bar" id="adwDescBar"></div></div>
+            <span class="adw-desc-count"><span id="adwDescCount">${(p.description||'').length}</span> / 5000</span>
+          </div>
         </div>
       </div>
 
@@ -2049,11 +2076,35 @@ function buildAdminEditDrawer(prop) {
   document.body.appendChild(overlay);
   document.body.appendChild(drawer);
 
+  // ── Draft backup key (per-property, sessionStorage only) ──
+  const _DRAFT_KEY = `adw_desc_${prop.id}`;
+
+  // ── Auto-grow textarea ──
+  function _autoGrow(ta) {
+    ta.style.height = 'auto';
+    ta.style.height = Math.max(ta.scrollHeight, 160) + 'px';
+  }
+
   // ── Open / close ──
   function openDrawer() {
     overlay.classList.add('open');
     drawer.classList.add('open');
     document.body.style.overflow = 'hidden';
+    // Restore sessionStorage draft (only if DB version hasn't changed since draft was saved)
+    const ta = document.getElementById('adwDesc');
+    const draftEl = document.getElementById('adwDescDraft');
+    if (ta) {
+      try {
+        const saved = sessionStorage.getItem(_DRAFT_KEY);
+        if (saved && saved !== ta.value) {
+          ta.value = saved;
+          if (draftEl) draftEl.classList.add('show');
+          _syncDescMeta(ta);
+          markDirty();
+        }
+      } catch(e) {}
+      _autoGrow(ta);
+    }
     setTimeout(() => document.getElementById('adwTitle')?.focus(), 320);
   }
   function closeDrawer() {
@@ -2078,11 +2129,41 @@ function buildAdminEditDrawer(prop) {
     el.addEventListener('change', markDirty);
   });
   document.getElementById('adwFeatured')?.addEventListener('change', markDirty);
-  document.getElementById('adwDesc')?.addEventListener('input', () => {
-    const c = document.getElementById('adwDescCount');
-    if (c) c.textContent = document.getElementById('adwDesc').value.length;
-    markDirty();
-  });
+
+  // ── Description — auto-grow + counter bar + draft backup ──
+  function _syncDescMeta(ta) {
+    const len = ta.value.length;
+    const pct = Math.min(100, (len / 5000) * 100);
+    const countEl = document.getElementById('adwDescCount');
+    const barEl   = document.getElementById('adwDescBar');
+    if (countEl) countEl.textContent = len;
+    if (barEl) {
+      barEl.style.width = pct + '%';
+      barEl.classList.toggle('warn', pct >= 70 && pct < 90);
+      barEl.classList.toggle('over', pct >= 90);
+    }
+    _autoGrow(ta);
+  }
+
+  let _draftTimer = null;
+  const descTA = document.getElementById('adwDesc');
+  if (descTA) {
+    // Initial size + bar state
+    _syncDescMeta(descTA);
+    descTA.addEventListener('input', () => {
+      _syncDescMeta(descTA);
+      markDirty();
+      // Debounced draft save
+      clearTimeout(_draftTimer);
+      _draftTimer = setTimeout(() => {
+        try { sessionStorage.setItem(_DRAFT_KEY, descTA.value); } catch(e) {}
+      }, 800);
+    });
+    // On mobile: scroll field into view when keyboard opens
+    descTA.addEventListener('focus', () => {
+      setTimeout(() => descTA.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 350);
+    });
+  }
 
   // ── Photo management ──
   const photoGrid = document.getElementById('adwPhotoGrid');
@@ -2394,6 +2475,8 @@ function buildAdminEditDrawer(prop) {
 
       // 6. Sync in-memory prop + visible UI
       Object.assign(prop, payload);
+
+      // ── Admin chrome ──
       const bannerTitle = document.getElementById('adminBannerTitle');
       if (bannerTitle && payload.title) { bannerTitle.textContent = payload.title; bannerTitle.title = payload.title; }
       const bannerSel = document.getElementById('adminStatusSelect');
@@ -2401,10 +2484,66 @@ function buildAdminEditDrawer(prop) {
       const notesField = document.getElementById('adminNotesField');
       if (notesField) notesField.value = payload.admin_notes || '';
 
+      // ── Live property page DOM patch (no refresh needed) ──
+      const _esc2 = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      // Title
+      if (payload.title) {
+        const el = document.getElementById('detailTitle');
+        if (el) el.textContent = payload.title;
+        document.title = payload.title + ' — Choice Properties';
+      }
+      // Price — every occurrence on the page
+      if (payload.monthly_rent != null) {
+        const rentFmt = '$' + Number(payload.monthly_rent).toLocaleString();
+        const dp = document.getElementById('detailPrice');
+        if (dp) dp.innerHTML = rentFmt + '<span>/month</span>';
+        const sp = document.getElementById('sidebarPrice');
+        if (sp) sp.innerHTML = rentFmt + '<span>/month</span>';
+        const sr = document.getElementById('sidebarRent');
+        if (sr) sr.textContent = rentFmt;
+        const mb = document.getElementById('mobBarRent');
+        if (mb) mb.textContent = rentFmt + '/mo';
+      }
+      // Address
+      if (payload.address || payload.city || payload.state || payload.zip) {
+        const ae = document.getElementById('detailAddress');
+        if (ae) ae.innerHTML = '<i class="fas fa-map-marker-alt"></i> '
+          + _esc2(payload.address||prop.address||'') + ', '
+          + _esc2(payload.city||prop.city||'') + ', '
+          + _esc2(payload.state||prop.state||'') + ' '
+          + _esc2(payload.zip||prop.zip||'');
+      }
+      // Description — re-render paragraphs + truncation
+      if (payload.description != null) {
+        const de = document.getElementById('detailDesc');
+        if (de) {
+          const nxt = de.nextElementSibling;
+          if (nxt?.classList.contains('detail-read-more')) nxt.remove();
+          de.classList.remove('truncated');
+          const paras = (payload.description||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
+          de.innerHTML = paras.length
+            ? paras.map(s=>`<p>${_esc2(s)}</p>`).join('')
+            : '<p>No additional description provided.</p>';
+          if ((payload.description||'').length > 300) {
+            de.classList.add('truncated');
+            const rm = document.createElement('button');
+            rm.className = 'detail-read-more';
+            rm.innerHTML = '<i class="fas fa-chevron-down" style="font-size:11px"></i> Read more';
+            rm.addEventListener('click', () => { de.classList.remove('truncated'); rm.remove(); });
+            de.insertAdjacentElement('afterend', rm);
+          }
+        }
+      }
+
+      // Clear sessionStorage draft on successful save
+      try { sessionStorage.removeItem(_DRAFT_KEY); } catch(e) {}
+      const draftEl2 = document.getElementById('adwDescDraft');
+      if (draftEl2) draftEl2.classList.remove('show');
+
       _dirty = false;
       dirtyBar?.classList.remove('show');
-      if (typeof showToast === 'function') showToast('Property saved!', 'success');
-      setTimeout(closeDrawer, 600);
+      if (typeof showToast === 'function') showToast('Saved — page updated ✓', 'success');
+      setTimeout(closeDrawer, 700);
 
     } catch(e) {
       _uploading = false;
