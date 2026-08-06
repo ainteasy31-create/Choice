@@ -120,6 +120,12 @@ _BOILERPLATE_PATTERNS = [
     r"Apply (?:today|now|online)[^!.]*[!.]",
     r"Move-in (?:today|now|immediately) -- [^.]*\.",
     r"(?:contact|call|email) (?:for|to) (?:schedule|set up|arrange) (?:a |an )?(?:tour|showing|viewing)[^.!?]*[.!?]",
+    # Additional tour/scheduling variants not caught above
+    r"Schedule to (?:see|view|visit|tour)[^.!?]*[.!?]",
+    r"[Vv]acant and (?:easy|available for|ready for) (?:view|viewing|showing)[^.!?]*\.?",
+    # Photo disclaimer variants — "(PICTURES are of a similar unit)"
+    r"\(PICTURES?\s+are\s+of\s+a\s+similar\s+unit[^)]*\)[.!?]?",
+    r"\([Pp]hotos?\s+(?:are\s+of|may\s+(?:be\s+of|depict|show))\s+(?:a\s+)?similar\s+unit[^)]*\)[.!?]?",
     # Screening language (platform handles this transparently)
     r"[Cc]redit score\s+(?:of\s+)?\d+\+?\s*(?:or (?:above|higher|more))?[^.]*\.",
     r"[Mm]ust (?:earn|make|have income of)\s+[\d.]+x?\s*(?:the\s+)?rent[^.]*\.",
@@ -153,6 +159,36 @@ def clean_description(text):
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = text.strip()
     return text
+
+
+def normalize_allcaps_description(text):
+    """
+    Convert fully ALL-CAPS descriptions to sentence case.
+
+    If more than 70% of alphabetic characters are uppercase, the entire text
+    is treated as an accidental ALL-CAPS MLS dump and converted to readable
+    sentence case.  Normal mixed-case text is returned unchanged.
+    """
+    if not text:
+        return text
+    alpha = [c for c in text if c.isalpha()]
+    if not alpha:
+        return text
+    upper_ratio = sum(1 for c in alpha if c.isupper()) / len(alpha)
+    if upper_ratio < 0.70:
+        return text  # already mixed-case — leave alone
+
+    # Lower-case everything, then re-capitalize sentence starters
+    lowered = text.lower()
+
+    def _cap_after_punct(m):
+        return m.group(1) + m.group(2).upper()
+
+    result = re.sub(r"([.!?]\s+)([a-z])", _cap_after_punct, lowered)
+    # Capitalize the very first character
+    if result:
+        result = result[0].upper() + result[1:]
+    return result
 
 
 # =============================================================================
@@ -1257,10 +1293,11 @@ def rule_based_enrich(record):
         record["amenities"] = json.dumps(clean_amenities)
 
     # 9. Create a rich fallback description when the source description is empty
-    #    (or very thin). Uses all structured fields rather than just beds/baths.
+    #    (or very thin — under 200 chars). Uses all structured fields rather than
+    #    just beds/baths, so thin MLS descriptions get a proper write-up.
     desc = _normalize_text(record.get("description"))
-    if not desc or len(desc) < 80:
-        record["description"] = _build_fallback_description(record, existing=desc)
+    if not desc or len(desc) < 200:
+        record["description"] = _build_fallback_description(record, existing=desc if desc else None)
 
     return record
 
@@ -1655,6 +1692,10 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
         if rec.get("description"):
             rec["description"] = clean_description(rec["description"])
 
+        # Step 2a: normalize ALL-CAPS descriptions from MLS raw data dumps
+        if rec.get("description"):
+            rec["description"] = normalize_allcaps_description(rec["description"])
+
         # Step 2b: strip external application instructions (TurboTenant,
         # Zillow/Apartments.com applications, property-ID application refs)
         if rec.get("description"):
@@ -1716,6 +1757,14 @@ def apply_enrichment_pipeline(records, verbose=False, enable_detail_fetch=True):
         # (catches stale prices left over from a pre-publish price adjustment).
         if rec.get("description") and rec.get("monthly_rent"):
             rec["description"] = enforce_price_consistency(rec["description"], rec["monthly_rent"])
+
+        # Step 6a-cleanup: remove garbled "/month" artifacts that can arise
+        # when a format-string result and regex substitution interact on the
+        # same token (e.g. "/monthnth", "/monthly" treated as one token).
+        if rec.get("description"):
+            rec["description"] = re.sub(
+                r"/month[a-z]{1,3}\b", "/month", rec["description"], flags=re.IGNORECASE
+            )
 
         # Step 6aa: normalize application fee language in the description.
         # Replace any mention of a free application, $0 fee, or a fee amount
