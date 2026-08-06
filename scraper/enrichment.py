@@ -174,6 +174,12 @@ _CORPORATE_FEE_PATTERNS = [
     r"Federal Occupancy Guidelines[^.]*\.",
     r"(?:Mynd|Progress Residential|Tricon|Invitation Homes|Main Street Renewal)"
     r"[^.]*(?:Equal Opportunity|License #|Property Management)[^.]*\.",
+    # Mynd "RENT WITH MYND" marketing block (full block and individual bullet lines)
+    r"RENT WITH MYND[\s\S]*?(?=\n\n|\Z)",
+    r"-\s*Fast Online Application\s*\([^)]*\)[^\n.]*\.?",
+    r"-\s*Mobile App to Pay Rent[^\n.]*\.?",
+    r"-\s*Affordable Renter['\u2019]?s Insurance[^\n.]*\.?",
+    r"Lease term:\s*\d+\s*months?\.?",
     r"License #\s*\d+[^.]*\.",
     r"(?:does not advertise on Craigslist|never ask you to wire money)[^.]*\.",
     r"Please report any fraudulent ads[^.]*\.",

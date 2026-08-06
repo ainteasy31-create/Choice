@@ -47,7 +47,7 @@ When you call `PipelineOrchestrator.run(criteria)`, the pipeline automatically:
 3. Strips external portal application instructions
 4. Strips agent/owner/broker name references
 5. Strips third-party brokerage/MLS branding
-6. Strips corporate fee schedules (Mynd, Invitation Homes fee blocks)
+6. Strips corporate fee schedules and marketing blocks (Mynd "RENT WITH MYND" block, Invitation Homes fee blocks, Progress Residential, Tricon)
 7. Removes individual branded/agent photos from the image list
 8. Normalizes HVAC fields from raw MLS blobs
 9. Infers missing laundry, parking, pets, title, deposit from amenity tags
