@@ -1855,7 +1855,6 @@ function buildAdminEditDrawer(prop) {
   let _photos = Array.isArray(prop.property_photos)
     ? prop.property_photos.slice().sort((a,b) => (a.display_order??0)-(b.display_order??0))
     : [];
-  let _deletedIds = new Set();
   let _dirty = false;
 
   function imgThumb(url) {
@@ -2168,23 +2167,80 @@ function buildAdminEditDrawer(prop) {
   // ── Photo management ──
   const photoGrid = document.getElementById('adwPhotoGrid');
 
-  function refreshPhotos() {
+  function refreshPhotos(markDirtyState = true) {
     if (photoGrid) photoGrid.innerHTML = renderPhotoGrid();
     const countEl = document.getElementById('adwPhotoCount');
     if (countEl) countEl.textContent = _photos.length;
     bindPhotos();
-    markDirty();
+    if (markDirtyState) markDirty();
   }
   function bindPhotos() {
     photoGrid?.querySelectorAll('[data-del]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const idx = parseInt(btn.dataset.del);
         const ph  = _photos[idx];
         if (!ph) return;
         if (!confirm(`Delete photo ${idx+1}? This cannot be undone.`)) return;
-        if (ph.id) _deletedIds.add(ph.id);
-        _photos.splice(idx, 1);
-        refreshPhotos();
+        if (!ph.id) {
+          _photos.splice(idx, 1);
+          refreshPhotos(false);
+          return;
+        }
+
+        // Quick-edit photo removal is immediate. Previously this only queued
+        // the ID in memory, so tapping X appeared to do nothing unless the
+        // user also found and pressed Save Changes.
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+          const { data, error } = await window.CP.sb()
+            .from('property_photos')
+            .delete()
+            .eq('id', ph.id)
+            .select('id');
+          if (error) throw new Error(error.message || 'Photo deletion failed');
+          if (!Array.isArray(data) || data.length !== 1) {
+            throw new Error('Photo could not be deleted. It may already be gone or you may not have permission.');
+          }
+
+          _photos.splice(idx, 1);
+          refreshPhotos(false);
+
+          // Keep display_order contiguous after an immediate deletion.
+          const orderResults = await Promise.all(_photos.map((photo, order) =>
+            window.CP.sb().from('property_photos')
+              .update({ display_order: order })
+              .eq('id', photo.id)
+          ));
+          const orderError = orderResults.find(result => result.error)?.error;
+          if (orderError && typeof showToast === 'function') {
+            showToast('Photo deleted, but gallery order could not be refreshed.', 'error');
+          }
+
+          // Best-effort ImageKit cleanup; the database row is already gone.
+          if (ph.file_id && window.CONFIG?.SUPABASE_URL && window.CONFIG?.SUPABASE_ANON_KEY) {
+            window.CP.Auth.getSession().then(session => {
+              if (!session?.access_token) return;
+              fetch(`${window.CONFIG.SUPABASE_URL}/functions/v1/imagekit-delete`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': window.CONFIG.SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ fileId: ph.file_id }),
+              }).catch(() => {});
+            }).catch(() => {});
+          }
+
+          if (typeof showToast === 'function') showToast('Photo deleted.', 'success');
+        } catch (error) {
+          btn.disabled = false;
+          btn.textContent = '✕';
+          if (typeof showToast === 'function') {
+            showToast('Photo deletion failed: ' + (error.message || error), 'error');
+          }
+        }
       });
     });
     photoGrid?.querySelectorAll('[data-mv]').forEach(btn => {
@@ -2373,18 +2429,13 @@ function buildAdminEditDrawer(prop) {
       const res = await window.CP.Properties.update(prop.id, payload);
       if (!res.ok) throw new Error(res.error || 'Property update failed');
 
-      // 2. Delete queued photos
-      for (const photoId of _deletedIds) {
-        await window.CP.sb().from('property_photos').delete().eq('id', photoId);
-      }
-      _deletedIds.clear();
-
-      // 3. Persist photo order
+      // 2. Persist photo order. Photo deletions are applied immediately when
+      // the X button is tapped, so Save Changes only needs to preserve order.
       await Promise.all(_photos.map((ph, i) =>
         window.CP.sb().from('property_photos').update({ display_order: i }).eq('id', ph.id)
       ));
 
-      // 4. Upload pending new photos
+      // 3. Upload pending new photos
       if (_pendingMap.size > 0) {
         _uploading = true;
         const uploadProg = document.getElementById('adwUploadProg');
@@ -2461,7 +2512,7 @@ function buildAdminEditDrawer(prop) {
         setTimeout(() => { if (uploadProg) uploadProg.style.display = 'none'; }, 1500);
       }
 
-      // 5. Audit log for property edit
+      // 4. Audit log for property edit
       try {
         const session = await window.CP.Auth.getSession();
         if (session?.user?.id) {
@@ -2473,7 +2524,7 @@ function buildAdminEditDrawer(prop) {
         }
       } catch(e) {}
 
-      // 6. Sync in-memory prop + visible UI
+      // 5. Sync in-memory prop + visible UI
       Object.assign(prop, payload);
 
       // ── Admin chrome ──
