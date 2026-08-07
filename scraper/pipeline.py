@@ -343,7 +343,11 @@ class PipelineOrchestrator:
 
     def _log(self, msg: str):
         if self.verbose:
-            print(msg)
+            try:
+                print(msg)
+            except UnicodeEncodeError:
+                safe_msg = msg.encode("ascii", "replace").decode("ascii")
+                print(safe_msg)
 
     # -----------------------------------------------------------------------
     # Public entry point

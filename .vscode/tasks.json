@@ -1,0 +1,342 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Douglasville scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"run_batch.py"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Douglasville scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"run_batch.py"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--dry-run",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--dry-run",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Indianapolis scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/indianapolis_in_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Tulsa scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/tulsa_ok_batch.py",
+				"--dry-run",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Tulsa scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/tulsa_ok_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Tulsa scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/tulsa_ok_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Tulsa scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/tulsa_ok_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--dry-run",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--dry-run",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--dry-run",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper publish",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--target",
+				"10",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper dry run",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--dry-run",
+				"--target",
+				"7",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper dry run revised",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--dry-run",
+				"--target",
+				"7",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper dry run revised",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--dry-run",
+				"--target",
+				"7",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Run Kansas City scraper publish revised",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"scraper/kansas_city_mo_batch.py",
+				"--target",
+				"7",
+				"--past-days",
+				"3650"
+			],
+			"problemMatcher": [],
+			"group": "test"
+		}
+	]
+}

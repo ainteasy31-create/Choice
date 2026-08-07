@@ -1,0 +1,20 @@
+Indianapolis dry-run results
+===========================
+
+Selected candidates for publishing:
+1. 5136 Rocky Mountain Dr Indianapolis | $1790/mo | score=98
+2. 112 Gazebo Dr Indianapolis | $1650/mo | score=96
+3. 7644 Scatter Woods Ln Indianapolis | $1695/mo | score=96
+4. 7136 Pluto Dr Indianapolis | $1800/mo | score=96
+5. 4967 Peony Pl Indianapolis | $1675/mo | score=96
+6. 5223 Padre Ln Indianapolis | $1645/mo | score=96
+7. 2316 Coyner Ave Indianapolis | $1785/mo | score=96
+8. 5202 Patterson St Indianapolis | $1780/mo | score=96
+9. 3047 N College Ave Indianapolis | $1775/mo | score=96
+10. 10414 Kensil St Indianapolis | $1705/mo | score=96
+
+Notes:
+- 39 records passed the criteria filter.
+- 37 passed pre-publish validation.
+- 2 were rejected for external application portal references.
+- Dry-run stopped before any database writes.
