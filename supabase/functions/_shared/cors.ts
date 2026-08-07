@@ -41,7 +41,7 @@ export function buildCorsHeaders(origin: string | null): Record<string, string> 
   return {
     'Access-Control-Allow-Origin': resolveAllowOrigin(origin),
     'Vary': 'Origin',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-import-secret',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Max-Age': '86400',
   };
@@ -55,7 +55,7 @@ export function buildCorsHeaders(origin: string | null): Record<string, string> 
 export const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': PRODUCTION_ORIGIN,
   'Vary': 'Origin',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-import-secret',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 export const cors = corsHeaders;

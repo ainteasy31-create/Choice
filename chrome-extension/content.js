@@ -258,6 +258,12 @@
       return;
     }
 
+    if (!payload.source_listing_id) {
+      setError(btn, 'Listing ID not found');
+      console.error('[CP] extractor returned no source_listing_id:', payload);
+      return;
+    }
+
     const settings = await getSettings();
 
     // Download to PC first (best-effort; pipeline is primary)
@@ -297,7 +303,8 @@
       chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
 
     } else {
-      const msg = (resp && resp.error) ? resp.error.slice(0, 38) : 'Server error';
+      const rawError = resp && resp.error;
+      const msg = rawError ? String(rawError).slice(0, 38) : 'Server error';
       setError(btn, 'Failed: ' + msg);
     }
   }

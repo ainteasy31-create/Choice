@@ -120,7 +120,19 @@ async function postPayload(payload) {
     headers: { 'Content-Type': 'application/json', 'x-import-secret': SECRET },
     body:    JSON.stringify(payload),
   });
-  return await res.json();
+  let body;
+  try {
+    body = await res.json();
+  } catch (_) {
+    body = {};
+  }
+  if (!res.ok) {
+    body = body && typeof body === 'object' ? body : {};
+    body.ok = false;
+    body.httpStatus = res.status;
+    body.error = body.error || `Server rejected import (HTTP ${res.status})`;
+  }
+  return body;
 }
 
 async function flushQueue() {
@@ -196,6 +208,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse(resp);
           return;
         }
+        // The request reached the server, so preserve its actionable error.
+        // Only actual fetch failures should enter the offline queue.
+        sendResponse({
+          ...(resp || {}),
+          ok: false,
+          error: resp?.error || 'Server rejected import',
+        });
+        return;
       } catch (err) {
         if (!msg.settings?.offlineQueue) {
           sendResponse({ ok: false, error: String(err) });

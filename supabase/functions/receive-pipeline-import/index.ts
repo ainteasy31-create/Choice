@@ -107,6 +107,14 @@ function normalizePropType(v: unknown): string | null {
   return MAP[s] ?? s.toUpperCase().replace(/[\s-]+/g, '_');
 }
 
+function normalizeSource(v: unknown): string {
+  const source = safeStr(v)?.toLowerCase() ?? 'zillow';
+  if (!['zillow', 'realtor', 'apartments', 'redfin'].includes(source)) {
+    throw new Error(`Unsupported source: ${source}`);
+  }
+  return source;
+}
+
 // ── Normalize available_date to YYYY-MM-DD ─────────────────────────────────────
 function normalizeDate(v: unknown): string | null {
   if (!v) return null;
@@ -158,6 +166,13 @@ Deno.serve(async (req) => {
     return jsonErr(400, 'source_listing_id is required', req);
   }
 
+  let source: string;
+  try {
+    source = normalizeSource(body.source);
+  } catch (err) {
+    return jsonErr(400, err instanceof Error ? err.message : 'Unsupported source', req);
+  }
+
   // ── Duplicate check ──────────────────────────────────────────────────────────
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -168,7 +183,7 @@ Deno.serve(async (req) => {
     .from('pipeline_properties')
     .select('id, title')
     .eq('source_listing_id', sourceListingId)
-    .eq('source', 'zillow')
+    .eq('source', source)
     .maybeSingle();
 
   if (existing) {
@@ -198,8 +213,8 @@ Deno.serve(async (req) => {
     zpid:        sourceListingId,
     detailUrl:   body.source_url,
     homeType:    propType,
-    _source:     'zillow',
-    _import:     'ios-scriptable-v3',
+    _source:     source,
+    _import:     body._import ?? 'browser-extension-v2',
     _imported_at: now,
   });
 
@@ -207,7 +222,7 @@ Deno.serve(async (req) => {
   const record: Record<string, unknown> = {
     // Identity
     id:                   genId(),
-    source:               'zillow',
+    source,
     source_url:           safeStr(body.source_url),
     source_listing_id:    sourceListingId,
     status:               'scraped',
