@@ -309,6 +309,7 @@
   <script>
     // Get Edge Function URL from config
     const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/import-from-url';
+    const IMPORT_SECRET = 'cp_import_7Kx3m9P2w5';
     
     let currentData = null;
 
@@ -360,6 +361,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-import-secret': IMPORT_SECRET,
           },
           body: JSON.stringify({ url }),
         });
