@@ -27,10 +27,15 @@ const STATIC_ALLOWED = new Set<string>([
 const PREVIEW_ORIGIN_RE =
   /^https:\/\/[a-z0-9-]+\.choice-properties-site\.pages\.dev$/i;
 
+// Chrome extension origins: chrome-extension://<extension-id>
+const CHROME_EXTENSION_RE = /^chrome-extension:\/\//;
+
 export function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (STATIC_ALLOWED.has(origin)) return true;
-  return PREVIEW_ORIGIN_RE.test(origin);
+  if (PREVIEW_ORIGIN_RE.test(origin)) return true;
+  if (CHROME_EXTENSION_RE.test(origin)) return true;
+  return false;
 }
 
 export function resolveAllowOrigin(origin: string | null): string {
