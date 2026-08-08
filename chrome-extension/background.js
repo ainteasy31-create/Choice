@@ -249,6 +249,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'TRANSFER_PHOTOS') {
+    (async () => {
+      try {
+        const { pipeline_id, property_id } = msg;
+        // Trigger the import-pipeline-photos Edge Function
+        const resp = await postPayload({
+          source_listing_id: pipeline_id,
+          source: 'chrome-extension',
+          _import: 'browser-extension-v2',
+        });
+        sendResponse(resp);
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
   if (msg.type === 'FLUSH_QUEUE') {
     (async () => {
       const flushed = await flushQueue();
