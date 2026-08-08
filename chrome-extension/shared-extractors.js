@@ -111,6 +111,37 @@
     return rent;
   }
 
+  function safeInt(v) {
+    if (v == null || v === '') return null;
+    const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+    return isNaN(n) || n <= 0 ? null : n;
+  }
+
+  function parseLeaseMonths(leaseTerm) {
+    if (!leaseTerm) return null;
+    const s = String(leaseTerm).toLowerCase();
+    const m = s.match(/(\d+)\s*month/);
+    if (m) return parseInt(m[1], 10);
+    if (/month.to.month|m2m|mtm/.test(s)) return 1;
+    if (/\byear\b|12[\s-]*month|annual/.test(s)) return 12;
+    return null;
+  }
+
+  function buildLocationContext(prop, rf) {
+    const parts = [];
+    const ws = prop.walkScore || (prop.walkScoreData && prop.walkScoreData.walkScore);
+    const ts = prop.transitScore || (prop.walkScoreData && prop.walkScoreData.transitScore);
+    const bs = prop.bikeScore || (prop.walkScoreData && prop.walkScoreData.bikeScore);
+    if (ws != null) parts.push('Walk score: ' + ws);
+    if (ts != null) parts.push('Transit score: ' + ts);
+    if (bs != null) parts.push('Bike score: ' + bs);
+    const district = rf.schoolDistrict || prop.schoolDistrict;
+    if (district) parts.push('School district: ' + district);
+    const zoning = rf.zoning || rf.zoningDescription;
+    if (zoning) parts.push('Zoning: ' + zoning);
+    return parts.length ? parts.join('; ') : null;
+  }
+
   const TYPE_MAP = {
     SINGLE_FAMILY: 'SINGLE_FAMILY', MULTI_FAMILY: 'MULTI_FAMILY', CONDO: 'CONDOS',
     CONDO_TOWNHOME: 'CONDOS', TOWNHOUSE: 'TOWNHOMES', APARTMENT: 'APARTMENT',
