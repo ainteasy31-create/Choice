@@ -230,8 +230,17 @@
   // ── Settings ──────────────────────────────────────────────────────────────
 
   async function getSettings() {
-    const data = await chrome.storage.local.get({ cp_settings: { downloadToPC: true, offlineQueue: true } });
-    return data.cp_settings;
+    try {
+      if (!chrome.storage || !chrome.storage.local) {
+        console.warn('[CP] chrome.storage not available, using defaults');
+        return { downloadToPC: true, offlineQueue: true };
+      }
+      const data = await chrome.storage.local.get({ cp_settings: { downloadToPC: true, offlineQueue: true } });
+      return data.cp_settings;
+    } catch (err) {
+      console.warn('[CP] storage error, using defaults:', err);
+      return { downloadToPC: true, offlineQueue: true };
+    }
   }
 
   // ── Save handler ─────────────────────────────────────────────────────────
@@ -269,7 +278,9 @@
     // Download to PC first (best-effort; pipeline is primary)
     if (settings.downloadToPC) {
       try {
-        await chrome.runtime.sendMessage({ type: 'DOWNLOAD_PAYLOAD', payload });
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+          await chrome.runtime.sendMessage({ type: 'DOWNLOAD_PAYLOAD', payload });
+        }
       } catch (err) {
         console.warn('[CP] download request error:', err);
       }
@@ -278,6 +289,9 @@
     // POST to edge function via the background service worker.
     let resp;
     try {
+      if (!chrome.runtime || !chrome.runtime.sendMessage) {
+        throw new Error('chrome.runtime.sendMessage not available');
+      }
       const uploadResp = await chrome.runtime.sendMessage({
         type: 'UPLOAD_PAYLOAD',
         payload,
@@ -293,7 +307,9 @@
       const photos = resp.photos || 0;
       const score  = resp.score  != null ? ` · Q:${resp.score}` : '';
       setSuccess(btn, `Saved! ${photos} photo${photos !== 1 ? 's' : ''}${score}`);
-      chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
+      if (chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
+      }
 
     } else if (resp && resp.duplicate) {
       setDuplicate(btn);
