@@ -1,0 +1,41 @@
+{
+  "name": "Import to Choice Properties",
+  "short_name": "Choice Import",
+  "description": "Save Zillow listings to your Choice Properties pipeline",
+  "start_url": "/import",
+  "display": "standalone",
+  "background_color": "#6366f1",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/import/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/import/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/import",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "url": "share_url"
+    }
+  },
+  "categories": ["business", "productivity"],
+  "screenshots": [
+    {
+      "src": "/import/screenshots/phone-1.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}

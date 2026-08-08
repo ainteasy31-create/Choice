@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="description" content="Import Zillow listings to Choice Properties pipeline">
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="/import/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Choice Import">
+  
+  <title>Import to Choice Properties</title>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px 0;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      color: #6366f1;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #334155;
+    }
+
+    .url-input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      background: #f8fafc;
+      color: #1e293b;
+      transition: all 0.2s;
+    }
+
+    .url-input:focus {
+      outline: none;
+      border-color: #6366f1;
+      background: white;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    .btn-primary:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #475569;
+      margin-top: 12px;
+    }
+
+    .btn-secondary:hover {
+      background: #cbd5e1;
+    }
+
+    .btn-icon {
+      font-size: 20px;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .preview {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .preview.visible {
+      display: block;
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .preview-image {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      background: #e2e8f0;
+    }
+
+    .preview-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1e293b;
+    }
+
+    .preview-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .preview-badge {
+      background: #e0e7ff;
+      color: #6366f1;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .preview-description {
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .error {
+      background: #fee;
+      color: #dc2626;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: none;
+      font-size: 14px;
+    }
+
+    .error.visible {
+      display: block;
+    }
+
+    .success {
+      background: #efe;
+      color: #16a34a;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: none;
+      font-size: 14px;
+    }
+
+    .success.visible {
+      display: block;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 12px;
+      }
+      
+      .card {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏠 Import to Choice</h1>
+      <p>Save Zillow listings to your pipeline</p>
+    </div>
+
+    <div class="card">
+      <div class="error" id="error"></div>
+      <div class="success" id="success"></div>
+
+      <div id="form-section">
+        <div class="input-group">
+          <label for="url-input">Zillow Listing URL</label>
+          <input 
+            type="url" 
+            id="url-input" 
+            class="url-input" 
+            placeholder="https://www.zillow.com/homedetails/..."
+            autocomplete="url"
+            autocorrect="off"
+            autocapitalize="none"
+          >
+        </div>
+
+        <button class="btn btn-primary" id="import-btn" onclick="handleImport()">
+          <span class="btn-icon">📥</span>
+          <span>Import Listing</span>
+        </button>
+
+        <button class="btn btn-secondary" onclick="pasteFromClipboard()">
+          <span class="btn-icon">📋</span>
+          <span>Paste from Clipboard</span>
+        </button>
+      </div>
+
+      <div class="preview" id="preview">
+        <img class="preview-image" id="preview-image" src="" alt="Property photo">
+        
+        <div class="preview-title" id="preview-title"></div>
+        
+        <div class="preview-details" id="preview-details"></div>
+        
+        <div class="preview-description" id="preview-description"></div>
+
+        <button class="btn btn-primary" id="save-btn" onclick="handleSave()">
+          <span class="btn-icon">✅</span>
+          <span>Save to Pipeline</span>
+        </button>
+
+        <button class="btn btn-secondary" onclick="cancelPreview()">
+          <span class="btn-icon">❌</span>
+          <span>Cancel</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get Edge Function URL from config
+    const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/import-from-url';
+    
+    let currentData = null;
+
+    // Handle share target (iOS 16+)
+    async function handleShare() {
+      const url = new URL(window.location);
+      const sharedUrl = url.searchParams.get('url');
+      
+      if (sharedUrl) {
+        document.getElementById('url-input').value = sharedUrl;
+        await handleImport();
+      }
+    }
+
+    // Paste from clipboard
+    async function pasteFromClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        document.getElementById('url-input').value = text;
+        hideError();
+      } catch (err) {
+        showError('Unable to access clipboard. Please paste manually.');
+      }
+    }
+
+    // Import listing
+    async function handleImport() {
+      const urlInput = document.getElementById('url-input');
+      const url = urlInput.value.trim();
+      
+      if (!url) {
+        showError('Please enter a Zillow URL');
+        return;
+      }
+
+      if (!url.includes('zillow.com')) {
+        showError('Please enter a valid Zillow URL');
+        return;
+      }
+
+      const btn = document.getElementById('import-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div><span>Importing...</span>';
+      hideError();
+      hideSuccess();
+
+      try {
+        const response = await fetch(EDGE_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to import listing');
+        }
+
+        if (data.blocked) {
+          throw new Error(data.message || 'Zillow blocked the request. Please try again later.');
+        }
+
+        if (data.duplicate) {
+          showSuccess('This listing is already in your pipeline!');
+          return;
+        }
+
+        if (data.ok) {
+          showPreview(data);
+        } else {
+          throw new Error(data.error || 'Import failed');
+        }
+
+      } catch (err) {
+        showError(err.message || 'Failed to import listing. Please try again.');
+        console.error('Import error:', err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">📥</span><span>Import Listing</span>';
+      }
+    }
+
+    // Show preview
+    function showPreview(data) {
+      currentData = data;
+
+      // Hide form, show preview
+      document.getElementById('form-section').classList.add('hidden');
+      document.getElementById('preview').classList.add('visible');
+
+      // Set preview image
+      const imgEl = document.getElementById('preview-image');
+      if (data.photo_urls && data.photo_urls.length > 0) {
+        imgEl.src = data.photo_urls[0];
+      } else {
+        imgEl.style.display = 'none';
+      }
+
+      // Set title
+      document.getElementById('preview-title').textContent = data.title || 'Untitled Listing';
+
+      // Set badges
+      const details = document.getElementById('preview-details');
+      details.innerHTML = '';
+      
+      if (data.bedrooms) {
+        details.innerHTML += `<span class="preview-badge">🛏 ${data.bedrooms} BR</span>`;
+      }
+      if (data.bathrooms) {
+        details.innerHTML += `<span class="preview-badge">🛁 ${data.bathrooms} BA</span>`;
+      }
+      if (data.square_footage) {
+        details.innerHTML += `<span class="preview-badge">📐 ${data.square_footage.toLocaleString()} sqft</span>`;
+      }
+      if (data.monthly_rent) {
+        details.innerHTML += `<span class="preview-badge">💰 $${data.monthly_rent.toLocaleString()}/mo</span>`;
+      }
+      if (data.score) {
+        details.innerHTML += `<span class="preview-badge">⭐ Q: ${data.score}</span>`;
+      }
+
+      // Set description
+      const descEl = document.getElementById('preview-description');
+      if (data.description) {
+        descEl.textContent = data.description.substring(0, 200) + (data.description.length > 200 ? '...' : '');
+      } else {
+        descEl.textContent = 'No description available';
+      }
+    }
+
+    // Save to pipeline
+    async function handleSave() {
+      if (!currentData) return;
+
+      const btn = document.getElementById('save-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div><span>Saving...</span>';
+
+      try {
+        // The data is already saved by the import endpoint
+        // This is just a confirmation
+        showSuccess('✅ Listing saved to pipeline!');
+        
+        // Reset after 2 seconds
+        setTimeout(() => {
+          cancelPreview();
+          document.getElementById('url-input').value = '';
+        }, 2000);
+
+      } catch (err) {
+        showError('Failed to save. Please try again.');
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">✅</span><span>Save to Pipeline</span>';
+      }
+    }
+
+    // Cancel preview
+    function cancelPreview() {
+      currentData = null;
+      document.getElementById('form-section').classList.remove('hidden');
+      document.getElementById('preview').classList.remove('visible');
+      hideError();
+      hideSuccess();
+    }
+
+    // Show error
+    function showError(message) {
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = message;
+      errorEl.classList.add('visible');
+    }
+
+    // Hide error
+    function hideError() {
+      const errorEl = document.getElementById('error');
+      errorEl.classList.remove('visible');
+    }
+
+    // Show success
+    function showSuccess(message) {
+      const successEl = document.getElementById('success');
+      successEl.textContent = message;
+      successEl.classList.add('visible');
+    }
+
+    // Hide success
+    function hideSuccess() {
+      const successEl = document.getElementById('success');
+      successEl.classList.remove('visible');
+    }
+
+    // Handle Enter key
+    document.getElementById('url-input')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        handleImport();
+      }
+    });
+
+    // Handle share target on load
+    window.addEventListener('load', handleShare);
+
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/import/sw.js').catch(err => {
+        console.log('Service worker registration failed:', err);
+      });
+    }
+  </script>
+</body>
+</html>
