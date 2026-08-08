@@ -329,11 +329,31 @@
 
   // ── Render: detail panel ─────────────────────────────────────────────────────
 
-  function panelPhotos(l){
+  async function panelPhotos(l){
     const imgs = parseJSON(l.original_image_urls) || [];
+    
+    // If published and has a choice_property_id, fetch the actual ImageKit photos
+    // from property_photos (transferred by import-pipeline-photos).
+    if(l.choice_property_id){
+      try {
+        const { data: photos, error } = await CP.sb()
+          .from('property_photos')
+          .select('url,display_order')
+          .eq('property_id', l.choice_property_id)
+          .order('display_order', { ascending: true })
+          .limit(12);
+        
+        if(!error && Array.isArray(photos) && photos.length){
+          const urls = photos.map(p => p.url).filter(Boolean);
+          return `<div class="pl-photo-strip">${urls.map(u => `<img src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>
+          <div class="pl-photo-count">${urls.length} photo${urls.length!==1?'s':''} on ImageKit</div>`;
+        }
+      } catch(_){ /* fall through to source URLs */ }
+    }
+    
     if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
     return `<div class="pl-photo-strip">${imgs.slice(0,12).map(u => `<img src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>
-    <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source — transferred to ImageKit automatically on publish.</div>`;
+    <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source — will transfer to ImageKit on publish.</div>`;
   }
 
   function missingTags(l){
@@ -389,7 +409,7 @@
       <!-- Photos -->
       <div class="pl-section">
         <div class="pl-section-title">Photos from source ${photoCount ? `<span style="font-weight:400;color:var(--muted-2)">(${photoCount})</span>` : ''}</div>
-        ${panelPhotos(l)}
+        <div id="panel-photos-container">${photoCount ? '<span style="font-size:.75rem;color:var(--muted-2)">Loading…</span>' : ''}</div>
       </div>
 
       <!-- Missing fields -->
@@ -587,14 +607,20 @@
       autoFillLocation(l);
     });
 
-    const saveBtn = panel.querySelector('.pl-save-btn');
-    if(saveBtn) saveBtn.addEventListener('click', () => doSave(l.id));
+      const saveBtn = panel.querySelector('.pl-save-btn');
+      if(saveBtn) saveBtn.addEventListener('click', () => doSave(l.id));
 
-    const arcBtn = panel.querySelector('.pl-arc-btn-panel');
-    if(arcBtn) arcBtn.addEventListener('click', () => doArchive(l.id));
+      const arcBtn = panel.querySelector('.pl-arc-btn-panel');
+      if(arcBtn) arcBtn.addEventListener('click', () => doArchive(l.id));
 
-    const pubBtn = panel.querySelector('.pl-pub-btn-panel');
-    if(pubBtn) pubBtn.addEventListener('click', () => doPublish(l.id));
+      const pubBtn = panel.querySelector('.pl-pub-btn-panel');
+      if(pubBtn) pubBtn.addEventListener('click', () => doPublish(l.id));
+
+      // Load photos asynchronously (may fetch from ImageKit for published listings)
+      const photoContainer = panel.querySelector('#panel-photos-container');
+      if(photoContainer && photoCount){
+        panelPhotos(l).then(html => { if(photoContainer) photoContainer.innerHTML = html; });
+      }
 
     // "Import full details" pre-fills the Import URL modal with this listing's source URL
     const reimportBtn = panel.querySelector('#pl-reimport-btn');
