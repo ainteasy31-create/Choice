@@ -5,24 +5,24 @@
 
 #cp-save-btn {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  right: max(24px, env(safe-area-inset-right));
   z-index: 2147483647; /* always on top */
 
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  height: 44px;
-  padding: 0 16px;
+  min-width: 60px;
+  height: 52px;
+  padding: 0 20px;
 
   background: #6366f1;
   color: #fff;
-  border-radius: 22px;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.45), 0 1px 4px rgba(0,0,0,0.18);
+  border-radius: 26px;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.5), 0 2px 6px rgba(0,0,0,0.2);
 
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -30,6 +30,8 @@
 
   cursor: pointer;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
   transition: background 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.2s, max-width 0.3s;
   overflow: hidden;
 }
@@ -47,7 +49,7 @@
 
 /* ── Collapsed state (auto-shrinks to pill after success) ─────────────────── */
 #cp-save-btn.cp-collapsed {
-  max-width: 44px;
+  max-width: 52px;
   padding: 0;
   opacity: 0.7;
 }
@@ -56,8 +58,8 @@
 }
 #cp-save-btn.cp-collapsed:hover {
   opacity: 1;
-  max-width: 320px;
-  padding: 0 16px;
+  max-width: 340px;
+  padding: 0 20px;
 }
 #cp-save-btn.cp-collapsed:hover .cp-result {
   opacity: 1;

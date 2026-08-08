@@ -13,24 +13,24 @@
   // ── Base inline styles ────────────────────────────────────────────────────
   const BASE_STYLES = {
     position:       'fixed',
-    bottom:         '24px',
-    right:          '24px',
+    bottom:         'max(24px, env(safe-area-inset-bottom))',
+    right:          'max(24px, env(safe-area-inset-right))',
     zIndex:         '2147483647',
     display:        'flex',
     alignItems:     'center',
     justifyContent: 'center',
     gap:            '8px',
-    padding:        '0 18px',
-    height:         '46px',
-    minWidth:       '44px',
-    maxWidth:       '320px',
+    padding:        '0 20px',
+    height:         '52px',
+    minWidth:       '60px',
+    maxWidth:       '340px',
     background:     '#6366f1',
     color:          '#fff',
     border:         'none',
-    borderRadius:   '23px',
+    borderRadius:   '26px',
     boxShadow:      '0 4px 20px rgba(99,102,241,0.5), 0 2px 6px rgba(0,0,0,0.2)',
     fontFamily:     '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    fontSize:       '14px',
+    fontSize:       '15px',
     fontWeight:     '700',
     letterSpacing:  '0.01em',
     lineHeight:     '1',
@@ -43,6 +43,7 @@
     textDecoration: 'none',
     boxSizing:      'border-box',
     verticalAlign:  'middle',
+    touchAction:    'manipulation',
   };
 
   // ── Button HTML ───────────────────────────────────────────────────────────
@@ -171,8 +172,8 @@
     btn.style.background = BG.idle;
     btn.style.cursor     = 'pointer';
     btn.style.opacity    = '1';
-    btn.style.maxWidth   = '320px';
-    btn.style.padding    = '0 18px';
+    btn.style.maxWidth   = '340px';
+    btn.style.padding    = '0 20px';
     btn.innerHTML = labelHtml(ICON_SAVE, 'Save to Pipeline');
   }
 
@@ -215,7 +216,7 @@
 
   function collapseBtn(btn) {
     btn.dataset.state   = 'collapsed';
-    btn.style.maxWidth  = '46px';
+    btn.style.maxWidth  = '52px';
     btn.style.padding   = '0';
     btn.style.opacity   = '0.75';
     btn.style.cursor    = 'pointer';
@@ -309,6 +310,19 @@
       setSuccess(btn, `Saved! ${photos} photo${photos !== 1 ? 's' : ''}${score}`);
       if (chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
+      }
+
+      // Auto-trigger ImageKit photo transfer for published listings
+      // This ensures photos are permanently available in the pipeline
+      if (resp.choice_property_id && photos > 0 && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'TRANSFER_PHOTOS',
+          pipeline_id: resp.id,
+          property_id: resp.choice_property_id
+        }).catch(() => {
+          // Non-blocking: photos can be transferred later from admin panel
+          console.warn('[CP] Photo transfer request failed (non-critical)');
+        });
       }
 
     } else if (resp && resp.duplicate) {
