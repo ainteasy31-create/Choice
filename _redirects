@@ -58,5 +58,8 @@
 # Property detail pages (UUID-based routes served by property.html SPA)
 /property/*                 /property.html                               200
 
+# Mobile import PWA
+/import                     /import/index.html                           200
+
 # Catch-all 404
 /*                          /404.html                                    404
