@@ -117,6 +117,7 @@ async function updateBadge() {
 async function postPayload(payload) {
   const res = await fetch(EDGE_URL, {
     method:  'POST',
+    mode:    'cors',
     headers: { 'Content-Type': 'application/json', 'x-import-secret': SECRET },
     body:    JSON.stringify(payload),
   });

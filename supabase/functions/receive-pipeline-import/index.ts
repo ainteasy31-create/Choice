@@ -148,7 +148,9 @@ Deno.serve(async (req) => {
   const IMPORT_SECRET = Deno.env.get('SHORTCUT_IMPORT_SECRET');
   if (!IMPORT_SECRET) return jsonErr(500, 'Import secret not configured', req);
 
-  const incoming = req.headers.get('x-import-secret');
+  // Read secret from query parameter (for Orion/iOS compatibility) or header
+  const url = new URL(req.url);
+  const incoming = url.searchParams.get('secret') || req.headers.get('x-import-secret');
   if (!incoming || incoming !== IMPORT_SECRET) {
     return jsonErr(401, 'Invalid import secret', req);
   }

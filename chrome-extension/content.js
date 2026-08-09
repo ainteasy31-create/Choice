@@ -246,6 +246,21 @@
 
   // ── Save handler ─────────────────────────────────────────────────────────
 
+  async function queuePayload(payload) {
+    if (!chrome.storage || !chrome.storage.local) {
+      throw new Error('chrome.storage.local not available');
+    }
+    const data = await chrome.storage.local.get({ cp_queue: [] });
+    const queue = data.cp_queue || [];
+    const key = `${payload.source || 'unknown'}|${payload.source_listing_id || 'unknown'}`;
+    const exists = queue.some(q => `${q.source || 'unknown'}|${q.source_listing_id || 'unknown'}` === key);
+    if (exists) return queue.length;
+    queue.push(Object.assign({}, payload, { _queued_at: Date.now() }));
+    const trimmed = queue.slice(-75); // MAX_QUEUE_ITEMS
+    await chrome.storage.local.set({ cp_queue: trimmed });
+    return trimmed.length;
+  }
+
   async function handleSave() {
     const btn = document.getElementById(BTN_ID);
     if (!btn || btn.disabled) return;
@@ -287,21 +302,52 @@
       }
     }
 
-    // POST to edge function via the background service worker.
+    // POST to edge function directly from content script (bypasses service worker
+    // for better Orion/iOS compatibility). Send secret as query parameter
+    // to avoid CORS preflight issues with custom headers.
     let resp;
     try {
-      if (!chrome.runtime || !chrome.runtime.sendMessage) {
-        throw new Error('chrome.runtime.sendMessage not available');
-      }
-      const uploadResp = await chrome.runtime.sendMessage({
-        type: 'UPLOAD_PAYLOAD',
-        payload,
-        settings,
+      const url = new URL(CP_CONFIG.EDGE_URL);
+      url.searchParams.set('secret', CP_CONFIG.IMPORT_SECRET);
+      
+      const uploadResp = await fetch(url.toString(), {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
-      resp = uploadResp || {};
+
+      let body;
+      try {
+        body = await uploadResp.json();
+      } catch (_) {
+        body = {};
+      }
+
+      if (!uploadResp.ok) {
+        body = body && typeof body === 'object' ? body : {};
+        body.ok = false;
+        body.httpStatus = uploadResp.status;
+        body.error = body.error || `Server rejected import (HTTP ${uploadResp.status})`;
+      }
+
+      resp = body;
     } catch (netErr) {
       console.error('[CP] upload request failed:', netErr);
-      resp = { ok: false, error: 'Network error' };
+      // Try to queue for later if offline queue is enabled
+      if (settings.offlineQueue) {
+        try {
+          const queueLength = await queuePayload(payload);
+          resp = { ok: false, queued: true, queueLength };
+        } catch (queueErr) {
+          resp = { ok: false, error: 'Network error' };
+        }
+      } else {
+        resp = { ok: false, error: 'Network error' };
+      }
     }
 
     if (resp && resp.ok) {
@@ -330,11 +376,13 @@
 
     } else if (resp && resp.queued) {
       setSuccess(btn, 'Queued offline — will sync');
-      chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
+      if (chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
+      }
 
     } else {
       const rawError = resp && resp.error;
-      const msg = rawError ? String(rawError).slice(0, 38) : 'Server error';
+      const msg = rawError ? String(rawError).slice(0, 60) : 'Server error';
       setError(btn, 'Failed: ' + msg);
     }
   }
