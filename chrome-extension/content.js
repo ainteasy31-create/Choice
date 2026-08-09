@@ -1,390 +1,143 @@
 // ============================================================
-// Import to Choice Properties — Content Script v2.0
-// Injected on: zillow.com/homedetails/*, realtor.com, apartments.com, redfin.com
-// Uses CP_Extractors (shared-extractors.js) for multi-site extraction.
-// Features: one-click save, Download-to-PC, offline queue.
+// Import to Choice Properties — Content Script v2.1
+// Orion-optimized: self-contained, no background worker needed.
 // ============================================================
-
 (function () {
   'use strict';
 
-  const BTN_ID = 'cp-save-btn';
+  const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
+  const SECRET   = 'cp_import_7Kx3m9P2w5';
 
-  // ── Base inline styles ────────────────────────────────────────────────────
-  const BASE_STYLES = {
-    position:       'fixed',
-    bottom:         'max(24px, env(safe-area-inset-bottom))',
-    right:          'max(24px, env(safe-area-inset-right))',
-    zIndex:         '2147483647',
-    display:        'flex',
-    alignItems:     'center',
-    justifyContent: 'center',
-    gap:            '8px',
-    padding:        '0 20px',
-    height:         '52px',
-    minWidth:       '60px',
-    maxWidth:       '340px',
-    background:     '#6366f1',
-    color:          '#fff',
-    border:         'none',
-    borderRadius:   '26px',
-    boxShadow:      '0 4px 20px rgba(99,102,241,0.5), 0 2px 6px rgba(0,0,0,0.2)',
-    fontFamily:     '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    fontSize:       '15px',
-    fontWeight:     '700',
-    letterSpacing:  '0.01em',
-    lineHeight:     '1',
-    whiteSpace:     'nowrap',
-    cursor:         'pointer',
-    userSelect:     'none',
-    outline:        'none',
-    overflow:       'hidden',
-    transition:     'background 0.15s, box-shadow 0.15s, transform 0.12s, max-width 0.3s, padding 0.3s, opacity 0.2s',
-    textDecoration: 'none',
-    boxSizing:      'border-box',
-    verticalAlign:  'middle',
-    touchAction:    'manipulation',
-  };
+  if (document.getElementById('cp-save-btn')) return;
 
-  // ── Button HTML ───────────────────────────────────────────────────────────
-  const ICON_SAVE = `
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2.5"
-         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
-      <path d="M12 2v13M5 9l7 7 7-7"/>
-      <path d="M3 20h18"/>
-    </svg>`;
+  // ── Inject button ───────────────────────────────────────────
+  const btn = document.createElement('button');
+  btn.id = 'cp-save-btn';
+  btn.textContent = 'Save to Pipeline';
+  Object.assign(btn.style, {
+    position: 'fixed', bottom: '24px', right: '24px', zIndex: '2147483647',
+    padding: '14px 24px', height: '52px', background: '#6366f1',
+    color: '#fff', border: 'none', borderRadius: '26px',
+    fontFamily: '-apple-system, sans-serif', fontSize: '15px',
+    fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
+    touchAction: 'manipulation',
+  });
 
-  const ICON_CHECK = `
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2.5"
-         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>`;
+  btn.addEventListener('click', async () => {
+    btn.textContent = 'Saving…';
+    btn.style.background = '#818cf8';
+    btn.disabled = true;
 
-  const ICON_X = `
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2.5"
-         stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
-      <line x1="18" y1="6" x2="6" y2="18"/>
-      <line x1="6" y1="6" x2="18" y2="18"/>
-    </svg>`;
-
-  const SPINNER_HTML = `
-    <span style="
-      display:inline-block;
-      width:15px;height:15px;
-      border:2px solid rgba(255,255,255,0.35);
-      border-top-color:#fff;
-      border-radius:50%;
-      animation:cp-spin 0.7s linear infinite;
-      flex-shrink:0;
-    "></span>`;
-
-  function labelHtml(icon, text) {
-    return `${icon}<span style="display:inline-block">${text}</span>`;
-  }
-
-  // ── State colours ─────────────────────────────────────────────────────────
-  const BG = {
-    idle:      '#6366f1',
-    hover:     '#4f46e5',
-    loading:   '#818cf8',
-    success:   '#16a34a',
-    duplicate: '#a16207',
-    error:     '#dc2626',
-  };
-
-  // ── Inject button ─────────────────────────────────────────────────────────
-  let _attempts = 0;
-
-  function tryInject() {
-    _attempts++;
-    if (document.getElementById(BTN_ID)) return;
-    if (!document.body)                                     { if (_attempts < 20) setTimeout(tryInject, 800); return; }
-    if (!CP_Extractors || !CP_Extractors.detect(location.href)) { if (_attempts < 20) setTimeout(tryInject, 800); return; }
-
-    // Inject keyframe for spinner via a <style> tag
-    if (!document.getElementById('cp-spin-style')) {
-      const s = document.createElement('style');
-      s.id = 'cp-spin-style';
-      s.textContent = '@keyframes cp-spin{to{transform:rotate(360deg)}}';
-      document.head.appendChild(s);
-    }
-
-    const btn = document.createElement('button');
-    btn.id = BTN_ID;
-    btn.setAttribute('title', 'Save this listing to Choice Properties pipeline');
-
-    Object.assign(btn.style, BASE_STYLES);
-
-    btn.innerHTML = labelHtml(ICON_SAVE, 'Save to Pipeline');
-
-    btn.addEventListener('mouseenter', () => {
-      if (!btn.dataset.state || btn.dataset.state === 'idle') {
-        btn.style.background = BG.hover;
-        btn.style.transform  = 'translateY(-1px)';
-        btn.style.boxShadow  = '0 6px 24px rgba(99,102,241,0.55), 0 2px 6px rgba(0,0,0,0.2)';
-      }
-    });
-    btn.addEventListener('mouseleave', () => {
-      if (!btn.dataset.state || btn.dataset.state === 'idle') {
-        btn.style.background = BG.idle;
-        btn.style.transform  = '';
-        btn.style.boxShadow  = BASE_STYLES.boxShadow;
-      }
-      if (btn.dataset.state === 'collapsed') {
-        collapseBtn(btn);
-      }
-    });
-    btn.addEventListener('mouseenter', () => {
-      if (btn.dataset.state === 'collapsed') expandBtn(btn);
-    });
-
-    btn.addEventListener('click', handleSave);
-    document.body.appendChild(btn);
-  }
-
-  // Start immediately, then back-off retries for slow Next.js hydration
-  setTimeout(tryInject,  500);
-  setTimeout(tryInject, 1500);
-  setTimeout(tryInject, 3000);
-  setTimeout(tryInject, 6000);
-
-  // SPA navigation — sites change URL without a full page reload
-  let _lastUrl = location.href;
-  setInterval(() => {
-    if (location.href !== _lastUrl) {
-      _lastUrl = location.href;
-      const old = document.getElementById(BTN_ID);
-      if (old) old.remove();
-      _attempts = 0;
-      setTimeout(tryInject,  800);
-      setTimeout(tryInject, 2000);
-    }
-  }, 500);
-
-  // ── Button state helpers ──────────────────────────────────────────────────
-
-  function setIdle(btn) {
-    btn.dataset.state    = 'idle';
-    btn.disabled         = false;
-    btn.style.background = BG.idle;
-    btn.style.cursor     = 'pointer';
-    btn.style.opacity    = '1';
-    btn.style.maxWidth   = '340px';
-    btn.style.padding    = '0 20px';
-    btn.innerHTML = labelHtml(ICON_SAVE, 'Save to Pipeline');
-  }
-
-  function setLoading(btn) {
-    btn.dataset.state    = 'loading';
-    btn.disabled         = true;
-    btn.style.background = BG.loading;
-    btn.style.cursor     = 'wait';
-    btn.innerHTML        = labelHtml(SPINNER_HTML, 'Saving…');
-  }
-
-  function setSuccess(btn, text) {
-    btn.dataset.state    = 'success';
-    btn.disabled         = false;
-    btn.style.background = BG.success;
-    btn.style.cursor     = 'default';
-    btn.style.boxShadow  = '0 4px 20px rgba(22,163,74,0.4), 0 2px 6px rgba(0,0,0,0.12)';
-    btn.innerHTML        = labelHtml(ICON_CHECK, text);
-    setTimeout(() => { if (btn.isConnected) collapseBtn(btn); }, 4000);
-  }
-
-  function setDuplicate(btn) {
-    btn.dataset.state    = 'duplicate';
-    btn.disabled         = false;
-    btn.style.background = BG.duplicate;
-    btn.style.cursor     = 'default';
-    btn.innerHTML        = labelHtml(ICON_CHECK, 'Already in pipeline');
-    setTimeout(() => { if (btn.isConnected) collapseBtn(btn); }, 4000);
-  }
-
-  function setError(btn, text) {
-    btn.dataset.state    = 'error';
-    btn.disabled         = false;
-    btn.style.background = BG.error;
-    btn.style.cursor     = 'pointer';
-    btn.style.boxShadow  = '0 4px 16px rgba(220,38,38,0.3), 0 2px 6px rgba(0,0,0,0.12)';
-    btn.innerHTML        = labelHtml(ICON_X, text);
-    setTimeout(() => { if (btn.isConnected) setIdle(btn); }, 3500);
-  }
-
-  function collapseBtn(btn) {
-    btn.dataset.state   = 'collapsed';
-    btn.style.maxWidth  = '52px';
-    btn.style.padding   = '0';
-    btn.style.opacity   = '0.75';
-    btn.style.cursor    = 'pointer';
-  }
-
-  function expandBtn(btn) {
-    btn.style.maxWidth = '320px';
-    btn.style.padding  = '0 18px';
-    btn.style.opacity  = '1';
-  }
-
-  // ── Settings ──────────────────────────────────────────────────────────────
-
-  async function getSettings() {
     try {
-      if (!chrome.storage || !chrome.storage.local) {
-        console.warn('[CP] chrome.storage not available, using defaults');
-        return { downloadToPC: true, offlineQueue: true };
-      }
-      const data = await chrome.storage.local.get({ cp_settings: { downloadToPC: true, offlineQueue: true } });
-      return data.cp_settings;
-    } catch (err) {
-      console.warn('[CP] storage error, using defaults:', err);
-      return { downloadToPC: true, offlineQueue: true };
-    }
-  }
+      const payload = extractListing();
+      if (!payload) { setError('Could not read listing'); return; }
 
-  // ── Save handler ─────────────────────────────────────────────────────────
-
-  async function queuePayload(payload) {
-    if (!chrome.storage || !chrome.storage.local) {
-      throw new Error('chrome.storage.local not available');
-    }
-    const data = await chrome.storage.local.get({ cp_queue: [] });
-    const queue = data.cp_queue || [];
-    const key = `${payload.source || 'unknown'}|${payload.source_listing_id || 'unknown'}`;
-    const exists = queue.some(q => `${q.source || 'unknown'}|${q.source_listing_id || 'unknown'}` === key);
-    if (exists) return queue.length;
-    queue.push(Object.assign({}, payload, { _queued_at: Date.now() }));
-    const trimmed = queue.slice(-75); // MAX_QUEUE_ITEMS
-    await chrome.storage.local.set({ cp_queue: trimmed });
-    return trimmed.length;
-  }
-
-  async function handleSave() {
-    const btn = document.getElementById(BTN_ID);
-    if (!btn || btn.disabled) return;
-    if (btn.dataset.state === 'success' || btn.dataset.state === 'duplicate') return;
-
-    setLoading(btn);
-
-    // Extract via multi-site registry
-    let payload;
-    try {
-      payload = CP_Extractors.extract(location.href, document);
-    } catch (err) {
-      setError(btn, 'Extraction error');
-      console.error('[CP] extraction error:', err);
-      return;
-    }
-
-    if (!payload) {
-      setError(btn, 'Open a full listing page');
-      return;
-    }
-
-    if (!payload.source_listing_id) {
-      setError(btn, 'Listing ID not found');
-      console.error('[CP] extractor returned no source_listing_id:', payload);
-      return;
-    }
-
-    const settings = await getSettings();
-
-    // Download to PC first (best-effort; pipeline is primary)
-    if (settings.downloadToPC) {
-      try {
-        if (chrome.runtime && chrome.runtime.sendMessage) {
-          await chrome.runtime.sendMessage({ type: 'DOWNLOAD_PAYLOAD', payload });
-        }
-      } catch (err) {
-        console.warn('[CP] download request error:', err);
-      }
-    }
-
-    // POST to edge function directly from content script (bypasses service worker
-    // for better Orion/iOS compatibility). Send secret as query parameter
-    // to avoid CORS preflight issues with custom headers.
-    let resp;
-    try {
-      const url = new URL(CP_CONFIG.EDGE_URL);
-      url.searchParams.set('secret', CP_CONFIG.IMPORT_SECRET);
-      
-      const uploadResp = await fetch(url.toString(), {
+      const resp = await fetch(EDGE_URL + '?secret=' + encodeURIComponent(SECRET), {
         method: 'POST',
-        mode: 'cors',
-        credentials: 'omit',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      const data = await resp.json();
 
-      let body;
-      try {
-        body = await uploadResp.json();
-      } catch (_) {
-        body = {};
-      }
-
-      if (!uploadResp.ok) {
-        body = body && typeof body === 'object' ? body : {};
-        body.ok = false;
-        body.httpStatus = uploadResp.status;
-        body.error = body.error || `Server rejected import (HTTP ${uploadResp.status})`;
-      }
-
-      resp = body;
-    } catch (netErr) {
-      console.error('[CP] upload request failed:', netErr);
-      // Try to queue for later if offline queue is enabled
-      if (settings.offlineQueue) {
-        try {
-          const queueLength = await queuePayload(payload);
-          resp = { ok: false, queued: true, queueLength };
-        } catch (queueErr) {
-          resp = { ok: false, error: 'Network error' };
-        }
+      if (data && data.ok) {
+        const photos = data.photos || 0;
+        btn.textContent = 'Saved! ' + photos + ' photos';
+        btn.style.background = '#16a34a';
+        setTimeout(() => { btn.remove(); }, 3000);
+      } else if (data && data.duplicate) {
+        btn.textContent = 'Already in pipeline';
+        btn.style.background = '#a16207';
+        setTimeout(() => { btn.remove(); }, 3000);
       } else {
-        resp = { ok: false, error: 'Network error' };
+        setError(data && data.error ? data.error.slice(0, 40) : 'Server error');
       }
+    } catch (e) {
+      console.error('[CP]', e);
+      setError('Network error');
     }
+  });
 
-    if (resp && resp.ok) {
-      const photos = resp.photos || 0;
-      const score  = resp.score  != null ? ` · Q:${resp.score}` : '';
-      setSuccess(btn, `Saved! ${photos} photo${photos !== 1 ? 's' : ''}${score}`);
-      if (chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
-      }
+  document.body.appendChild(btn);
 
-      // Auto-trigger ImageKit photo transfer for published listings
-      // This ensures photos are permanently available in the pipeline
-      if (resp.choice_property_id && photos > 0 && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'TRANSFER_PHOTOS',
-          pipeline_id: resp.id,
-          property_id: resp.choice_property_id
-        }).catch(() => {
-          // Non-blocking: photos can be transferred later from admin panel
-          console.warn('[CP] Photo transfer request failed (non-critical)');
-        });
-      }
-
-    } else if (resp && resp.duplicate) {
-      setDuplicate(btn);
-
-    } else if (resp && resp.queued) {
-      setSuccess(btn, 'Queued offline — will sync');
-      if (chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({ type: 'SAVED' }).catch(() => {});
-      }
-
-    } else {
-      const rawError = resp && resp.error;
-      const msg = rawError ? String(rawError).slice(0, 60) : 'Server error';
-      setError(btn, 'Failed: ' + msg);
-    }
+  function setError(msg) {
+    btn.textContent = 'Failed: ' + msg;
+    btn.style.background = '#dc2626';
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = 'Save to Pipeline'; btn.style.background = '#6366f1'; }, 4000);
   }
 
+  // ── Zillow extractor (only) ─────────────────────────────────
+  function extractListing() {
+    const el = document.getElementById('__NEXT_DATA__');
+    if (!el) return null;
+    let nd;
+    try { nd = JSON.parse(el.textContent); } catch (_) { return null; }
+
+    let prop = null;
+    const paths = [
+      ['props', 'pageProps', 'componentProps', 'gdpClientCache'],
+      ['props', 'pageProps', 'gdpClientCache'],
+    ];
+    for (const path of paths) {
+      let node = nd;
+      for (const key of path) { if (!node) break; node = node[key]; }
+      if (!node) continue;
+      try {
+        const cache = typeof node === 'string' ? JSON.parse(node) : node;
+        for (const k of Object.keys(cache)) {
+          const v = cache[k];
+          if (v && v.property && v.property.zpid) { prop = v.property; break; }
+          if (v && v.data && v.data.property && v.data.property.zpid) { prop = v.data.property; break; }
+        }
+      } catch (_) {}
+      if (prop) break;
+    }
+    if (!prop) return null;
+
+    const rf = prop.resoFacts || {};
+    const addr = prop.address || {};
+    const zpid = String(prop.zpid || '');
+    const street = addr.streetAddress || prop.streetAddress || '';
+    const city = addr.city || prop.city || '';
+    const state = addr.state || prop.state || '';
+    const zip = addr.zipcode || prop.zipcode || '';
+    const beds = prop.bedrooms != null ? prop.bedrooms : null;
+    const baths = prop.bathrooms != null ? Math.floor(prop.bathrooms) : null;
+    const halfBath = prop.bathrooms != null && prop.bathrooms !== Math.floor(prop.bathrooms) ? 1 : null;
+    const lat = prop.latitude || null;
+    const lng = prop.longitude || null;
+    const sqft = prop.livingArea || null;
+    const yr = prop.yearBuilt || rf.yearBuilt || null;
+    const propType = prop.homeType ? String(prop.homeType).toUpperCase() : null;
+
+    // Collect photos
+    const photos = [];
+    const seen = new Set();
+    const add = (u) => { if (u && typeof u === 'string' && u.startsWith('http') && !seen.has(u)) { photos.push(u); seen.add(u); } };
+    for (const p of (prop.responsivePhotos || [])) { if (p && p.mixedSources && p.mixedSources.jpeg) { let best = null, bestW = 0; for (const j of p.mixedSources.jpeg) { if ((j.width||0) > bestW) { bestW = j.width||0; best = j.url; } } if (best) add(best); } }
+    for (const p of (prop.photos || [])) add(typeof p === 'string' ? p : (p && p.url));
+    add(prop.heroImage);
+
+    return {
+      source: 'zillow',
+      source_listing_id: zpid,
+      source_url: location.href,
+      title: (beds ? beds + 'BR ' : '') + (propType || 'Rental') + (city ? ' in ' + city : ''),
+      address: street, city, state, zip, lat, lng,
+      monthly_rent: prop.price ? parseInt(String(prop.price).replace(/[^0-9]/g, ''), 10) || null : null,
+      bedrooms: beds, bathrooms: baths, half_bathrooms: halfBath,
+      square_footage: sqft ? parseInt(String(sqft), 10) : null,
+      year_built: yr ? parseInt(String(yr), 10) : null,
+      property_type: propType,
+      description: prop.description || null,
+      neighborhood: prop.neighborhoodName || null,
+      county: addr.county || null,
+      available_date: rf.dateAvailable ? String(rf.dateAvailable).slice(0, 10) : null,
+      pets_allowed: prop.isPetFriendly != null ? !!prop.isPetFriendly : null,
+      parking: rf.parkingFeatures ? rf.parkingFeatures.join(', ') : null,
+      security_deposit: rf.securityDeposit ? parseInt(String(rf.securityDeposit), 10) || null : null,
+      original_image_urls: JSON.stringify(photos.slice(0, 50)),
+      _import: 'orion-extension-v2.1',
+    };
+  }
 })();

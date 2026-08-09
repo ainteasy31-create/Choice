@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Import to Choice Properties",
   "version": "2.1.0",
-  "description": "Save Zillow, Realtor.com, Apartments.com, and Redfin listings to your Choice Properties pipeline.",
+  "description": "Save listings to Choice Properties pipeline.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.zillow.com/*",
@@ -19,13 +19,8 @@
         "https://www.apartments.com/*",
         "https://www.redfin.com/*"
       ],
-      "js": ["config.js", "shared-extractors.js", "content.js"],
-      "css": ["content.css"],
+      "js": ["config.js", "content.js"],
       "run_at": "document_idle"
     }
-  ],
-  "action": {
-    "default_popup": "popup.html",
-    "default_title": "Import to Choice Properties"
-  }
+  ]
 }
