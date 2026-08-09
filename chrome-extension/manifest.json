@@ -3,7 +3,7 @@
   "name": "Import to Choice Properties",
   "version": "2.0.0",
   "description": "Save any Zillow, Realtor.com, Apartments.com, or Redfin listing to your Choice Properties pipeline with one click — all fields and photos captured. Optional Download-to-PC and offline queue.",
-  "permissions": ["tabs", "storage", "downloads", "alarms"],
+  "permissions": ["tabs", "storage"],
   "host_permissions": [
     "https://www.zillow.com/*",
     "https://www.realtor.com/*",
