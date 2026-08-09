@@ -1,15 +1,303 @@
-[2026-08-09 08:34:37] BrowserContainerVC: openOptionsPopover, hasURL: false
-[2026-08-09 08:34:37] NewTabViewController ID 5: updatePopoverSourceView
-[2026-08-09 08:34:56] Toolbar Animations: Expansion
+[2026-08-09 08:49:39] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:49:39] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:49:57] BrowserController: beginWebExtInstall url: file:///private/var/mobile/Containers/Data/Application/35DE72A6-0DC4-4059-9546-9E9F81D15E94/Documents/chrome-extension-orion-fixed%20(3)/
+[2026-08-09 08:49:59] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:49:59] FeaturedExtensionsViewModel: Error: Failed to install extension: Orion.WebExtBundle
+[2026-08-09 08:50:03] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:50:03] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:50:05] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:50:05] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "orion://history")
+[2026-08-09 08:50:06] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:50:08] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:50:12] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:50:13] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:50:13] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:50:19] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:50:21] UIView.showHideAnimated: <UIButton: 0x11e5ac900; frame = (0 0; 0 0); opaque = NO; tintColor = <UIDynamicCatalogSystemColor: 0x101f88240; name = secondaryLabelColor>; gestureRecognizers = <NSArray: 0x11e71fee0>; layer = <CALayer: 0x11e71f440>> configuration=<UIButtonConfiguration: 0x1243b7e80> baseStyle=plain macStyle=automatic buttonSize=medium cornerStyle=dynamic image=<UIImage:0x124a20780 symbol(system: arrow.clockwise)> contentInsets={0, 0, 0, 0} imagePlacement=leading imagePadding=0 titlePadding=1 titleAlignment=automatic automaticallyUpdateForSelection background=<UIBackgroundConfiguration: 0x1248a4c40; Base Style = Custom; cornerRadius = 5.95>, show: false, checkCurrent: false
+[2026-08-09 08:50:26] NewTabViewController ID 5: handleLocationChange searchString: C
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.1, animated: false)
+[2026-08-09 08:50:26] NewTabViewController ID 5: updateMainViewVisibility url: https://search.brave.com/search?q=C, animated: true
+[2026-08-09 08:50:26] UIView.showHideAnimated: <Orion.WebContextView: 0x110c00a00; frame = (0 0; 414 714); alpha = 0; autoresize = W+H; gestureRecognizers = <NSArray: 0x110eba180>; animations = { bounds.size=<CASpringAnimation: 0x11e4fd780>; position=<CASpringAnimation: 0x11e4fe340>; }; backgroundColor = <UIDynamicSystemColor: 0x110c88280; name = systemGray6Color>; layer = <CALayer: 0x110eb8e80>>, show: true, checkCurrent: true
+[2026-08-09 08:50:26] TabViewModel: WebPageDelegate: urlUpdated: https://search.brave.com/search?q=C, webPage: Orion.WebPageModel
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: urlDidChange
+[2026-08-09 08:50:26] TabViewModel: WebPageDelegate: isLoading: true, webPage: Orion.WebPageModel
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:50:26] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:50:26] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:50:26] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: true, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: restoreToolbars
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.15, animated: false)
+[2026-08-09 08:50:26] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "C")
+[2026-08-09 08:50:26] TabViewModel: processAction action: configureContentBlocker(enabled: false)
+[2026-08-09 08:50:28] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.3, animated: true)
+[2026-08-09 08:50:28] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 08:50:28] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "https://search.brave.com/search?q=C")
+[2026-08-09 08:50:28] NewTabViewController ID 5: processViewModel w/ state: removeReaderModeHighlightFromURLBar
+[2026-08-09 08:50:28] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x110f2b980 symbol(system: globe) {20, 19} baseline=3.5,contentInsets={1, 1.5, 1, 1.5},alignmentRectInsets={-0.5, 0, -0.5, 0} config=<traits=(UserInterfaceIdiom = Phone, DisplayScale = 2, DisplayGamut = P3, HorizontalSizeClass = Compact, VerticalSizeClass = Regular, UserInterfaceStyle = Dark, UserInterfaceLayoutDirection = LTR, PreferredContentSizeCategory = XS, AccessibilityContrast = Normal)> renderingMode=automatic(template)>))
+[2026-08-09 08:50:28] Call: base.frameReady-https://search.brave.com/search?q=C
+[2026-08-09 08:50:28] Call: common.runtimeSendMessage-https://search.brave.com/search?q=C
+[2026-08-09 08:50:28] Call: browserAction.setIcon-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] JSAPI: Error: browser.tabs.query is using unimplemented query parameters. (["discarded": 0])
+[2026-08-09 08:50:28] Call: commands.getAll-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] JSAPI: Error: browser.tabs.query is using unimplemented query parameters. (["windowType": normal])
+[2026-08-09 08:50:28] Call: base.crossContextCallback-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] Call: common.tabSendMessage-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] JSAPI: Error: browser.tabs.sendMessage is using unimplemented options. (["frameId"])
+[2026-08-09 08:50:28] Call: common.tabSendMessage-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:28] JSAPI: Error: browser.tabs.sendMessage is using unimplemented options. (["frameId"])
+[2026-08-09 08:50:28] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 08:50:28] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.4061423, animated: true)
+[2026-08-09 08:50:31] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.44492897, animated: true)
+[2026-08-09 08:50:32] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.47142485, animated: true)
+[2026-08-09 08:50:32] Call: kagiFaviconObserver.requestIconOnDocumentReady-https://search.brave.com/search?q=C
+[2026-08-09 08:50:32] Call: base.contentLoaded-https://search.brave.com/search?q=C
+[2026-08-09 08:50:32] Call: kagiFaviconObserver.requestIconOnDocumentReady-https://search.brave.com/search?q=C
+[2026-08-09 08:50:32] Call: common.runtimeSendMessage-https://search.brave.com/search?q=C
+[2026-08-09 08:50:32] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:32] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:50:32] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.4978713, animated: true)
+[2026-08-09 08:50:32] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.7789843, animated: true)
+[2026-08-09 08:50:33] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.8312871, animated: true)
+[2026-08-09 08:50:33] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x1268bd540 anonymous {96, 96} renderingMode=automatic(original)>))
+[2026-08-09 08:50:33] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.83138806, animated: true)
+[2026-08-09 08:50:33] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.87568814, animated: true)
+[2026-08-09 08:50:34] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.8939321, animated: true)
+[2026-08-09 08:50:34] Call: base.frameLoaded-https://search.brave.com/search?q=C
+[2026-08-09 08:50:34] Call: base.frameLoaded-https://search.brave.com/search?q=C
+[2026-08-09 08:50:34] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 1.0, animated: true)
+[2026-08-09 08:50:34] TabViewModel: WebPageDelegate: isLoading: false, webPage: Orion.WebPageModel
+[2026-08-09 08:50:34] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:50:34] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:50:34] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:50:34] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:50:34] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:50:34] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: true, backNavigation: Orion.NewTabViewModel.BackNavigation.switchToStartView)
+[2026-08-09 08:50:34] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.0, animated: false)
+[2026-08-09 08:50:34] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:50:35] TabViewModel: processAction action: takeScreenshot(tabRootView: Optional(<Orion.NewTabRootView: 0x110ea9200; frame = (0 0; 414 714); backgroundColor = <UIDynamicSystemColor: 0x110c88280; name = systemGray6Color>; layer = <CALayer: 0x110eb9800>>))
+[2026-08-09 08:50:35] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C
+[2026-08-09 08:50:35] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C
+[2026-08-09 08:50:35] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C
+[2026-08-09 08:50:35] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C
+[2026-08-09 08:50:35] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C
+[2026-08-09 08:50:35] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C
+[2026-08-09 08:50:35] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x1268bda40 anonymous {96, 96} renderingMode=automatic(original)>))
+[2026-08-09 08:50:38] NewTabViewController ID 5: updateMainViewVisibility url: https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc, animated: true
+[2026-08-09 08:50:38] UIView.showHideAnimated: <Orion.WebContextView: 0x110c00a00; frame = (0 0; 414 714); autoresize = W+H; gestureRecognizers = <NSArray: 0x110eba180>; backgroundColor = <UIDynamicSystemColor: 0x110c88280; name = systemGray6Color>; layer = <CALayer: 0x110eb8e80>>, show: true, checkCurrent: true
+[2026-08-09 08:50:38] TabViewModel: processAction action: updateWebsiteAddress(newAddress: Optional(https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc))
+[2026-08-09 08:50:38] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc")
+[2026-08-09 08:50:38] TabViewModel: WebPageDelegate: urlUpdated: https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc, webPage: Orion.WebPageModel
+[2026-08-09 08:50:38] NewTabViewController ID 5: processViewModel w/ state: urlDidChange
+[2026-08-09 08:50:38] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:50:38] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:50:38] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:50:38] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:50:38] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:50:38] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: true, backNavigation: Orion.NewTabViewModel.BackNavigation.switchToStartView)
+[2026-08-09 08:50:38] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:50:41] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:41] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:41] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:41] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:41] Call: kagiEvents.selectionChanged-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:41] Call: kagiEvents.selectionChanged-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:42] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:42] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:42] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:42] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:44] NewTabViewController ID 5: openWebsiteSettingsPopover, hasURL: true
+[2026-08-09 08:50:44] NewTabViewController ID 5: configureWebsiteSettingsIfNeeded
+[2026-08-09 08:50:44] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:50:44] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:50:44] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:50:47] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:47] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:47] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:47] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:47] Call: kagiEvents.selectionChanged-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:47] Call: kagiEvents.selectionChanged-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:50:48] BrowserContainerVC: openOptionsPopover, hasURL: true
+[2026-08-09 08:50:48] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:50:58] BrowserController: beginWebExtInstall url: file:///private/var/mobile/Containers/Data/Application/35DE72A6-0DC4-4059-9546-9E9F81D15E94/Documents/chrome-extension-orion-fixed%20(3)/
+[2026-08-09 08:51:00] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:51:00] FeaturedExtensionsViewModel: Error: Failed to install extension: Orion.WebExtBundle
+[2026-08-09 08:51:01] BrowserContainerVC: openOptionsPopover, hasURL: true
+[2026-08-09 08:51:01] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:51:11] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:11] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:11] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:51:12] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:12] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:12] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:12] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:12] PGSideMenu: Recognizable percentage: 10.0%
 [layout=bottomStacked] [hidingMode=standard]
 [layout=bottomStacked] [isCollapsed=false] [inWindow=true]
-[2026-08-09 08:34:56] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:51:12] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
 [layout=bottomStacked] [isCollapsed=false] [inWindow=true]
-[2026-08-09 08:34:56] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:51:12] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
 [layout=bottomStacked] [isCollapsed=false] [inWindow=true]
-[2026-08-09 08:34:57] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
-[2026-08-09 08:35:23] BrowserController: beginWebExtInstall url: file:///private/var/mobile/Containers/Data/Application/35DE72A6-0DC4-4059-9546-9E9F81D15E94/Documents/chrome-extension-orion-release/
-[2026-08-09 08:35:25] WebExtension: Error: Error loading manifest file.
-[2026-08-09 08:35:25] FeaturedExtensionsViewModel: Error: Failed to install extension: Orion.WebExtBundle
-[2026-08-09 08:35:34] BrowserContainerVC: openOptionsPopover, hasURL: false
-[2026-08-09 08:35:34] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:51:12] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:51:12] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:12] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:51:16] BrowserContainerVC: openOptionsPopover, hasURL: true
+[2026-08-09 08:51:16] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:51:42] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 08:51:42] BrowserContainerVC: openOptionsPopover, hasURL: true
+[2026-08-09 08:51:42] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:52:24] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.1, animated: false)
+[2026-08-09 08:52:24] TabViewModel: WebPageDelegate: isLoading: true, webPage: Orion.WebPageModel
+[2026-08-09 08:52:24] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:52:24] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:52:24] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:52:24] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:52:24] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:52:24] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: true, backNavigation: Orion.NewTabViewModel.BackNavigation.switchToStartView)
+[2026-08-09 08:52:24] NewTabViewController ID 5: processViewModel w/ state: restoreToolbars
+[2026-08-09 08:52:24] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.15, animated: false)
+[2026-08-09 08:52:24] TabViewModel: processAction action: configureContentBlocker(enabled: false)
+[2026-08-09 08:52:25] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.3, animated: true)
+[2026-08-09 08:52:25] Call: common.runtimeSendMessage-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:25] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 08:52:25] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc")
+[2026-08-09 08:52:25] NewTabViewController ID 5: processViewModel w/ state: removeReaderModeHighlightFromURLBar
+[2026-08-09 08:52:25] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x12c1e05a0 anonymous {96, 96} renderingMode=automatic(original)>))
+[2026-08-09 08:52:25] Call: base.frameReady-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:25] Call: base.crossContextCallback-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:25] Call: alarms.create-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:25] Call: common.tabSendMessage-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:25] JSAPI: Error: browser.tabs.sendMessage is using unimplemented options. (["frameId"])
+[2026-08-09 08:52:25] Call: common.runtimeSendMessage-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:25] Call: base.crossContextCallback-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:25] Call: base.crossContextCallback-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:25] Call: common.tabSendMessage-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:25] JSAPI: Error: browser.tabs.sendMessage is using unimplemented options. (["frameId"])
+[2026-08-09 08:52:25] Call: kagiFaviconObserver.requestIconOnDocumentReady-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:25] Call: base.contentLoaded-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:25] Call: kagiFaviconObserver.requestIconOnDocumentReady-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:25] Call: common.runtimeSendMessage-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:25] Call: common.tabSendMessage-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:25] JSAPI: Error: browser.tabs.sendMessage is using unimplemented options. (["frameId"])
+[2026-08-09 08:52:26] Call: base.crossContextCallback-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x12c1e0820 anonymous {96, 96} renderingMode=automatic(original)>))
+[2026-08-09 08:52:26] Call: common.runtimeSendMessage-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.45646605, animated: true)
+[2026-08-09 08:52:26] BrowserContainerVC: openOptionsPopover, hasURL: true
+[2026-08-09 08:52:26] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.8211472, animated: true)
+[2026-08-09 08:52:26] Call: common.tabSendMessage-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:26] JSAPI: Error: browser.tabs.sendMessage is using unimplemented options. (["frameId"])
+[2026-08-09 08:52:26] Call: base.crossContextCallback-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:52:26] Call: base.frameLoaded-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:26] Call: base.frameLoaded-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 1.0, animated: true)
+[2026-08-09 08:52:26] TabViewModel: WebPageDelegate: isLoading: false, webPage: Orion.WebPageModel
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:52:26] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:52:26] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:52:26] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: true, backNavigation: Orion.NewTabViewModel.BackNavigation.switchToStartView)
+[2026-08-09 08:52:26] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.0, animated: false)
+[2026-08-09 08:52:26] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:52:27] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:27] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:27] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:27] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:27] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:27] Call: kagiFaviconObserver.iconUpdated-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:27] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x12c1e0be0 anonymous {96, 96} renderingMode=automatic(original)>))
+[2026-08-09 08:52:27] TabViewModel: processAction action: takeScreenshot(tabRootView: Optional(<Orion.NewTabRootView: 0x110ea9200; frame = (0 0; 414 714); backgroundColor = <UIDynamicSystemColor: 0x110c88280; name = systemGray6Color>; layer = <CALayer: 0x110eb9800>>))
+[2026-08-09 08:52:37] BrowserController: beginWebExtInstall url: file:///private/var/mobile/Containers/Data/Application/35DE72A6-0DC4-4059-9546-9E9F81D15E94/Documents/chrome-extension-orion-fixed%20(3)/
+[2026-08-09 08:52:47] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:52:47] FeaturedExtensionsViewModel: Error: Failed to install extension: Orion.WebExtBundle
+[2026-08-09 08:52:48] BrowserContainerVC: openOptionsPopover, hasURL: true
+[2026-08-09 08:52:48] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:52:56] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:56] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:56] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:56] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:57] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:57] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:57] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:52:59] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:52:59] Call: kagiEvents.clickData-https://search.brave.com/search?q=C&conversation=096ca37ed6f52e72b3babd1509499ec5d5bc
+[2026-08-09 08:53:01] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 08:53:01] TabViewModel: processAction action: takeScreenshot(tabRootView: Optional(<Orion.NewTabRootView: 0x110ea9200; frame = (0 0; 414 714); backgroundColor = <UIDynamicSystemColor: 0x110c88280; name = systemGray6Color>; layer = <CALayer: 0x110eb9800>>))
+[2026-08-09 08:53:01] BrowserContainerVC: addTab: configuration: nil
+[2026-08-09 08:53:01] NewTabViewController ID 6: init w/ config nil
+[2026-08-09 08:53:01] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 08:53:01] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 08:53:01] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 08:53:01] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 08:53:01] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 08:53:01] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 08:53:01] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:53:01] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:53:01] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:53:01] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:53:01] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:53:01] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:53:01] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:53:01] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: true, backNavigation: Orion.NewTabViewModel.BackNavigation.switchToStartView)
+[2026-08-09 08:53:01] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:53:01] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 5)
+[2026-08-09 08:53:01] NewTabRootView ID 6: hideToolbarOnScrollSettingChanged
+[2026-08-09 08:53:01] TabViewModel: commonInit configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil), internalPageType: Optional(Orion.NewInternalPageType.newTab), tabCreatedWithStartPage: true, browserTab.url: nil
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.1, animated: false)
+[2026-08-09 08:53:01] TabViewModel: WebPageDelegate: urlUpdated: orion://newtab/, webPage: Orion.WebPageModel
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: urlDidChange
+[2026-08-09 08:53:01] TabViewModel: WebPageDelegate: isLoading: true, webPage: Orion.WebPageModel
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:53:01] NewTabViewController ID 6: updateBarsItems
+[2026-08-09 08:53:01] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 5)
+[2026-08-09 08:53:01] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: restoreToolbars
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.15, animated: false)
+[2026-08-09 08:53:01] NewTabRootView ID 6: hideToolbarOnScrollSettingChanged
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x126b1eda0 named(main: orion.toolbar.startpage) {16, 16} renderingMode=alwaysTemplate>))
+[2026-08-09 08:53:01] NewTabViewController ID 6: updateBarsItems
+[2026-08-09 08:53:01] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 5)
+[2026-08-09 08:53:01] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 08:53:01] TabViewModel: processAction action: updateWebsiteAddress(newAddress: nil)
+[2026-08-09 08:53:01] NewTabViewController ID 6: processViewModel w/ state: updateWebsiteAddress(text: "")
+[2026-08-09 08:53:01] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:53:01] TabViewModel: openStartURLIfNeeded: webPageModel: Orion.WebPageModel, hasURL: false, configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil)
+[2026-08-09 08:53:01] TabViewModel: processAction action: configureContentBlocker(enabled: false)
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.5, animated: true)
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: updateWebsiteAddress(text: "orion://newtab/")
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: removeReaderModeHighlightFromURLBar
+[2026-08-09 08:53:02] Call: kagiFaviconObserver.requestIconOnDocumentReady-orion://newtab/
+[2026-08-09 08:53:02] Call: base.frameLoaded-orion://newtab/
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: pageLoadingProgressChanged(progress: 1.0, animated: true)
+[2026-08-09 08:53:02] TabViewModel: WebPageDelegate: isLoading: false, webPage: Orion.WebPageModel
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:53:02] NewTabViewController ID 6: updateBarsItems
+[2026-08-09 08:53:02] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 5)
+[2026-08-09 08:53:02] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.0, animated: false)
+[2026-08-09 08:53:02] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:53:02] NewTabViewController ID 6: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 08:53:03] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:53:03] TabViewModel: processAction action: takeScreenshot(tabRootView: Optional(<Orion.NewTabRootView: 0x11e3f4c00; frame = (0 0; 414 714); backgroundColor = <UIDynamicSystemColor: 0x110c88280; name = systemGray6Color>; layer = <CALayer: 0x1243c49c0>>))
+[2026-08-09 08:53:04] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:53:04] NewTabViewController ID 6: updatePopoverSourceView
