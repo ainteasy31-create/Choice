@@ -1,0 +1,487 @@
+[2026-08-09 05:58:47] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 05:58:47] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 05:58:59] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 05:58:59] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 05:59:19] BrowserController: beginWebExtInstall url: file:///private/var/mobile/Containers/Shared/AppGroup/371C5E75-9AC7-4529-84D5-2D617973453C/File%20Provider%20Storage/Replit%20fix/chrome-extension-orion%20(2)/
+[2026-08-09 05:59:22] WebExtension: Error: Error loading manifest file.
+[2026-08-09 05:59:22] FeaturedExtensionsViewModel: Error: Failed to install extension: Orion.WebExtBundle
+[2026-08-09 05:59:26] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 05:59:26] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 05:59:40] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 05:59:43] SceneDelegate: sceneDidEnterBackground - window 1
+[2026-08-09 06:09:01] UniversalLinksHandling: Successfully enabled universal link detection
+[2026-08-09 06:09:01] AppDelegate: didFinishLaunchingWithOptions 
+[2026-08-09 06:09:01] WebExtension: Command has no suggested keys.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-5c01fb7247bafbf9db601d37d046bbea)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-55ef1efa5b1e92b5df75fe586ff3a159)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-7111d2c5d46c4a5a58ebe30889806212)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-9d406ef55d0345787393fddfae830d68)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-a4f7eef5b2a0528982d6ed4c89ae1daa)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-199e124fd675cc62ccbd0776889fef55)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-9ad166c8b212f8ca360b168cd4509a20)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-a9474c90295dc4edd9713e082f591eb9)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-44847342f5746e4e1a8a53272ea0ec15)
+[2026-08-09 06:09:01] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:09:01] WebExtension: Error: Error loading web extension bundle. (id: unpacked-fe0733b7e6a7d6ed4918445f0dd2f505)
+[2026-08-09 06:09:01] CloudKit: CloudKit > Start syncing, canSync: false. Caller: application(_:didFinishLaunchingWithOptions:)
+[2026-08-09 06:09:01] WebExtension: Error: Content script uses unimplemented keys.
+[2026-08-09 06:09:01] WebExtension: Error: Content script uses unimplemented keys.
+[2026-08-09 06:09:02] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(https://chromewebstore.google.com/user/installed), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Chrome Web Store – my items"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251841.3946939), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("45DEF467-3915-47EA-9415-953F8EDC7B04"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] NewTabViewController ID 2: init w/ config Optional(Orion.TabConfiguration(url: Optional(https://chromewebstore.google.com/user/installed), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Chrome Web Store – my items"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251841.3946939), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("45DEF467-3915-47EA-9415-953F8EDC7B04"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(https://darkreader.org/help/en/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Help – Dark Reader"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251861.791826), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("CEBFC31C-6EFE-4E90-92F0-E5982C12B932"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] NewTabViewController ID 3: init w/ config Optional(Orion.TabConfiguration(url: Optional(https://darkreader.org/help/en/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Help – Dark Reader"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251861.791826), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("CEBFC31C-6EFE-4E90-92F0-E5982C12B932"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Empty Tab"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786254903.749681), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("4560F298-C129-4E78-B07C-E5EEF2943327"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] NewTabViewController ID 4: init w/ config Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Empty Tab"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786254903.749681), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("4560F298-C129-4E78-B07C-E5EEF2943327"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Start Page"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255183.56537), interactionState: Optional(583 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("35EC9A66-5BF3-4414-AE18-F284283ECA4A"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] NewTabViewController ID 5: init w/ config Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Start Page"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255183.56537), interactionState: Optional(583 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("35EC9A66-5BF3-4414-AE18-F284283ECA4A"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:09:02] BrowserContainerVC: selectTab: index: 3, tabsCount: 4
+[2026-08-09 06:09:02] NewTabRootView ID 5: hideToolbarOnScrollSettingChanged
+[2026-08-09 06:09:02] TabViewModel: commonInit configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil), internalPageType: Optional(Orion.NewInternalPageType.newTab), tabCreatedWithStartPage: true, browserTab.url: Optional("orion://newtab/")
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.1, animated: false)
+[2026-08-09 06:09:02] TabViewModel: WebPageDelegate: urlUpdated: orion://newtab/, webPage: Orion.WebPageModel
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: urlDidChange
+[2026-08-09 06:09:02] TabViewModel: WebPageDelegate: isLoading: true, webPage: Orion.WebPageModel
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 06:09:02] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 06:09:02] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 06:09:02] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: restoreToolbars
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.15, animated: false)
+[2026-08-09 06:09:02] NewTabRootView ID 5: hideToolbarOnScrollSettingChanged
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x120fb10e0 named(main: orion.toolbar.startpage) {16, 16} renderingMode=alwaysTemplate>))
+[2026-08-09 06:09:02] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 06:09:02] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 06:09:02] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 06:09:02] TabViewModel: processAction action: updateWebsiteAddress(newAddress: nil)
+[2026-08-09 06:09:02] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "")
+[2026-08-09 06:09:02] BrowserContainerVC: commonInit: regularTabURLs: ["https://chromewebstore.google.com/user/installed", "https://darkreader.org/help/en/", "", ""], privateTabURLs: []
+[2026-08-09 06:09:02] UIView.showHideAnimated: <Orion.GaussianBlurView: 0x120e9b800; baseClass = UIVisualEffectView; frame = (0 0; 0 0); layer = <CALayer: 0x120f4ba20>> effect=<UIBlurEffect: 0x12024a620> style=UIBlurEffectStyleRegular, show: true, checkCurrent: false
+[2026-08-09 06:09:02] SceneDelegate: First window - using legacy Preferences for tab restoration
+[2026-08-09 06:09:02] BrowserContainerVC: selectTab: index: 3, tabsCount: 4
+[2026-08-09 06:09:02] BrowserContainerContentView.resetLayout: resetLayout
+[2026-08-09 06:09:02] LayoutEngineProbe: Probing after BrowserContainerContentView.resetLayout
+[2026-08-09 06:09:02] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: false
+[2026-08-09 06:09:02] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:09:02] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: false
+[2026-08-09 06:09:02] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:09:03] SceneDelegate: sceneWillEnterForeground - window 1
+[2026-08-09 06:09:03] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 06:09:03] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:09:03] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 06:09:03] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:09:03] TabViewModel: openStartURLIfNeeded: webPageModel: Orion.WebPageModel, hasURL: false, configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil)
+[2026-08-09 06:09:03] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 06:09:04] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 06:09:04] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 06:09:04] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 06:09:04] AppDelegate.didRegisterForRemoteNotifications: Did register for remote notifications 833378DDB78C65124AC81B27ACCD488788DA1B336ADD037F5565FCA340199FB5
+[2026-08-09 06:09:04] TabViewModel: processAction action: configureContentBlocker(enabled: false)
+[2026-08-09 06:09:05] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: tabs.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: permissions.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: runtime.setUninstallURL-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: base.frameLoaded-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: commands.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.5, animated: true)
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "orion://newtab/")
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: removeReaderModeHighlightFromURLBar
+[2026-08-09 06:09:05] Call: kagiFaviconObserver.requestIconOnDocumentReady-orion://newtab/
+[2026-08-09 06:09:05] Call: base.frameLoaded-orion://newtab/
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 1.0, animated: true)
+[2026-08-09 06:09:05] TabViewModel: WebPageDelegate: isLoading: false, webPage: Orion.WebPageModel
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 06:09:05] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 06:09:05] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 06:09:05] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.0, animated: false)
+[2026-08-09 06:09:05] BrowserContainerVC: storeSessionURLs
+[2026-08-09 06:09:05] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 06:09:05] Call: browserAction.setIcon-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] JSAPI: Error: browser.tabs.query is using unimplemented query parameters. (["discarded": 0])
+[2026-08-09 06:09:05] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: alarms.create-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] Call: tabs.executeScript-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:05] JSAPI: Error: browser.tabs.executeScript is using unimplemented option. (allFrames: true)
+[2026-08-09 06:09:05] JSAPI: Error: browser.tabs.executeScript is using unimplemented option. (matchAboutBlank: true)
+[2026-08-09 06:09:05] Tabs: Executing script having run at documentStart
+[2026-08-09 06:09:05] JSAPI: Error: Error with browser.tabs.executeScript javascript callback. (A JavaScript exception occurred)
+[2026-08-09 06:09:05] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 06:09:06] TabViewModel: processAction action: takeScreenshot(tabRootView: Optional(<Orion.NewTabRootView: 0x120e99200; frame = (0 0; 414 714); backgroundColor = <UIDynamicSystemColor: 0x120c88380; name = systemGray6Color>; layer = <CALayer: 0x120ea9fa0>>))
+[2026-08-09 06:09:06] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:06] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:06] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:06] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:06] Call: browserAction.setBadgeText-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:09:06] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 06:09:09] SceneDelegate: sceneDidEnterBackground - window 1
+[2026-08-09 06:12:57] UniversalLinksHandling: Successfully enabled universal link detection
+[2026-08-09 06:12:57] AppDelegate: didFinishLaunchingWithOptions 
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-5c01fb7247bafbf9db601d37d046bbea)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-9d406ef55d0345787393fddfae830d68)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-a4f7eef5b2a0528982d6ed4c89ae1daa)
+[2026-08-09 06:12:57] WebExtension: Command has no suggested keys.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-9ad166c8b212f8ca360b168cd4509a20)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-a9474c90295dc4edd9713e082f591eb9)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-199e124fd675cc62ccbd0776889fef55)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-55ef1efa5b1e92b5df75fe586ff3a159)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-fe0733b7e6a7d6ed4918445f0dd2f505)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-7111d2c5d46c4a5a58ebe30889806212)
+[2026-08-09 06:12:57] WebExtension: Error: Error loading manifest file.
+[2026-08-09 06:12:57] WebExtension: Error: Error loading web extension bundle. (id: unpacked-44847342f5746e4e1a8a53272ea0ec15)
+[2026-08-09 06:12:57] CloudKit: CloudKit > Start syncing, canSync: false. Caller: application(_:didFinishLaunchingWithOptions:)
+[2026-08-09 06:12:57] WebExtension: Error: Content script uses unimplemented keys.
+[2026-08-09 06:12:57] WebExtension: Error: Content script uses unimplemented keys.
+[2026-08-09 06:12:57] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(https://chromewebstore.google.com/user/installed), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Chrome Web Store – my items"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251841.3946939), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("45DEF467-3915-47EA-9415-953F8EDC7B04"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] NewTabViewController ID 2: init w/ config Optional(Orion.TabConfiguration(url: Optional(https://chromewebstore.google.com/user/installed), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Chrome Web Store – my items"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251841.3946939), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("45DEF467-3915-47EA-9415-953F8EDC7B04"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(https://darkreader.org/help/en/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Help – Dark Reader"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251861.791826), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("CEBFC31C-6EFE-4E90-92F0-E5982C12B932"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] NewTabViewController ID 3: init w/ config Optional(Orion.TabConfiguration(url: Optional(https://darkreader.org/help/en/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Help – Dark Reader"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251861.791826), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("CEBFC31C-6EFE-4E90-92F0-E5982C12B932"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Empty Tab"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255742.1364079), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("4560F298-C129-4E78-B07C-E5EEF2943327"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] NewTabViewController ID 4: init w/ config Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Empty Tab"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255742.1364079), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("4560F298-C129-4E78-B07C-E5EEF2943327"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Start Page"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255749.323797), interactionState: Optional(593 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("35EC9A66-5BF3-4414-AE18-F284283ECA4A"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] NewTabViewController ID 5: init w/ config Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Start Page"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255749.323797), interactionState: Optional(593 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("35EC9A66-5BF3-4414-AE18-F284283ECA4A"), parentLocalTabIdentifier: nil))
+[2026-08-09 06:12:57] BrowserContainerVC: selectTab: index: 3, tabsCount: 4
+[2026-08-09 06:12:57] NewTabRootView ID 5: hideToolbarOnScrollSettingChanged
+[2026-08-09 06:12:57] TabViewModel: commonInit configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil), internalPageType: Optional(Orion.NewInternalPageType.newTab), tabCreatedWithStartPage: true, browserTab.url: Optional("orion://newtab/")
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.1, animated: false)
+[2026-08-09 06:12:57] TabViewModel: WebPageDelegate: urlUpdated: orion://newtab/, webPage: Orion.WebPageModel
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: urlDidChange
+[2026-08-09 06:12:57] TabViewModel: WebPageDelegate: isLoading: true, webPage: Orion.WebPageModel
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 06:12:57] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 06:12:57] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 06:12:57] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: restoreToolbars
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.15, animated: false)
+[2026-08-09 06:12:57] NewTabRootView ID 5: hideToolbarOnScrollSettingChanged
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x112fc4fa0 named(main: orion.toolbar.startpage) {16, 16} renderingMode=alwaysTemplate>))
+[2026-08-09 06:12:57] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 06:12:57] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 06:12:57] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 06:12:57] TabViewModel: processAction action: updateWebsiteAddress(newAddress: nil)
+[2026-08-09 06:12:57] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "")
+[2026-08-09 06:12:57] BrowserContainerVC: commonInit: regularTabURLs: ["https://chromewebstore.google.com/user/installed", "https://darkreader.org/help/en/", "", ""], privateTabURLs: []
+[2026-08-09 06:12:57] UIView.showHideAnimated: <Orion.GaussianBlurView: 0x112eb7a00; baseClass = UIVisualEffectView; frame = (0 0; 0 0); layer = <CALayer: 0x112f57ac0>> effect=<UIBlurEffect: 0x10a252600> style=UIBlurEffectStyleRegular, show: true, checkCurrent: false
+[2026-08-09 06:12:58] SceneDelegate: First window - using legacy Preferences for tab restoration
+[2026-08-09 06:12:58] BrowserContainerVC: selectTab: index: 3, tabsCount: 4
+[2026-08-09 06:12:58] BrowserContainerContentView.resetLayout: resetLayout
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after BrowserContainerContentView.resetLayout
+[2026-08-09 06:12:58] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: false
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:12:58] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: false
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:12:58] SceneDelegate: sceneWillEnterForeground - window 1
+[2026-08-09 06:12:58] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:12:58] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 06:12:58] TabViewModel: openStartURLIfNeeded: webPageModel: Orion.WebPageModel, hasURL: false, configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil)
+[2026-08-09 06:12:58] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 06:12:58] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 06:12:58] AppDelegate.didRegisterForRemoteNotifications: Did register for remote notifications 833378DDB78C65124AC81B27ACCD488788DA1B336ADD037F5565FCA340199FB5
+[2026-08-09 06:12:58] TabViewModel: processAction action: configureContentBlocker(enabled: false)
+[2026-08-09 06:12:59] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: tabs.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: permissions.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: runtime.setUninstallURL-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: base.frameLoaded-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: commands.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: browserAction.setIcon-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] JSAPI: Error: browser.tabs.query is using unimplemented query parameters. (["discarded": 0])
+[2026-08-09 06:12:59] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: alarms.create-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] Call: tabs.executeScript-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:12:59] JSAPI: Error: browser.tabs.executeScript is using unimplemented option. (allFrames: true)
+[2026-08-09 06:12:59] JSAPI: Error: browser.tabs.executeScript is using unimplemented option. (matchAboutBlank: true)
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.5, animated: true)
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "orion://newtab/")
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: removeReaderModeHighlightFromURLBar
+[2026-08-09 06:12:59] Call: kagiFaviconObserver.requestIconOnDocumentReady-orion://newtab/
+[2026-08-09 06:12:59] Call: base.frameLoaded-orion://newtab/
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 1.0, animated: true)
+[2026-08-09 06:12:59] TabViewModel: WebPageDelegate: isLoading: false, webPage: Orion.WebPageModel
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 06:12:59] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 06:12:59] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 06:12:59] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.0, animated: false)
+[2026-08-09 06:12:59] BrowserContainerVC: storeSessionURLs
+[2026-08-09 06:12:59] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 06:12:59] Tabs: Executing script having run at documentStart
+[2026-08-09 06:12:59] JSAPI: Error: Error with browser.tabs.executeScript javascript callback. (A JavaScript exception occurred)
+[2026-08-09 06:13:00] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:13:00] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:13:00] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:13:00] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:13:00] Call: browserAction.setBadgeText-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 06:13:00] TabViewModel: processAction action: takeScreenshot(tabRootView: Optional(<Orion.NewTabRootView: 0x112eb5400; frame = (0 0; 414 714); backgroundColor = <UIDynamicSystemColor: 0x112ca43c0; name = systemGray6Color>; layer = <CALayer: 0x112ebd880>>))
+[2026-08-09 06:13:04] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 06:13:04] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 06:13:09] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 06:13:12] SceneDelegate: sceneDidEnterBackground - window 1
+[2026-08-09 08:12:40] UniversalLinksHandling: Successfully enabled universal link detection
+[2026-08-09 08:12:40] AppDelegate: didFinishLaunchingWithOptions 
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-9d406ef55d0345787393fddfae830d68)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-199e124fd675cc62ccbd0776889fef55)
+[2026-08-09 08:12:40] WebExtension: Command has no suggested keys.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-a4f7eef5b2a0528982d6ed4c89ae1daa)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-5c01fb7247bafbf9db601d37d046bbea)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-7111d2c5d46c4a5a58ebe30889806212)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-fe0733b7e6a7d6ed4918445f0dd2f505)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-a9474c90295dc4edd9713e082f591eb9)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-44847342f5746e4e1a8a53272ea0ec15)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-9ad166c8b212f8ca360b168cd4509a20)
+[2026-08-09 08:12:40] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:12:40] WebExtension: Error: Error loading web extension bundle. (id: unpacked-55ef1efa5b1e92b5df75fe586ff3a159)
+[2026-08-09 08:12:40] CloudKit: CloudKit > Start syncing, canSync: false. Caller: application(_:didFinishLaunchingWithOptions:)
+[2026-08-09 08:12:40] WebExtension: Error: Content script uses unimplemented keys.
+[2026-08-09 08:12:40] WebExtension: Error: Content script uses unimplemented keys.
+[2026-08-09 08:12:40] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(https://chromewebstore.google.com/user/installed), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Chrome Web Store – my items"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251841.3946939), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("45DEF467-3915-47EA-9415-953F8EDC7B04"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] NewTabViewController ID 2: init w/ config Optional(Orion.TabConfiguration(url: Optional(https://chromewebstore.google.com/user/installed), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Chrome Web Store – my items"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251841.3946939), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("45DEF467-3915-47EA-9415-953F8EDC7B04"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(https://darkreader.org/help/en/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Help – Dark Reader"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251861.791826), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("CEBFC31C-6EFE-4E90-92F0-E5982C12B932"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] NewTabViewController ID 3: init w/ config Optional(Orion.TabConfiguration(url: Optional(https://darkreader.org/help/en/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Help – Dark Reader"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786251861.791826), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("CEBFC31C-6EFE-4E90-92F0-E5982C12B932"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Empty Tab"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255977.822215), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("4560F298-C129-4E78-B07C-E5EEF2943327"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] NewTabViewController ID 4: init w/ config Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Empty Tab"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255977.822215), interactionState: Optional(0 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("4560F298-C129-4E78-B07C-E5EEF2943327"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] BrowserContainerVC: addTab: configuration: Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Start Page"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255992.210293), interactionState: Optional(583 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("35EC9A66-5BF3-4414-AE18-F284283ECA4A"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] NewTabViewController ID 5: init w/ config Optional(Orion.TabConfiguration(url: Optional(orion://newtab/), webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: Optional("Start Page"), cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: Optional(1786255992.210293), interactionState: Optional(583 bytes), iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: Optional("35EC9A66-5BF3-4414-AE18-F284283ECA4A"), parentLocalTabIdentifier: nil))
+[2026-08-09 08:12:40] BrowserContainerVC: selectTab: index: 3, tabsCount: 4
+[2026-08-09 08:12:40] NewTabRootView ID 5: hideToolbarOnScrollSettingChanged
+[2026-08-09 08:12:40] TabViewModel: commonInit configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil), internalPageType: Optional(Orion.NewInternalPageType.newTab), tabCreatedWithStartPage: true, browserTab.url: Optional("orion://newtab/")
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.1, animated: false)
+[2026-08-09 08:12:40] TabViewModel: WebPageDelegate: urlUpdated: orion://newtab/, webPage: Orion.WebPageModel
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: urlDidChange
+[2026-08-09 08:12:40] TabViewModel: WebPageDelegate: isLoading: true, webPage: Orion.WebPageModel
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:12:40] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:12:40] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:12:40] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: restoreToolbars
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.15, animated: false)
+[2026-08-09 08:12:40] NewTabRootView ID 5: hideToolbarOnScrollSettingChanged
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: Optional(<UIImage:0x15cfecfa0 named(main: orion.toolbar.startpage) {16, 16} renderingMode=alwaysTemplate>))
+[2026-08-09 08:12:40] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:12:40] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:12:40] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 08:12:40] TabViewModel: processAction action: updateWebsiteAddress(newAddress: nil)
+[2026-08-09 08:12:40] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "")
+[2026-08-09 08:12:40] BrowserContainerVC: commonInit: regularTabURLs: ["https://chromewebstore.google.com/user/installed", "https://darkreader.org/help/en/", "", ""], privateTabURLs: []
+[2026-08-09 08:12:40] UIView.showHideAnimated: <Orion.GaussianBlurView: 0x15cebf800; baseClass = UIVisualEffectView; frame = (0 0; 0 0); layer = <CALayer: 0x15cf7bb00>> effect=<UIBlurEffect: 0x15c246630> style=UIBlurEffectStyleRegular, show: true, checkCurrent: false
+[2026-08-09 08:12:40] SceneDelegate: First window - using legacy Preferences for tab restoration
+[2026-08-09 08:12:40] BrowserContainerVC: selectTab: index: 3, tabsCount: 4
+[2026-08-09 08:12:40] BrowserContainerContentView.resetLayout: resetLayout
+[2026-08-09 08:12:40] LayoutEngineProbe: Probing after BrowserContainerContentView.resetLayout
+[2026-08-09 08:12:40] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: false
+[2026-08-09 08:12:40] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 08:12:40] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: false
+[2026-08-09 08:12:40] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 08:12:40] SceneDelegate: sceneWillEnterForeground - window 1
+[2026-08-09 08:12:40] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 08:12:40] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 08:12:40] AddressBarCell: Re-parenting address bar, hadSuperview: false, inWindow: true
+[2026-08-09 08:12:40] LayoutEngineProbe: Probing after AddressBarCell.configure
+[2026-08-09 08:12:41] TabViewModel: openStartURLIfNeeded: webPageModel: Orion.WebPageModel, hasURL: false, configuration: TabConfiguration(url: nil, webContextView: nil, index: nil, openerTabId: nil, startLoading: false, successorId: nil, tabId: nil, isPinned: false, isDiscarded: false, isSelected: false, isPrivate: false, inheritWindowPrivacy: true, title: nil, cookieStoreId: nil, sessionState: nil, navigationType: nil, referer: nil, isRestoring: false, childrenTabId: nil, isExpanded: false, lastAccessed: nil, interactionState: nil, iCloudTabIdentifier: nil, parentICloudTabIdentifier: nil, localTabIdentifier: nil, parentLocalTabIdentifier: nil)
+[2026-08-09 08:12:41] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:12:41] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:12:41] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:12:41] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:12:41] AppDelegate.didRegisterForRemoteNotifications: Did register for remote notifications 833378DDB78C65124AC81B27ACCD488788DA1B336ADD037F5565FCA340199FB5
+[2026-08-09 08:12:41] TabViewModel: processAction action: configureContentBlocker(enabled: false)
+[2026-08-09 08:12:41] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: tabs.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: permissions.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: runtime.setUninstallURL-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: runtime.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: base.frameLoaded-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: commands.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: browserAction.setIcon-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: tabs.query-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] JSAPI: Error: browser.tabs.query is using unimplemented query parameters. (["discarded": 0])
+[2026-08-09 08:12:41] Call: alarms.addListener-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: alarms.create-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] Call: tabs.executeScript-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:41] JSAPI: Error: browser.tabs.executeScript is using unimplemented option. (allFrames: true)
+[2026-08-09 08:12:41] JSAPI: Error: browser.tabs.executeScript is using unimplemented option. (matchAboutBlank: true)
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.5, animated: true)
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "orion://newtab/")
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: removeReaderModeHighlightFromURLBar
+[2026-08-09 08:12:41] Call: kagiFaviconObserver.requestIconOnDocumentReady-orion://newtab/
+[2026-08-09 08:12:41] Call: base.frameLoaded-orion://newtab/
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 1.0, animated: true)
+[2026-08-09 08:12:41] TabViewModel: WebPageDelegate: isLoading: false, webPage: Orion.WebPageModel
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: pageLoadingStatusChanged
+[2026-08-09 08:12:41] NewTabViewController ID 5: updateBarsItems
+[2026-08-09 08:12:41] TabViewModel: processAction action: updateLocationBar
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: updateLocationBar(viewModel: Orion.WebPageModel, tabsCount: 4)
+[2026-08-09 08:12:41] TabViewModel: processAction action: updateToolsbar
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: updateToolsbar(tabHasURL: false, backNavigation: Orion.NewTabViewModel.BackNavigation.forbidden)
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: faviconUpdated(image: nil)
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: pageLoadingProgressChanged(progress: 0.0, animated: false)
+[2026-08-09 08:12:41] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:12:41] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteTitle
+[2026-08-09 08:12:41] Tabs: Executing script having run at documentStart
+[2026-08-09 08:12:41] JSAPI: Error: Error with browser.tabs.executeScript javascript callback. (A JavaScript exception occurred)
+[2026-08-09 08:12:42] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:42] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:42] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:42] Call: storage.get-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:42] Call: browserAction.setBadgeText-moz-extension://73165377b43b01f953b4b8889bf9f86d/background/index.html
+[2026-08-09 08:12:42] TabViewModel: processAction action: takeScreenshot(tabRootView: Optional(<Orion.NewTabRootView: 0x15cebd200; frame = (0 0; 414 714); backgroundColor = <UIDynamicSystemColor: 0x15ccacc40; name = systemGray6Color>; layer = <CALayer: 0x15cec2080>>))
+[2026-08-09 08:12:45] NewTabViewController ID 5: processViewModel w/ state: updateWebsiteAddress(text: "orion://extensions")
+[2026-08-09 08:13:07] BrowserController: beginWebExtInstall url: file:///private/var/mobile/Containers/Shared/AppGroup/371C5E75-9AC7-4529-84D5-2D617973453C/File%20Provider%20Storage/Downloads/chrome-extension-orion-test/
+[2026-08-09 08:13:09] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:13:09] FeaturedExtensionsViewModel: Error: Failed to install extension: Orion.WebExtBundle
+[2026-08-09 08:13:13] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:13:13] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:13:18] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:13:18] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:13:33] BrowserController: beginWebExtInstall url: file:///private/var/mobile/Containers/Shared/AppGroup/371C5E75-9AC7-4529-84D5-2D617973453C/File%20Provider%20Storage/Downloads/chrome-extension-orion-test/
+[2026-08-09 08:13:37] WebExtension: Error: Error loading manifest file.
+[2026-08-09 08:13:37] FeaturedExtensionsViewModel: Error: Failed to install extension: Orion.WebExtBundle
+[2026-08-09 08:14:20] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:14:20] NewTabViewController ID 5: updatePopoverSourceView
+[2026-08-09 08:14:39] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 08:14:55] SceneDelegate: sceneDidEnterBackground - window 1
+[2026-08-09 08:14:55] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:14:55] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:14:55] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:14:55] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:14:55] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:14:55] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 08:14:55] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:14:55] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:14:55] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:14:55] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:15:05] SceneDelegate: sceneWillEnterForeground - window 1
+[2026-08-09 08:15:05] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:05] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:05] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:05] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:15:08] SceneDelegate: sceneDidEnterBackground - window 1
+[2026-08-09 08:15:08] BrowserContainerVC: storeSessionURLs
+[2026-08-09 08:15:08] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:08] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:08] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:08] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:15:08] PGSideMenu: gestureRecognizerShouldBegin false 2
+[2026-08-09 08:15:08] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:08] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:08] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:08] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:15:54] SceneDelegate: sceneWillEnterForeground - window 1
+[2026-08-09 08:15:54] Toolbar Animations: Expansion
+[layout=bottomStacked] [hidingMode=standard]
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:54] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:54] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[layout=bottomStacked] [isCollapsed=false] [inWindow=true]
+[2026-08-09 08:15:54] LayoutEngineProbe: Probing after AddressBarView.finishExpansion
+[2026-08-09 08:15:54] PGSideMenu: Recognizable percentage: 10.0%
+[2026-08-09 08:15:58] BrowserContainerVC: openOptionsPopover, hasURL: false
+[2026-08-09 08:15:58] NewTabViewController ID 5: updatePopoverSourceView
