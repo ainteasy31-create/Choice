@@ -1,17 +1,30 @@
 {
   "manifest_version": 3,
   "name": "Import to Choice Properties",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Save listings to Choice Properties pipeline.",
-  "permissions": [
-    "storage"
-  ],
+  "permissions": ["storage", "tabs", "downloads", "alarms"],
   "host_permissions": [
     "https://www.zillow.com/*",
+    "https://m.zillow.com/*",
     "https://www.realtor.com/*",
     "https://www.apartments.com/*",
-    "https://www.redfin.com/*"
+    "https://www.redfin.com/*",
+    "https://tlfmwetmhthpyrytrcfo.supabase.co/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Import to Choice Properties",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -22,14 +35,13 @@
     {
       "matches": [
         "https://www.zillow.com/homedetails/*",
+        "https://m.zillow.com/homedetails/*",
         "https://www.realtor.com/realestateandhomes-detail/*",
         "https://www.apartments.com/*",
-        "https://www.redfin.com/*"
+        "https://www.redfin.com/*",
+        "https://m.redfin.com/*"
       ],
-      "js": [
-        "config.js",
-        "content.js"
-      ],
+      "js": ["config.js", "shared-extractors.js", "content.js"],
       "run_at": "document_idle"
     }
   ]

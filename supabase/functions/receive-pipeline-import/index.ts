@@ -1,19 +1,24 @@
 // ============================================================
 // Choice Properties — receive-pipeline-import Edge Function
-// v2.0 — June 2026
+// v2.1 — August 2026
 //
 // Accepts a parsed Zillow listing payload from the iOS Scriptable
-// "Import to Choice" script (v3.0). Authenticates via a shared
-// secret (x-import-secret header) — no user login required on phone.
+// "Import to Choice" script (v3.0) or the Chrome/Orion extension.
+// Authenticates via a shared secret (x-import-secret header or ?secret= query)
+// — no user login required on phone.
 //
-// POST body: full listing fields from iOS script v3.0
+// Uses permissive CORS for secrets-authenticated endpoints — the secret is
+// the real auth, not the Origin, so we echo back any Origin including
+// 'null' (WebKit extension content scripts on Orion/iOS).
+//
+// POST body: full listing fields from extension or iOS script
 // Returns:   { ok: true, id, title, score, photos }
 //          | { ok: false, duplicate: true, id, title }
 //          | { error: string }
 // ============================================================
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { corsResponse, jsonOk, jsonErr } from '../_shared/cors.ts';
+import { permissiveCorsResponse, permissiveJsonOk, permissiveJsonErr } from '../_shared/cors.ts';
 
 // ── Quality-score weights — mirrors scraper/zillow_scraper.py exactly ─────────
 // CORE: 13 fields × 6 pts = 78 pts max
@@ -141,18 +146,18 @@ function normalizeDate(v: unknown): string | null {
 
 // ── Handler ────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return corsResponse(req.headers.get('origin'));
-  if (req.method !== 'POST')   return jsonErr(405, 'Method not allowed', req);
+  if (req.method === 'OPTIONS') return permissiveCorsResponse(req);
+  if (req.method !== 'POST')   return permissiveJsonErr(405, 'Method not allowed', req);
 
   // ── Auth: shared secret ──────────────────────────────────────────────────────
   const IMPORT_SECRET = Deno.env.get('SHORTCUT_IMPORT_SECRET');
-  if (!IMPORT_SECRET) return jsonErr(500, 'Import secret not configured', req);
+  if (!IMPORT_SECRET) return permissiveJsonErr(500, 'Import secret not configured', req);
 
   // Read secret from query parameter (for Orion/iOS compatibility) or header
   const url = new URL(req.url);
   const incoming = url.searchParams.get('secret') || req.headers.get('x-import-secret');
   if (!incoming || incoming !== IMPORT_SECRET) {
-    return jsonErr(401, 'Invalid import secret', req);
+    return permissiveJsonErr(401, 'Invalid import secret', req);
   }
 
   // ── Parse body ───────────────────────────────────────────────────────────────
@@ -160,19 +165,19 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return jsonErr(400, 'Invalid JSON body', req);
+    return permissiveJsonErr(400, 'Invalid JSON body', req);
   }
 
   const sourceListingId = safeStr(body.source_listing_id);
   if (!sourceListingId) {
-    return jsonErr(400, 'source_listing_id is required', req);
+    return permissiveJsonErr(400, 'source_listing_id is required', req);
   }
 
   let source: string;
   try {
     source = normalizeSource(body.source);
   } catch (err) {
-    return jsonErr(400, err instanceof Error ? err.message : 'Unsupported source', req);
+    return permissiveJsonErr(400, err instanceof Error ? err.message : 'Unsupported source', req);
   }
 
   // ── Duplicate check ──────────────────────────────────────────────────────────
@@ -189,7 +194,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (existing) {
-    return jsonOk({
+    return permissiveJsonOk({
       ok: false, duplicate: true,
       id: existing.id, title: existing.title,
       message: 'Already in pipeline',
@@ -325,7 +330,7 @@ Deno.serve(async (req) => {
 
   if (insertErr) {
     console.error('Insert error:', insertErr);
-    return jsonErr(500, 'Database insert failed: ' + insertErr.message, req);
+    return permissiveJsonErr(500, 'Database insert failed: ' + insertErr.message, req);
   }
 
   // Count photos for the success response
@@ -335,7 +340,7 @@ Deno.serve(async (req) => {
     photoCount = Array.isArray(urls) ? urls.length : 0;
   } catch { /* ignore */ }
 
-  return jsonOk({
+  return permissiveJsonOk({
     ok:     true,
     id:     record.id,
     title:  String(title),

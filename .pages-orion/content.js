@@ -1,7 +1,8 @@
 // ============================================================
-// Import to Choice Properties — Content Script v2.2
+// Import to Choice Properties — Content Script v2.2.1
 // Orion-optimized: uses shared-extractors.js (loaded via manifest),
 // routes saves through the background worker so the offline queue works.
+// Includes timeout fallback for Orion's WebKit service worker quirks.
 // ============================================================
 (function () {
   'use strict';
@@ -39,23 +40,36 @@
       if (!payload) { setError('Could not read listing'); return; }
 
       // Route through the background worker so the offline queue works.
-      // Fall back to a direct POST if the background worker is unavailable (Orion edge cases).
+      // Fall back to a direct POST if the background worker is unavailable
+      // (Orion edge cases where MV3 service workers don't wake properly).
+      // Use a 5-second timeout — Orion's WebKit may not respond to
+      // chrome.runtime.sendMessage at all, and we don't want to hang.
       let resp = null;
       try {
         if (chrome.runtime && chrome.runtime.sendMessage) {
-          resp = await chrome.runtime.sendMessage({
-            type: 'UPLOAD_PAYLOAD',
-            payload,
-            settings: { offlineQueue: true },
-          });
+          resp = await Promise.race([
+            chrome.runtime.sendMessage({
+              type: 'UPLOAD_PAYLOAD',
+              payload,
+              settings: { offlineQueue: true },
+            }),
+            new Promise((_, rej) =>
+              setTimeout(() => rej(new Error('background_timeout')), 5000)
+            ),
+          ]);
         }
       } catch (_) { /* background unavailable — fall through to direct */ }
 
       if (!resp) {
-        // Direct POST fallback (header-only secret — never in the URL)
-        const direct = await fetch(EDGE_URL, {
+        // Direct POST fallback.
+        // Orion on iOS (WebKit) sometimes blocks the x-import-secret custom
+        // header in the CORS preflight. As a belt-and-suspenders fallback,
+        // we pass the secret as a URL query parameter (the Edge Function
+        // accepts both ?secret= and x-import-secret).
+        const url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
+        const direct = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-import-secret': SECRET },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         resp = await direct.json();
