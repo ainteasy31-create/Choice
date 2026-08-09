@@ -33,3 +33,10 @@ Do not use older `chrome-extension-orion-fixed.zip` or Windows-created copies.
 ## Notes
 - The ZIP is built from `chrome-extension/` and includes the latest Orion/mobile fixes.
 - Rebuild it with a ZIP tool that writes portable `/` paths; do not use Windows `Compress-Archive`, which can create backslash paths that Orion cannot resolve.
+
+## Quick download (release)
+If you want the packaged ZIP without browsing the repo, download the release asset I uploaded:
+
+- https://github.com/approvalhub466-a11y/Choice/releases/tag/v2.2.0-orion-test
+
+Use this on your iPhone: download the ZIP from the release, extract in Files, then load the extracted folder in Orion's Developer → Load Unpacked.
