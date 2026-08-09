@@ -82,3 +82,10 @@ out/
 # Logs
 *.log
 logs/
+
+# Python bytecode / cache — do not commit
+__pycache__/
+*.py[cod]
+*.pyc
+.pytest_cache/
+.mypy_cache/

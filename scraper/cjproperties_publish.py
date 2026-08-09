@@ -290,10 +290,14 @@ def main():
         pipeline_id = rec.get("id") or "PP-" + uuid.uuid4().hex[:8].upper()
         rec["id"] = pipeline_id
 
-        # Ensure required fields
-        rec.setdefault("application_fee", 50)
-        rec.setdefault("security_deposit", rec.get("monthly_rent"))
-        rec.setdefault("minimum_lease_months", 12)
+        # Ensure required fields — do NOT fabricate financial values.
+        # Leave application_fee / security_deposit / minimum_lease_months as
+        # null so the admin review UI can fill them in before publishing.
+        # (Previously these were hardcoded to 50 / rent / 12, which violated
+        # the platform's validate_for_publish rules and misrepresented listings.)
+        rec.setdefault("application_fee", None)
+        rec.setdefault("security_deposit", None)
+        rec.setdefault("minimum_lease_months", None)
         rec.setdefault("lease_terms", "[]")
         rec.setdefault("amenities", "[]")
         rec.setdefault("appliances", "[]")

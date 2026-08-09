@@ -79,6 +79,18 @@ except ImportError as _e:
     _ZW_AVAILABLE = False
     _ZW_IMPORT_ERR = str(_e)
 
+# ── Guard: Zillow services module (Apify, ScrapeBadger, Oxylabs) ──────────────
+try:
+    import sys as _sys_zs
+    import os as _os_zs
+    _sys_zs.path.insert(0, _os_zs.path.dirname(_os_zs.path.abspath(__file__)))
+    from zillow_services import scrape_zillow_with_service as _zillow_service_scrape
+    from zillow_services import get_available_services as _zillow_get_services
+    _ZS_AVAILABLE = True
+except ImportError as _e:
+    _ZS_AVAILABLE = False
+    _ZS_IMPORT_ERR = str(_e)
+
 # ── Guard: Opendoor scraper module — opt-in only for explicit URLs ───────────
 try:
     import sys as _sys_op
@@ -2051,12 +2063,56 @@ def _run_urls(urls, args, started_at):
 # ── Zillow scrape for one location ────────────────────────────────────────────
 
 def _run_zillow(location, args, started_at):
+    # Check if service-based scraping is requested and available
+    zillow_service = getattr(args, "zillow_service", "auto")
+    
+    # Try service-based scraping if not explicitly set to direct
+    if zillow_service != "direct" and _ZS_AVAILABLE:
+        print(f"\n{'─'*55}")
+        print(f"🏠  Zillow scrape ({zillow_service}): {location}")
+        print(f"{'─'*55}")
+        
+        try:
+            records, blocked, service_used = _zillow_service_scrape(
+                location=location,
+                service=zillow_service,
+                limit=args.limit,
+                beds_min=args.beds_min,
+                beds_max=args.beds_max,
+                price_min=args.price_min,
+                price_max=args.price_max,
+                verbose=True,
+            )
+            
+            if blocked:
+                msg = "Zillow blocked the request (bot detection). Try a different service or residential IP."
+                print(f"  ⛔  {msg}")
+                _log_run(location, "zillow", 0, 0, 0, msg, started_at)
+                return 0, 0, 0, 0
+            
+            if not records:
+                print("   No Zillow listings found.")
+                _log_run(location, "zillow", 0, 0, 0, None, started_at)
+                return 0, 0, 0, 0
+            
+            print(f"   [Service] Used {service_used} service")
+            return _stage_records(records, location, "zillow", args, started_at)
+            
+        except Exception as e:
+            print(f"❌  Zillow service scrape error: {e}")
+            if zillow_service == "auto":
+                print("   Falling back to direct scraper...")
+            else:
+                _log_run(location, "zillow", 0, 0, 0, str(e), started_at)
+                return 0, 0, 0, 0
+    
+    # Fallback to direct scraper
     if not _ZW_AVAILABLE:
         print(f"❌  Zillow scraper unavailable: {_ZW_IMPORT_ERR}")
         return 0, 0, 0, 0
 
     print(f"\n{'─'*55}")
-    print(f"🏠  Zillow scrape: {location}")
+    print(f"🏠  Zillow scrape (direct): {location}")
     print(f"{'─'*55}")
 
     try:
@@ -2465,6 +2521,17 @@ Search mode (Realtor.com is safe from Replit; Zillow needs residential IP):
             "Allow Opendoor URL scraping in URL mode. "
             "Opendoor listings are sale-to-rent conversion candidates and are "
             "only scraped when explicitly permitted."
+        ),
+    )
+    p.add_argument(
+        "--zillow-service", default="auto", choices=["auto", "direct", "apify", "scrapebadger", "oxylabs"],
+        help=(
+            "Zillow scraping service to use (search mode only).\n"
+            "  auto       — automatically select best available service (default)\n"
+            "  direct     — use built-in direct scraper (requires residential IP)\n"
+            "  apify      — use Apify (requires APIFY_API_TOKEN in .env)\n"
+            "  scrapebadger — use ScrapeBadger (requires SCRAPEBADGER_API_TOKEN in .env)\n"
+            "  oxylabs    — use Oxylabs (requires OXYLABS_USERNAME + OXYLABS_PASSWORD in .env)"
         ),
     )
     return p

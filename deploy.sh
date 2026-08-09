@@ -5,7 +5,9 @@ echo "🚀 Choice Properties - Auto Deploy Script"
 echo "=========================================="
 echo ""
 
-cd /workspaces/choicepropertiesofficial
+# Operate from the current working directory (repo root), not a hardcoded path.
+# Previously hardcoded /workspaces/choicepropertiesofficial (a stale Replit path).
+cd "$(dirname "$0")"
 
 echo "📊 Checking git status..."
 git status

@@ -342,10 +342,33 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse(req.headers.get('origin'));
   if (req.method !== 'POST')   return jsonErr(405, 'Method not allowed', req);
 
-  // ── Auth: require logged-in admin ────────────────────────────────────────────
+  // ── Auth: shared import secret OR logged-in admin ────────────────────────────
   const SUPABASE_URL  = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const ANON_KEY      = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+  const IMPORT_SECRET = Deno.env.get('SHORTCUT_IMPORT_SECRET') || '';
+
+  // Allow the shared import secret (header only — used by the PWA / import page)
+  // OR a logged-in admin JWT (used by the admin portal's "Import URL" button).
+  const incomingSecret = req.headers.get('x-import-secret') || '';
+  if (incomingSecret && IMPORT_SECRET && incomingSecret === IMPORT_SECRET) {
+    // Shared-secret path — no user session needed. Build an admin client directly.
+    const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
+
+    // Parse body
+    let body: { url?: string; dry_run?: boolean };
+    try { body = await req.json(); } catch { return jsonErr(400, 'Invalid JSON body', req); }
+
+    const rawUrl = (body.url || '').trim();
+    if (!rawUrl) return jsonErr(400, 'url is required', req);
+    if (!rawUrl.startsWith('http')) return jsonErr(400, 'url must be a full https:// URL', req);
+    if (!rawUrl.includes('zillow.com')) return jsonErr(400, 'Only Zillow URLs are supported', req);
+    const dryRun = !!body.dry_run;
+
+    const handled = await handleImport(rawUrl, dryRun, adminClient, null, req);
+    return handled;
+  }
 
   const authHeader = req.headers.get('authorization') || '';
   const userToken  = authHeader.replace(/^Bearer\s+/i, '');
@@ -377,6 +400,18 @@ Deno.serve(async (req) => {
   if (!rawUrl.startsWith('http')) return jsonErr(400, 'url must be a full https:// URL', req);
   if (!rawUrl.includes('zillow.com')) return jsonErr(400, 'Only Zillow URLs are supported', req);
   const dryRun = !!body.dry_run;
+
+  return await handleImport(rawUrl, dryRun, adminClient, user?.id || null, req);
+});
+
+// ── Shared import handler ─────────────────────────────────────────────────────
+async function handleImport(
+  rawUrl: string,
+  dryRun: boolean,
+  adminClient: Awaited<ReturnType<typeof createClient>>,
+  userId: string | null,
+  req: Request,
+): Promise<Response> {
 
   // ── Fetch Zillow page ────────────────────────────────────────────────────────
   let html: string;
@@ -439,7 +474,7 @@ Deno.serve(async (req) => {
     _source:      'zillow',
     _import:      'admin-url-import-v1',
     _imported_at: now,
-    _imported_by: user.id,
+    _imported_by: userId, // null for shared-secret imports
   });
 
   const record: Record<string,unknown> = {
@@ -547,4 +582,4 @@ Deno.serve(async (req) => {
     populated_fields: populatedFields,
     missing_fields:  TRACKABLE_MISSING.filter(f => isEmpty(record[f])),
   }, req);
-});
+}

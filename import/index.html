@@ -308,6 +308,8 @@
 
   <script>
     // Get Edge Function URL from config
+    // Uses import-from-url (server-side extraction, bypasses CORS).
+    // Auth: shared secret OR admin JWT — the edge function accepts both.
     const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/import-from-url';
     const IMPORT_SECRET = 'cp_import_7Kx3m9P2w5';
     
@@ -370,10 +372,6 @@
 
         if (!response.ok) {
           throw new Error(data.error || 'Failed to import listing');
-        }
-
-        if (data.blocked) {
-          throw new Error(data.message || 'Zillow blocked the request. Please try again later.');
         }
 
         if (data.duplicate) {
