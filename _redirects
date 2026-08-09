@@ -61,5 +61,8 @@
 # Mobile import PWA
 /import                     /import/index.html                           200
 
+# Orion extension live loader files (served publicly for auto-updates)
+/.pages-orion/*             /.pages-orion/:splat                           200
+
 # Catch-all 404
 /*                          /404.html                                    404

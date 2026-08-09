@@ -10,7 +10,8 @@
     "https://www.realtor.com/*",
     "https://www.apartments.com/*",
     "https://www.redfin.com/*",
-    "https://tlfmwetmhthpyrytrcfo.supabase.co/*"
+    "https://tlfmwetmhthpyrytrcfo.supabase.co/*",
+    "https://choice-properties-site.pages.dev/*"
   ],
   "background": {
     "service_worker": "background.js"

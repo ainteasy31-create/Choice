@@ -1,108 +1,140 @@
 // ============================================================
-// Import to Choice Properties — Content Script v2.2.1
-// Orion-optimized: uses shared-extractors.js (loaded via manifest),
-// routes saves through the background worker so the offline queue works.
-// Includes timeout fallback for Orion's WebKit service worker quirks.
+// Import to Choice Properties — Content Script v2.3.0 (Live Loader)
+// This is a THIN LOADER. It fetches the latest logic from
+// Cloudflare Pages on every page load, so updates are automatic.
+//
+// HOW IT WORKS:
+//   1. On page load, this script fetches live-shared-extractors.js
+//      and live-content.js from the hosted URL.
+//   2. It executes them via injected <script> tags.
+//   3. If the fetch fails (offline), it falls back to the bundled
+//      shared-extractors.js and inline logic below.
+//
+// TO UPDATE THE EXTENSION:
+//   Edit .pages-orion/live-content.js or .pages-orion/live-shared-extractors.js
+//   → push to GitHub → Cloudflare auto-deploys → extension picks up
+//   changes on next page load. NO reinstall needed.
 // ============================================================
 (function () {
   'use strict';
 
-  const EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
-  const SECRET   = 'cp_import_7Kx3m9P2w5';
+  var LIVE_BASE = 'https://choice-properties-site.pages.dev/.pages-orion/';
+  var LIVE_EXTRACTORS = LIVE_BASE + 'live-shared-extractors.js';
+  var LIVE_CONTENT = LIVE_BASE + 'live-content.js';
 
   if (document.getElementById('cp-save-btn')) return;
 
-  // ── Inject button ───────────────────────────────────────────
-  const btn = document.createElement('button');
-  btn.id = 'cp-save-btn';
-  btn.textContent = 'Save to Pipeline';
-  Object.assign(btn.style, {
-    position: 'fixed', bottom: 'max(24px, env(safe-area-inset-bottom))', right: 'max(24px, env(safe-area-inset-right))',
-    zIndex: '2147483647',
-    padding: '14px 24px', minWidth: '60px', height: '52px', background: '#6366f1',
-    color: '#fff', border: 'none', borderRadius: '26px',
-    fontFamily: '-apple-system, sans-serif', fontSize: '15px',
-    fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
-    touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none',
-  });
+  // ── Load live code from Cloudflare Pages ─────────────────────
+  function loadScript(url) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = url;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('Failed to load ' + url)); };
+      document.head.appendChild(s);
+    });
+  }
 
-  btn.addEventListener('click', async () => {
-    btn.textContent = 'Saving…';
-    btn.style.background = '#818cf8';
-    btn.disabled = true;
-
+  async function loadLive() {
     try {
-      // Use the shared extractor registry (loaded via manifest as shared-extractors.js)
-      const extractor = window.CP_Extractors && window.CP_Extractors.detect(location.href);
-      if (!extractor) { setError('Unsupported page'); return; }
-
-      const payload = window.CP_Extractors.extract(location.href, document);
-      if (!payload) { setError('Could not read listing'); return; }
-
-      // Route through the background worker so the offline queue works.
-      // Fall back to a direct POST if the background worker is unavailable
-      // (Orion edge cases where MV3 service workers don't wake properly).
-      // Use a 5-second timeout — Orion's WebKit may not respond to
-      // chrome.runtime.sendMessage at all, and we don't want to hang.
-      let resp = null;
-      try {
-        if (chrome.runtime && chrome.runtime.sendMessage) {
-          resp = await Promise.race([
-            chrome.runtime.sendMessage({
-              type: 'UPLOAD_PAYLOAD',
-              payload,
-              settings: { offlineQueue: true },
-            }),
-            new Promise((_, rej) =>
-              setTimeout(() => rej(new Error('background_timeout')), 5000)
-            ),
-          ]);
-        }
-      } catch (_) { /* background unavailable — fall through to direct */ }
-
-      if (!resp) {
-        // Direct POST fallback.
-        // Orion on iOS (WebKit) sometimes blocks the x-import-secret custom
-        // header in the CORS preflight. As a belt-and-suspenders fallback,
-        // we pass the secret as a URL query parameter (the Edge Function
-        // accepts both ?secret= and x-import-secret).
-        const url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
-        const direct = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        resp = await direct.json();
-      }
-
-      if (resp && resp.ok) {
-        const photos = resp.photos || 0;
-        btn.textContent = 'Saved! ' + photos + ' photos';
-        btn.style.background = '#16a34a';
-        setTimeout(() => { btn.remove(); }, 3000);
-      } else if (resp && resp.duplicate) {
-        btn.textContent = 'Already in pipeline';
-        btn.style.background = '#a16207';
-        setTimeout(() => { btn.remove(); }, 3000);
-      } else if (resp && resp.queued) {
-        btn.textContent = 'Queued offline (' + resp.queueLength + ')';
-        btn.style.background = '#d97706';
-        setTimeout(() => { btn.remove(); }, 3000);
-      } else {
-        setError(resp && resp.error ? resp.error.slice(0, 40) : 'Server error');
-      }
+      // Load extractors first, then content logic
+      await loadScript(LIVE_EXTRACTORS);
+      await loadScript(LIVE_CONTENT);
+      return true;
     } catch (e) {
-      console.error('[CP]', e);
-      setError('Network error');
+      console.warn('[CP] Live load failed, using bundled fallback:', e.message);
+      return false;
     }
-  });
+  }
 
-  document.body.appendChild(btn);
+  // ── Bundled fallback (used only if live fetch fails) ─────────
+  function runBundledFallback() {
+    // If live extractors loaded but live-content failed, use bundled content
+    if (window.CP_Extractors && !document.getElementById('cp-save-btn')) {
+      // The live-content.js should have run. If not, inject the bundled logic.
+      var EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
+      var SECRET = 'cp_import_7Kx3m9P2w5';
 
-  function setError(msg) {
-    btn.textContent = 'Failed: ' + msg;
-    btn.style.background = '#dc2626';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = 'Save to Pipeline'; btn.style.background = '#6366f1'; }, 4000);
+      var btn = document.createElement('button');
+      btn.id = 'cp-save-btn';
+      btn.textContent = 'Save to Pipeline';
+      Object.assign(btn.style, {
+        position: 'fixed', bottom: 'max(24px, env(safe-area-inset-bottom))', right: 'max(24px, env(safe-area-inset-right))',
+        zIndex: '2147483647',
+        padding: '14px 24px', minWidth: '60px', height: '52px', background: '#6366f1',
+        color: '#fff', border: 'none', borderRadius: '26px',
+        fontFamily: '-apple-system, sans-serif', fontSize: '15px',
+        fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
+        touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none',
+      });
+
+      btn.addEventListener('click', async function () {
+        btn.textContent = 'Saving…';
+        btn.style.background = '#818cf8';
+        btn.disabled = true;
+
+        try {
+          var extractor = window.CP_Extractors && window.CP_Extractors.detect(location.href);
+          if (!extractor) { setError('Unsupported page'); return; }
+
+          var payload = window.CP_Extractors.extract(location.href, document);
+          if (!payload) { setError('Could not read listing'); return; }
+
+          var url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
+          var direct = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          var resp = await direct.json();
+
+          if (resp && resp.ok) {
+            var photos = resp.photos || 0;
+            btn.textContent = 'Saved! ' + photos + ' photos';
+            btn.style.background = '#16a34a';
+            setTimeout(function () { btn.remove(); }, 3000);
+          } else if (resp && resp.duplicate) {
+            btn.textContent = 'Already in pipeline';
+            btn.style.background = '#a16207';
+            setTimeout(function () { btn.remove(); }, 3000);
+          } else if (resp && resp.queued) {
+            btn.textContent = 'Queued offline (' + resp.queueLength + ')';
+            btn.style.background = '#d97706';
+            setTimeout(function () { btn.remove(); }, 3000);
+          } else {
+            setError(resp && resp.error ? resp.error.slice(0, 40) : 'Server error');
+          }
+        } catch (e) {
+          console.error('[CP]', e);
+          setError('Network error');
+        }
+      });
+
+      document.body.appendChild(btn);
+
+      function setError(msg) {
+        btn.textContent = 'Failed: ' + msg;
+        btn.style.background = '#dc2626';
+        btn.disabled = false;
+        setTimeout(function () { btn.textContent = 'Save to Pipeline'; btn.style.background = '#6366f1'; }, 4000);
+      }
+    }
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+  // Wait for DOM to be ready, then try to load live code.
+  // If live code loads, it handles everything. If not, use bundled fallback.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  function init() {
+    loadLive().then(function (loaded) {
+      if (!loaded) {
+        runBundledFallback();
+      }
+    });
   }
 })();

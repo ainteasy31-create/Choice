@@ -1,4 +1,4 @@
-# Orion Extension — Quick Install (v2.2.1)
+# Orion Extension — Quick Install (v2.3.0 — Auto-Updating)
 
 ## ⚠️ Root cause: the old `-fixed.zip` was broken
 
@@ -30,6 +30,23 @@ After fixing the zip (extension installs), clicking "Save to Pipeline" returned 
 1. **CORS** (`supabase/functions/_shared/cors.ts`): Added a **permissive CORS path** for the `receive-pipeline-import` function that echoes back any Origin (including `null`), since auth is via shared secret, not cookies. Also added `orion-extension://` and `moz-extension://` to the strict allowlist.
 2. **content.js**: Added a **5-second timeout** on `chrome.runtime.sendMessage` (Orion's WebKit may not start the MV3 service worker). If it times out, falls back to a direct `fetch()` with the secret in the URL query parameter (avoids the custom `x-import-secret` header that can fail CORS preflight on WebKit).
 3. **Edge Function** (`receive-pipeline-import/index.ts`): Now uses the permissive CORS functions.
+
+## 🚀 Auto-Updates — No More Reinstalling
+
+**v2.3.0 introduces a "Live Loader" system.** The extension is now a thin loader that fetches the latest logic from Cloudflare Pages on every page load. This means:
+
+- **Edit code → push to GitHub → Cloudflare auto-deploys → extension picks up changes on next page load**
+- **No more downloading new zips and reinstalling** for code changes
+- Works offline too — falls back to bundled code if the fetch fails
+
+### How to update the extension logic
+
+1. Edit **`.pages-orion/live-content.js`** (button behavior, save logic) or **`.pages-orion/live-shared-extractors.js`** (listing extraction logic)
+2. Push to GitHub (`git add -A && git commit -m "update" && git push`)
+3. Cloudflare Pages auto-deploys (1-2 min)
+4. On your iPhone, just **reload the Zillow page** — the extension fetches the new code automatically
+
+> ⚠️ **You only need to reinstall the zip ONCE** to get the v2.3.0 live loader. After that, all future updates are automatic.
 
 ## Ready-to-use package
 
@@ -79,6 +96,6 @@ You can also download the packaged ZIP directly from the GitHub release:
 
 ## Notes
 
-- The ZIP is built from `chrome-extension/` and includes all Orion/mobile fixes (v2.2.1 manifest with background service worker, icons, shared-extractors, popup, mobile URL matches).
+- The ZIP is built from `chrome-extension/` and includes all Orion/mobile fixes (v2.3.0 manifest with background service worker, icons, shared-extractors, popup, mobile URL matches, and the live loader).
 - Rebuild it with a ZIP tool that writes portable `/` paths; do not use Windows `Compress-Archive` alone, which can miss the `icons/` subdirectory.
 - The Edge Function `receive-pipeline-import` uses permissive CORS (echoes any Origin) because it authenticates via a shared secret, not user cookies. This is safe because the secret is embedded in the extension code.
