@@ -1,15 +1,22 @@
 // ============================================================
 // Choice Properties — Live Content Script (auto-updated)
-// v3.0 — Browser-side photo download + ImageKit upload
+// v3.1 — Background-worker photo download + ImageKit upload
 // ============================================================
 // This file is hosted on Cloudflare Pages and fetched by the
 // extension's thin loader (content.js) on every page load.
 // Edit this file → push to GitHub → Cloudflare auto-deploys
 // → extension picks up changes automatically. No reinstall needed.
 //
-// v3.0: PHOTOS ARE DOWNLOADED IN THE BROWSER and uploaded to
-// ImageKit BEFORE the listing is sent to the pipeline. This
-// avoids Zillow/Realtor CDN blocking server-side requests.
+// v3.1: PHOTOS ARE DOWNLOADED VIA THE BACKGROUND SERVICE WORKER
+// (which has host_permissions for Zillow/Realtor CDNs, bypassing
+// CORS restrictions that block content-script fetches) and uploaded
+// to ImageKit BEFORE the listing is sent to the pipeline.
+//
+// FALLBACK CHAIN:
+//   1. Background worker download (best — no CORS issues)
+//   2. Direct content-script fetch (works for some CDNs)
+//   3. Send source URLs to server — server tries to download
+//   4. If all fail, listing still saves with source URLs for retry
 // ============================================================
 (function () {
   'use strict';
@@ -17,7 +24,7 @@
   // ── Config ──────────────────────────────────────────────────
   var EDGE_URL = (window.CP_CONFIG && window.CP_CONFIG.EDGE_URL) || 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
   var SECRET   = (window.CP_CONFIG && window.CP_CONFIG.IMPORT_SECRET) || 'cp_import_7Kx3m9P2w5';
-  var VERSION  = '3.0.0-live';
+  var VERSION  = '3.1.0-live';
 
   // ── SPA navigation handling ─────────────────────────────────
   var lastUrl = location.href;
@@ -66,10 +73,10 @@
     }, 1000);
   }
 
-  // ── Photo download + upload helpers (v3.0) ──────────────────
-  // Downloads each image in the browser (using the user's cookies/IP)
-  // and uploads to ImageKit via the imagekit-upload edge function.
-  // This avoids Zillow/Realtor blocking datacenter IPs.
+  // ── Photo download + upload helpers (v3.1) ──────────────────
+  // Downloads each image via the background service worker (which
+  // has host_permissions for Zillow/Realtor CDNs, bypassing CORS)
+  // and uploads to ImageKit via the pipeline-photo-upload edge function.
   async function downloadAndUploadPhotos(photoUrls, maxPhotos) {
     var uploaded = [];
     var failed = 0;
@@ -89,26 +96,77 @@
     return { uploaded: uploaded, failed: failed };
   }
 
-  async function uploadOnePhoto(url, index) {
+  // Download a photo via the background worker (bypasses CORS)
+  async function downloadViaBackground(url) {
+    return new Promise(function(resolve) {
+      try {
+        if (!chrome.runtime || !chrome.runtime.sendMessage) {
+          resolve(null);
+          return;
+        }
+        chrome.runtime.sendMessage(
+          { type: 'DOWNLOAD_PHOTO', url: url },
+          function(response) {
+            if (chrome.runtime.lastError) {
+              console.warn('[CP] Background download error:', chrome.runtime.lastError.message);
+              resolve(null);
+              return;
+            }
+            if (response && response.ok && response.dataUri) {
+              resolve(response);
+            } else {
+              resolve(null);
+            }
+          }
+        );
+      } catch (e) {
+        console.warn('[CP] Background download exception:', e.message);
+        resolve(null);
+      }
+    });
+  }
+
+  // Fallback: try direct fetch from content script (works for some CDNs)
+  async function downloadViaDirectFetch(url) {
     try {
-      // 1. Download the image in the browser (uses user's cookies)
       var imgRes = await fetch(url, {
         mode: 'cors',
         credentials: 'include',
         headers: { 'Accept': 'image/*' }
       });
-      if (!imgRes.ok) {
-        console.warn('[CP] Photo fetch failed:', imgRes.status, url.slice(0, 80));
-        return null;
-      }
-
-      // 2. Convert to base64
+      if (!imgRes.ok) return null;
       var blob = await imgRes.blob();
       var base64 = await blobToBase64(blob);
       var ext = (blob.type || 'image/jpeg').split('/')[1] || 'jpg';
       if (ext === 'jpeg') ext = 'jpg';
+      return {
+        dataUri: base64,
+        contentType: blob.type || 'image/jpeg',
+        ext: ext,
+        size: blob.size,
+      };
+    } catch (e) {
+      return null;
+    }
+  }
 
-      // 3. Upload to ImageKit via pipeline-photo-upload edge function
+  async function uploadOnePhoto(url, index) {
+    try {
+      // 1. Try background worker download first (bypasses CORS)
+      var photo = await downloadViaBackground(url);
+
+      // 2. Fallback: direct content-script fetch
+      if (!photo) {
+        photo = await downloadViaDirectFetch(url);
+      }
+
+      // 3. If both failed, return null (will be retried server-side)
+      if (!photo) {
+        console.warn('[CP] All download methods failed for:', url.slice(0, 100));
+        return null;
+      }
+
+      // 4. Upload to ImageKit via pipeline-photo-upload edge function
       var ikRes = await fetch('https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/pipeline-photo-upload', {
         method: 'POST',
         headers: {
@@ -116,8 +174,8 @@
           'x-import-secret': SECRET
         },
         body: JSON.stringify({
-          fileData: base64,
-          fileName: 'photo_' + (index + 1) + '.' + ext,
+          fileData: photo.dataUri,
+          fileName: 'photo_' + (index + 1) + '.' + photo.ext,
           folder: '/pipeline/temp'
         })
       });
@@ -167,14 +225,19 @@
         photoUrls = extracted.photo_urls || [];
       }
 
-      // ── Download + upload photos in browser (v3.0) ──────────
-      btn.textContent = 'Downloading photos…';
+      // ── Download + upload photos (v3.1) ─────────────────────
+      // Show progress: "Downloading photos (1/12)…"
       var photoResult = { uploaded: [], failed: 0 };
       if (photoUrls.length > 0) {
+        btn.textContent = 'Downloading photos…';
         photoResult = await downloadAndUploadPhotos(photoUrls, 30);
       }
 
       // ── Build payload with ImageKit URLs ────────────────────
+      // If some photos uploaded to ImageKit, use those URLs.
+      // If none uploaded, send source URLs — the server will try
+      // to download them (and the pipeline will show a retry button).
+      var finalUrls = photoResult.uploaded.length > 0 ? photoResult.uploaded : photoUrls;
       var payload = {
         source: extracted.source,
         source_listing_id: extracted.source_listing_id,
@@ -197,9 +260,8 @@
         description: extracted.description,
         available_date: extracted.available_date,
         pets_allowed: extracted.pets_allowed,
-        // Use ImageKit URLs if uploaded, otherwise fall back to source URLs
-        original_image_urls: JSON.stringify(photoResult.uploaded.length > 0 ? photoResult.uploaded : photoUrls),
-        _import: 'browser-extension-v3.0.0-live',
+        original_image_urls: JSON.stringify(finalUrls),
+        _import: 'browser-extension-v3.1.0-live',
       };
 
       // ── Send to pipeline ────────────────────────────────────
@@ -215,7 +277,14 @@
       if (resp && resp.ok) {
         var photos = resp.photos || 0;
         var ikPhotos = resp.imagekit_photos || 0;
-        btn.textContent = ikPhotos > 0 ? 'Saved! ' + ikPhotos + ' photos ✓' : 'Saved! ' + photos + ' source photos';
+        var failedPhotos = resp.imagekit_failed || 0;
+        if (ikPhotos > 0) {
+          btn.textContent = 'Saved! ' + ikPhotos + ' photos ✓';
+        } else if (failedPhotos > 0) {
+          btn.textContent = 'Saved! Photos pending retry';
+        } else {
+          btn.textContent = 'Saved! ' + photos + ' source photos';
+        }
         btn.style.background = '#16a34a';
         setTimeout(function () { btn.remove(); }, 3000);
       } else if (resp && resp.duplicate) {

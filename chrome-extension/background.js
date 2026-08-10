@@ -1,6 +1,10 @@
 // ============================================================
-// Import to Choice Properties — Background Service Worker v2.1
+// Import to Choice Properties — Background Service Worker v3.0
 // Orion-compatible: no importScripts, no alarms dependency.
+// v3.0: Added DOWNLOAD_PHOTO handler — the background worker
+// has host_permissions for Zillow/Realtor CDNs, so it can
+// fetch images without CORS restrictions that block content
+// scripts. This is the reliable photo download path.
 // ============================================================
 
 // Inline config (Orion doesn't reliably support importScripts)
@@ -121,6 +125,68 @@ async function flushQueue() {
   return flushed;
 }
 
+// ── Photo download helper (v3.0) ─────────────────────────────
+// The background service worker has host_permissions for
+// Zillow/Realtor/Apartments/Redfin CDNs, so it can fetch images
+// without CORS restrictions. Content scripts send a message here
+// to download a photo and get back a base64 data URI.
+async function downloadPhoto(url) {
+  try {
+    // Try with a browser-like User-Agent and Referer
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+
+    // Add Referer based on the URL host
+    try {
+      const u = new URL(url);
+      if (u.hostname.includes('zillow')) headers['Referer'] = 'https://www.zillow.com/';
+      else if (u.hostname.includes('realtor')) headers['Referer'] = 'https://www.realtor.com/';
+      else if (u.hostname.includes('apartments')) headers['Referer'] = 'https://www.apartments.com/';
+      else if (u.hostname.includes('redfin')) headers['Referer'] = 'https://www.redfin.com/';
+    } catch (_) {}
+
+    const res = await fetch(url, {
+      headers,
+      credentials: 'omit',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (!res.ok) {
+      console.warn('[CP] Background photo fetch failed:', res.status, url.slice(0, 100));
+      return null;
+    }
+
+    const blob = await res.blob();
+    const contentType = blob.type || 'image/jpeg';
+    const ext = (contentType.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+
+    // Convert blob to base64 data URI
+    const base64 = await blobToBase64(blob);
+    return {
+      dataUri: base64,
+      contentType: contentType,
+      ext: ext,
+      size: blob.size,
+    };
+  } catch (err) {
+    console.warn('[CP] Background photo download error:', err.message, url.slice(0, 100));
+    return null;
+  }
+}
+
+function blobToBase64(blob) {
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = function() { resolve(reader.result); };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'SAVED') {
     (async () => {
@@ -183,6 +249,25 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
       } else {
         sendResponse({ ok: false, error: 'Network error' });
+      }
+    })();
+    return true;
+  }
+
+  // ── DOWNLOAD_PHOTO handler (v3.0) ──────────────────────────
+  // Content script sends { type: 'DOWNLOAD_PHOTO', url } and
+  // receives { ok: true, dataUri, contentType, ext } or { ok: false }.
+  if (msg.type === 'DOWNLOAD_PHOTO') {
+    (async () => {
+      try {
+        const result = await downloadPhoto(msg.url);
+        if (result) {
+          sendResponse({ ok: true, ...result });
+        } else {
+          sendResponse({ ok: false, error: 'Download failed' });
+        }
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
       }
     })();
     return true;

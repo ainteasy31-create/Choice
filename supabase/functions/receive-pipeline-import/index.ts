@@ -126,8 +126,8 @@ Deno.serve(async (req) => {
     return permissiveJsonErr(500, 'Database insert failed: ' + insertErr.message, req);
   }
 
-  // ── Auto-upload images to ImageKit (v3.0) ────────────────────
-  // If the browser already uploaded images to ImageKit (v3.0 extension),
+  // ── Auto-upload images to ImageKit (v3.1) ────────────────────
+  // If the browser already uploaded images to ImageKit (v3.1 extension),
   // skip server-side download. Otherwise download + upload here.
   let imagekitUploaded = 0;
   let imagekitFailed = 0;
@@ -147,14 +147,22 @@ Deno.serve(async (req) => {
 
     async function uploadOne(sourceUrl: string, index: number): Promise<string | null> {
       try {
-        // Fetch the source image
+        // Fetch the source image with browser-like headers to bypass CDN blocks
         const fetchHeaders: Record<string, string> = {
-          'User-Agent': 'Mozilla/5.0 (compatible; ChoiceProperties/1.0)',
-          'Accept': 'image/*',
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
         };
+        // Add Referer based on source site
         if (source === 'zillow') fetchHeaders['Referer'] = 'https://www.zillow.com/';
+        else if (source === 'realtor') fetchHeaders['Referer'] = 'https://www.realtor.com/';
+        else if (source === 'apartments') fetchHeaders['Referer'] = 'https://www.apartments.com/';
+        else if (source === 'redfin') fetchHeaders['Referer'] = 'https://www.redfin.com/';
+
         const imgRes = await fetch(sourceUrl, {
           headers: fetchHeaders,
+          redirect: 'follow',
           signal: AbortSignal.timeout(FETCH_TIMEOUT),
         });
         if (!imgRes.ok) {

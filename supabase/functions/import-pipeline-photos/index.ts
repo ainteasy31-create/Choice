@@ -124,11 +124,25 @@ Deno.serve(async (req) => {
   // Returns true on success, false on any failure.
   async function transferPhoto(url: string, index: number): Promise<boolean> {
     try {
+      // Use browser-like headers to bypass CDN blocks
+      const fetchHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      };
+      // Add Referer based on URL host
+      try {
+        const u = new URL(url);
+        if (u.hostname.includes('zillow')) fetchHeaders['Referer'] = 'https://www.zillow.com/';
+        else if (u.hostname.includes('realtor')) fetchHeaders['Referer'] = 'https://www.realtor.com/';
+        else if (u.hostname.includes('apartments')) fetchHeaders['Referer'] = 'https://www.apartments.com/';
+        else if (u.hostname.includes('redfin')) fetchHeaders['Referer'] = 'https://www.redfin.com/';
+      } catch (_) {}
+
       const imgRes = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ChoiceProperties/1.0)',
-          'Accept': 'image/*',
-        },
+        headers: fetchHeaders,
+        redirect: 'follow',
         signal: AbortSignal.timeout(FETCH_TIMEOUT),
       });
       if (!imgRes.ok) return false;
