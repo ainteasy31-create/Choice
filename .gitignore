@@ -78,6 +78,10 @@ downloads/
 temp/
 tmp/
 
+# Supabase CLI temp files — never commit (contains linked project ref, URLs)
+supabase/.temp/
+supabase/supabase/.temp/
+
 # Build artifacts
 dist/
 build/
