@@ -9,9 +9,11 @@
   'use strict';
 
   // ── Config ──────────────────────────────────────────────────
-  var EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
-  var SECRET   = 'cp_import_7Kx3m9P2w5';
-  var VERSION  = '2.3.0-live';
+  // Read from window.CP_CONFIG (set by config.js) with fallback
+  // to hardcoded values for backward compatibility with already-installed extensions.
+  var EDGE_URL = (window.CP_CONFIG && window.CP_CONFIG.EDGE_URL) || 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
+  var SECRET   = (window.CP_CONFIG && window.CP_CONFIG.IMPORT_SECRET) || 'cp_import_7Kx3m9P2w5';
+  var VERSION  = '2.3.1-live';
 
   // ── SPA navigation handling ─────────────────────────────────
   // Zillow uses client-side routing. When navigating between listings,

@@ -1,7 +1,22 @@
 // ============================================================
 // Choice Properties — Multi-site Listing Extractor Registry
-// Pure functions. No chrome.* APIs. Works in browser + Node.
-// Each extractor returns the normalized pipeline payload.
+// GENERATED FILE — DO NOT EDIT DIRECTLY.
+// Edit src/extractors/shared-extractors.js and run:
+//   node scripts/build-extractors.js
+// ============================================================
+// ============================================================
+// Choice Properties — Canonical Multi-site Listing Extractor
+// ============================================================
+// THIS IS THE SINGLE SOURCE OF TRUTH for all listing extraction.
+// Do NOT edit the generated copies in:
+//   - chrome-extension/shared-extractors.js
+//   - .pages-orion/live-shared-extractors.js
+//   - supabase/functions/_shared/zillow-extract.ts
+//
+// To update: edit this file, then run: node scripts/build-extractors.js
+// This generates all runtime variants from this one source.
+//
+// Supported sites: Zillow, Realtor.com, Apartments.com, Redfin
 // ============================================================
 (function (global) {
   'use strict';
@@ -14,15 +29,12 @@
       if (!el) return null;
       try { return JSON.parse(el.textContent); } catch (_) { return null; }
     }
-
     if (typeof source === 'string') {
       try { return JSON.parse(source); } catch (_) { return null; }
     }
-
     if (typeof source === 'object') {
       return source;
     }
-
     return null;
   }
 
@@ -43,13 +55,10 @@
     return best;
   }
 
-  // Zillow CDN serves the same photo at multiple variant suffixes:
-  //   -uncropped_scaled_within_1536_1152.jpg  (full-res)
-  //   -cc_ft_1536.jpg                          (compressed)
-  //   -p_h.jpg                                 (hero)
-  // We dedup by the base image hash and keep the highest-resolution variant.
+  // Zillow CDN serves the same photo at multiple variant suffixes.
+  // Dedup by base image hash, keep highest-resolution variant.
   function dedupZillowPhotos(urls) {
-    const byHash = new Map(); // hash -> { url, score }
+    const byHash = new Map();
     const scoreOf = (u) => {
       if (/-uncropped_scaled_within_1536_1152\.jpg/.test(u)) return 3;
       if (/-cc_ft_1536\.jpg/.test(u)) return 2;
@@ -58,7 +67,7 @@
     };
     for (const u of urls) {
       const m = u.match(/\/fp\/([a-f0-9]{16,})-/i);
-      const hash = m ? m[1] : u; // fall back to full URL if no hash
+      const hash = m ? m[1] : u;
       const score = scoreOf(u);
       const cur = byHash.get(hash);
       if (!cur || score > cur.score) byHash.set(hash, { url: u, score });
@@ -159,8 +168,7 @@
   }
 
   // Zillow URLs embed the zpid at the end: .../12345_zpid/
-  // If the URL's zpid doesn't match the data's zpid (stale/wrong URL), rebuild
-  // a canonical URL from the data so the source link always points to the right listing.
+  // If the URL's zpid doesn't match the data's zpid, rebuild a canonical URL.
   function canonicalZillowUrl(url, zpid) {
     if (!zpid) return url;
     const m = url.match(/(https?:\/\/[^/]+\/homedetails\/[^/]+)\/\d+_zpid\/?/i);

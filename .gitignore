@@ -22,6 +22,10 @@ apply/config.js
 # This is separate from the Cloudflare-generated config.js for the main site.
 !chrome-extension/config.js
 
+# .pages-orion/config.js is the Orion extension's credential config — committed
+# so the live loader has the secret for auto-updates.
+!.pages-orion/config.js
+
 # Node modules — never commit generated/installed files
 node_modules/
 package-lock.json.bak

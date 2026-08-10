@@ -1,5 +1,5 @@
 // ============================================================
-// Choice Properties — Extension Config
+// Choice Properties — Orion Extension Config
 // ============================================================
 // Holds the import secret for the receive-pipeline-import edge function.
 // The secret is also embedded as a fallback in content.js for
