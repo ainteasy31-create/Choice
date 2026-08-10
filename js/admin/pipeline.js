@@ -44,29 +44,33 @@
     const failures = [];
     const desc = listing.description || '';
 
-    // 1. Image check
+    // 1. Image check — check both source URLs AND ImageKit URLs
+    const sourceUrls = parseJSON(listing.original_image_urls) || [];
+    const hasImages = sourceUrls.length > 0;
+    const hasImageKit = sourceUrls.some(u => u.includes('ik.imagekit.io'));
+
     if (listing.choice_property_id) {
       // Already published once — count confirmed ImageKit photos.
-      // Use select without head:true so count is accurate.
       const { data: existingPhotos } = await CP.sb()
         .from('property_photos')
         .select('id')
         .eq('property_id', listing.choice_property_id);
       const transferred = existingPhotos ? existingPhotos.length : 0;
-      if (transferred === 0) {
-        failures.push('No images have been transferred to ImageKit yet — use "Import source photos" first');
+      if (transferred === 0 && !hasImages) {
+        failures.push('No images available — add at least one photo before publishing');
       }
     } else {
       // First publish — source photos must exist (transferred post-publish by import-pipeline-photos)
-      const sourceUrls = parseJSON(listing.original_image_urls) || [];
-      if (sourceUrls.length === 0) {
+      if (!hasImages) {
         failures.push('No source images available — add at least one photo before publishing');
       }
     }
 
-    // 2. Rent must be set
-    if (!listing.monthly_rent) {
+    // 2. Rent must be set and reasonable
+    if (!listing.monthly_rent || listing.monthly_rent <= 0) {
       failures.push('Monthly rent is not set');
+    } else if (listing.monthly_rent > 100000) {
+      failures.push('Monthly rent looks incorrect ($' + listing.monthly_rent + ') — please verify');
     }
 
     // 3. Free-application language in description
@@ -348,19 +352,38 @@
           .select('url,display_order')
           .eq('property_id', l.choice_property_id)
           .order('display_order', { ascending: true })
-          .limit(12);
+          .limit(50);
         
         if(!error && Array.isArray(photos) && photos.length){
           const urls = photos.map(p => p.url).filter(Boolean);
-          return `<div class="pl-photo-strip">${urls.map(u => `<img src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>
-          <div class="pl-photo-count">${urls.length} photo${urls.length!==1?'s':''} on ImageKit</div>`;
+          return renderGallery(urls, 'on ImageKit');
         }
       } catch(_){ /* fall through to source URLs */ }
     }
     
     if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
-    return `<div class="pl-photo-strip">${imgs.map(u => `<img src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>
-    <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source.</div>`;
+    return renderGallery(imgs, 'from source');
+  }
+
+  // ── Modern photo gallery carousel ─────────────────────────────────────────
+  function renderGallery(urls, label){
+    if(!urls.length) return '<p class="pl-photo-count">No photos available.</p>';
+    const thumbs = urls.slice(0, 20).map((u, i) =>
+      `<img class="pl-gallery-thumb${i === 0 ? ' active' : ''}" src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-idx="${i}" onclick="event.stopPropagation()">`
+    ).join('');
+    return `
+    <div class="pl-gallery" id="pl-gallery">
+      <div class="pl-gallery-main">
+        <img id="pl-gallery-img" src="${S.esc(urls[0])}" alt="" referrerpolicy="no-referrer">
+        ${urls.length > 1 ? `
+          <button class="pl-gallery-nav prev" id="pl-gallery-prev" aria-label="Previous photo">‹</button>
+          <button class="pl-gallery-nav next" id="pl-gallery-next" aria-label="Next photo">›</button>
+          <div class="pl-gallery-counter" id="pl-gallery-counter">1 / ${urls.length}</div>
+        ` : ''}
+      </div>
+      ${urls.length > 1 ? `<div class="pl-gallery-thumbs" id="pl-gallery-thumbs">${thumbs}</div>` : ''}
+      <div class="pl-photo-count">${urls.length} photo${urls.length!==1?'s':''} ${label}</div>
+    </div>`;
   }
 
   function missingTags(l){
@@ -626,7 +649,10 @@
       // Load photos asynchronously (may fetch from ImageKit for published listings)
       const photoContainer = panel.querySelector('#panel-photos-container');
       if(photoContainer && photoCount){
-        panelPhotos(l).then(html => { if(photoContainer) photoContainer.innerHTML = html; });
+        panelPhotos(l).then(html => {
+          if(photoContainer) photoContainer.innerHTML = html;
+          wireGalleryEvents();
+        });
       }
 
     // "Import full details" pre-fills the Import URL modal with this listing's source URL
@@ -634,6 +660,46 @@
     if(reimportBtn) reimportBtn.addEventListener('click', () => {
       openImportModal(l.source_url);
     });
+  }
+
+  // ── Gallery navigation events ─────────────────────────────────────────────
+  function wireGalleryEvents(){
+    const gallery = document.getElementById('pl-gallery');
+    if(!gallery) return;
+    const img = document.getElementById('pl-gallery-img');
+    const counter = document.getElementById('pl-gallery-counter');
+    const thumbs = gallery.querySelectorAll('.pl-gallery-thumb');
+    const prev = document.getElementById('pl-gallery-prev');
+    const next = document.getElementById('pl-gallery-next');
+    if(!img) return;
+    const urls = thumbs.length ? Array.from(thumbs).map(t => t.src) : [img.src];
+    let idx = 0;
+
+    function show(i){
+      idx = (i + urls.length) % urls.length;
+      img.src = urls[idx];
+      if(counter) counter.textContent = (idx + 1) + ' / ' + urls.length;
+      thumbs.forEach((t, ti) => t.classList.toggle('active', ti === idx));
+    }
+
+    if(prev) prev.addEventListener('click', e => { e.stopPropagation(); show(idx - 1); });
+    if(next) next.addEventListener('click', e => { e.stopPropagation(); show(idx + 1); });
+    thumbs.forEach(t => {
+      t.addEventListener('click', e => {
+        e.stopPropagation();
+        show(parseInt(t.dataset.idx || '0', 10));
+      });
+    });
+    // Swipe support for mobile
+    let startX = 0;
+    const main = gallery.querySelector('.pl-gallery-main');
+    if(main){
+      main.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+      main.addEventListener('touchend', e => {
+        const dx = e.changedTouches[0].clientX - startX;
+        if(Math.abs(dx) > 40) show(idx + (dx < 0 ? 1 : -1));
+      }, { passive: true });
+    }
   }
 
   function closePanel(){
