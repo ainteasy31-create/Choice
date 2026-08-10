@@ -52,8 +52,10 @@
     // If live extractors loaded but live-content failed, use bundled content
     if (window.CP_Extractors && !document.getElementById('cp-save-btn')) {
       // The live-content.js should have run. If not, inject the bundled logic.
-      var EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
-      var SECRET = 'cp_import_7Kx3m9P2w5';
+      // Read config from window.CP_CONFIG (set by config.js) with fallback
+      // to the hardcoded value for backward compatibility with already-installed extensions.
+      var EDGE_URL = (window.CP_CONFIG && window.CP_CONFIG.EDGE_URL) || 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
+      var SECRET = (window.CP_CONFIG && window.CP_CONFIG.IMPORT_SECRET) || 'cp_import_7Kx3m9P2w5';
 
       // SPA navigation handling
       var lastUrl = location.href;
