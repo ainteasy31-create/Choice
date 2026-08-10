@@ -55,20 +55,55 @@
       var EDGE_URL = 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
       var SECRET = 'cp_import_7Kx3m9P2w5';
 
-      var btn = document.createElement('button');
-      btn.id = 'cp-save-btn';
-      btn.textContent = 'Save to Pipeline';
-      Object.assign(btn.style, {
-        position: 'fixed', bottom: 'max(24px, env(safe-area-inset-bottom))', right: 'max(24px, env(safe-area-inset-right))',
-        zIndex: '2147483647',
-        padding: '14px 24px', minWidth: '60px', height: '52px', background: '#6366f1',
-        color: '#fff', border: 'none', borderRadius: '26px',
-        fontFamily: '-apple-system, sans-serif', fontSize: '15px',
-        fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
-        touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none',
-      });
+      // SPA navigation handling
+      var lastUrl = location.href;
 
-      btn.addEventListener('click', async function () {
+      function isSupportedPage(url) {
+        return /zillow\.com\/homedetails\//i.test(url) ||
+               /realtor\.com\/realestateandhomes-detail\//i.test(url) ||
+               /apartments\.com\//i.test(url) ||
+               /redfin\.com\//i.test(url);
+      }
+
+      function removeButton() {
+        var old = document.getElementById('cp-save-btn');
+        if (old) old.remove();
+      }
+
+      function injectButton() {
+        if (document.getElementById('cp-save-btn')) return;
+        if (!isSupportedPage(location.href)) return;
+
+        var btn = document.createElement('button');
+        btn.id = 'cp-save-btn';
+        btn.textContent = 'Save to Pipeline';
+        Object.assign(btn.style, {
+          position: 'fixed', bottom: 'max(24px, env(safe-area-inset-bottom))', right: 'max(24px, env(safe-area-inset-right))',
+          zIndex: '2147483647',
+          padding: '14px 24px', minWidth: '60px', height: '52px', background: '#6366f1',
+          color: '#fff', border: 'none', borderRadius: '26px',
+          fontFamily: '-apple-system, sans-serif', fontSize: '15px',
+          fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
+          touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none',
+        });
+
+        btn.addEventListener('click', handleSave);
+        document.body.appendChild(btn);
+      }
+
+      function watchUrlChanges() {
+        setInterval(function () {
+          if (location.href !== lastUrl) {
+            lastUrl = location.href;
+            removeButton();
+            setTimeout(injectButton, 500);
+          }
+        }, 1000);
+      }
+
+      async function handleSave() {
+        var btn = document.getElementById('cp-save-btn');
+        if (!btn) return;
         btn.textContent = 'Saving…';
         btn.style.background = '#818cf8';
         btn.disabled = true;
@@ -136,16 +171,21 @@
           console.error('[CP]', e);
           setError('Network error');
         }
-      });
-
-      document.body.appendChild(btn);
+      }
 
       function setError(msg) {
+        var btn = document.getElementById('cp-save-btn');
+        if (!btn) return;
         btn.textContent = 'Failed: ' + msg;
         btn.style.background = '#dc2626';
         btn.disabled = false;
-        setTimeout(function () { btn.textContent = 'Save to Pipeline'; btn.style.background = '#6366f1'; }, 4000);
+        setTimeout(function () {
+          if (btn) { btn.textContent = 'Save to Pipeline'; btn.style.background = '#6366f1'; }
+        }, 4000);
       }
+
+      injectButton();
+      watchUrlChanges();
     }
   }
 

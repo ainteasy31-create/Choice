@@ -186,6 +186,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'TRANSFER_PHOTOS') {
+    (async () => {
+      try {
+        const pipelineId = msg.pipeline_id;
+        if (!pipelineId) {
+          sendResponse({ ok: false, error: 'pipeline_id is required' });
+          return;
+        }
+        const resp = await fetch(
+          'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/import-pipeline-photos?secret=' + encodeURIComponent(SECRET),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pipeline_id: pipelineId }),
+          }
+        );
+        const body = await resp.json().catch(() => ({}));
+        sendResponse({ ok: true, ...body });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
   if (msg.type === 'FLUSH_QUEUE') {
     (async () => {
       const flushed = await flushQueue();

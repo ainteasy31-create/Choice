@@ -65,6 +65,32 @@
     return 'unknown';
   }
 
+  // Zillow CDN serves the same photo at multiple variant suffixes:
+  //   -uncropped_scaled_within_1536_1152.jpg  (full-res)
+  //   -cc_ft_1536.jpg                          (compressed)
+  //   -p_h.jpg                                 (hero)
+  // We dedup by the base image hash and keep the highest-resolution variant.
+  function dedupZillowPhotos(urls) {
+    var byHash = {};
+    function scoreOf(u) {
+      if (/-uncropped_scaled_within_1536_1152\.jpg/.test(u)) return 3;
+      if (/-cc_ft_1536\.jpg/.test(u)) return 2;
+      if (/-p_h\.jpg/.test(u)) return 1;
+      return 0;
+    }
+    for (var i = 0; i < urls.length; i++) {
+      var u = urls[i];
+      var m = u.match(/\/fp\/([a-f0-9]{16,})-/i);
+      var hash = m ? m[1] : u; // fall back to full URL if no hash
+      var score = scoreOf(u);
+      var cur = byHash[hash];
+      if (!cur || score > cur.score) byHash[hash] = { url: u, score: score };
+    }
+    var result = [];
+    for (var h in byHash) result.push(byHash[h].url);
+    return result;
+  }
+
   // ── Zillow extractor ─────────────────────────────────────────
   function extractZillow(url, doc) {
     var data = getNextData(doc);
@@ -195,6 +221,9 @@
     }
     addPhoto(prop.desktopWebHdpImageLink);
     addPhoto(prop.heroImage);
+
+    // Dedup by image hash (Zillow serves same photo at multiple variant suffixes)
+    photoUrls = dedupZillowPhotos(photoUrls);
 
     // Rent parsing
     var rent = null;
