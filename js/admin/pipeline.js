@@ -362,7 +362,23 @@
     }
     
     if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
-    return renderGallery(imgs, 'from source');
+
+    // FIX: Zillow/Realtor CDN images block hotlinking from the admin domain.
+    // Use the admin session token to proxy non-ImageKit URLs through the
+    // proxy-image edge function so they display correctly.
+    // ImageKit URLs (ik.imagekit.io) work directly.
+    try {
+      const session = await CP.sb().auth.getSession();
+      const token = session?.data?.session?.access_token || '';
+      const proxied = imgs.map(u => {
+        if (u.includes('ik.imagekit.io')) return u;
+        if (!token) return u;
+        return 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/proxy-image?url=' + encodeURIComponent(u) + '&token=' + encodeURIComponent(token);
+      });
+      return renderGallery(proxied, 'from source');
+    } catch(_) {
+      return renderGallery(imgs, 'from source');
+    }
   }
 
   // ── Modern photo gallery carousel ─────────────────────────────────────────
@@ -647,8 +663,11 @@
       if(pubBtn) pubBtn.addEventListener('click', () => doPublish(l.id));
 
       // Load photos asynchronously (may fetch from ImageKit for published listings)
+      // FIX: photoCount was referenced from renderPanel() scope (undefined here),
+      // so panelPhotos() never ran and "Loading…" stayed stuck on screen.
+      // Now it always runs — panelPhotos() handles the empty case itself.
       const photoContainer = panel.querySelector('#panel-photos-container');
-      if(photoContainer && photoCount){
+      if(photoContainer){
         panelPhotos(l).then(html => {
           if(photoContainer) photoContainer.innerHTML = html;
           wireGalleryEvents();
