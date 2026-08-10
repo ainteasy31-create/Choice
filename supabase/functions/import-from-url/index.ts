@@ -186,9 +186,13 @@ async function handleImport(
     _imported_by: userId, // null for shared-secret imports
   });
 
+  let folderInfo: Record<string, unknown> | null = null;
+  const folderName = safeStr((req.url ? new URL(req.url).searchParams.get('folder') : null));
+  
   const record = buildPipelineRecord({
     source: 'zillow',
     source_listing_id: sourceListingId,
+    folder_name: folderName,
     source_url: rawUrl,
     title: safeStr(extracted.title) ?? sourceListingId,
     address: safeStr(extracted.address),
@@ -256,6 +260,21 @@ async function handleImport(
   let photoCount = 0;
   try { const u = JSON.parse((record.original_image_urls as string) || '[]'); photoCount = Array.isArray(u) ? u.length : 0; } catch { /* ignore */ }
 
+  // ── Optional folder assignment ─────────────────────────────────
+  if (folderName) {
+    try {
+      const { data: folderData, error: folderErr } = await adminClient.rpc('pipeline_folder_add_property', {
+        p_property_id: record.id,
+        p_folder_name: folderName,
+      });
+      if (!folderErr && folderData?.ok) {
+        folderInfo = { folder: folderName, serial: folderData.serial };
+      }
+    } catch (e) {
+      console.warn('[import-from-url] Folder assignment failed:', e);
+    }
+  }
+
   // Count populated fields for summary
   const populatedFields = [...CORE_FIELDS, ...BONUS_FIELDS].filter(f => !isEmpty(record[f]));
 
@@ -269,5 +288,6 @@ async function handleImport(
     rent:            safeInt(extracted.monthly_rent),
     populated_fields: populatedFields,
     missing_fields:  TRACKABLE_MISSING.filter(f => isEmpty(record[f])),
+    folder:          folderInfo,
   }, req);
 }

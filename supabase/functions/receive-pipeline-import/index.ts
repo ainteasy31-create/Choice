@@ -113,6 +113,23 @@ Deno.serve(async (req) => {
     photoCount = Array.isArray(urls) ? urls.length : 0;
   } catch { /* ignore */ }
 
+  // ── Optional folder assignment ─────────────────────────────────
+  let folderInfo: Record<string, unknown> | null = null;
+  const folderName = safeStr(body.folder_name);
+  if (folderName) {
+    try {
+      const { data: folderData, error: folderErr } = await adminClient.rpc('pipeline_folder_add_property', {
+        p_property_id: record.id,
+        p_folder_name: folderName,
+      });
+      if (!folderErr && folderData?.ok) {
+        folderInfo = { folder: folderName, serial: folderData.serial };
+      }
+    } catch (e) {
+      console.warn('[receive-pipeline-import] Folder assignment failed:', e);
+    }
+  }
+
   return permissiveJsonOk({
     ok:     true,
     id:     record.id,
@@ -121,5 +138,6 @@ Deno.serve(async (req) => {
     photos: photoCount,
     city:   safeStr(body.city),
     rent:   safeInt(body.monthly_rent),
+    folder: folderInfo,
   }, req);
 });

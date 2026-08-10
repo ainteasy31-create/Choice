@@ -268,6 +268,7 @@
     const isChecked   = _selected.has(l.id);
     const srcLabel = l.source === 'zillow' ? 'Zillow' : l.source === 'realtor' ? 'Realtor' : (l.source ? S.esc(l.source) : '');
     const srcImp = importSource(l);
+    const folderBadge = l.folder_serial ? `<span class="qs-badge" style="background:rgba(99,102,241,.15);color:var(--brand)" title="Folder serial number">#${l.folder_serial}</span>` : '';
 
     return `<div class="pl-card${isChecked ? ' pl-card-selected' : ''}" data-pl-id="${S.esc(l.id)}" role="button" tabindex="0" aria-label="${S.esc((l.address||'Listing') + ', ' + (l.city||''))}">
       <div class="pl-thumb-wrap">
@@ -281,6 +282,7 @@
         <div class="pl-card-badges">
           ${l.source ? `<span class="src-badge src-${S.esc(l.source)}">${srcLabel}</span>` : ''}
           ${qsBadge(score)}
+          ${folderBadge}
           ${srcImp === 'admin-url' ? `<span class="qs-badge qs-high" title="Imported via admin URL import">🖥 Desktop</span>` : ''}
           ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none;pointer-events:auto" target="_blank" onclick="event.stopPropagation()">Live ↗</a>` : ''}
           ${isPublished && l.photo_import_status === 'failed' ? `<span class="qs-badge qs-low" title="${S.esc(l.last_photo_import_error || 'Photo transfer to ImageKit failed')} — listing stays hidden from the public site until photos are added">⏳ Pending images</span>` : ''}
@@ -1345,6 +1347,235 @@
     });
   }
 
+  // ── Folder system ─────────────────────────────────────────────────────────────
+
+  let _folders = [];       // list of folders
+  let _activeFolder = null; // currently selected folder (null = all)
+
+  async function loadFolders(){
+    try {
+      const { data, error } = await CP.sb().rpc('pipeline_folder_list');
+      if(error) throw error;
+      _folders = typeof data === 'string' ? JSON.parse(data) : (data || []);
+      renderFolderSidebar();
+    } catch(e){
+      console.warn('[pipeline] loadFolders failed', e);
+    }
+  }
+
+  function renderFolderSidebar(){
+    const wrap = document.getElementById('pl-folders');
+    if(!wrap) return;
+    if(!_folders.length){
+      wrap.innerHTML = '<div class="pl-folder-empty">No folders yet.<br><button class="btn btn-sm btn-outline" id="pl-new-folder-btn">+ New Folder</button></div>';
+      const btn = document.getElementById('pl-new-folder-btn');
+      if(btn) btn.addEventListener('click', openCreateFolderModal);
+      return;
+    }
+    wrap.innerHTML = _folders.map(f => `
+      <div class="pl-folder-item${_activeFolder === f.id ? ' active' : ''}" data-folder-id="${S.esc(f.id)}" role="button" tabindex="0">
+        <div class="pl-folder-name">📁 ${S.esc(f.name)}</div>
+        <div class="pl-folder-count">${f.property_count || 0}</div>
+      </div>
+    `).join('') + '<div class="pl-folder-item pl-folder-new" id="pl-new-folder-item" role="button" tabindex="0">+ New Folder</div>';
+
+    wrap.querySelectorAll('.pl-folder-item[data-folder-id]').forEach(el => {
+      el.addEventListener('click', () => selectFolder(el.dataset.folderId));
+    });
+    const newBtn = document.getElementById('pl-new-folder-item');
+    if(newBtn) newBtn.addEventListener('click', openCreateFolderModal);
+  }
+
+  async function selectFolder(folderId){
+    _activeFolder = folderId;
+    renderFolderSidebar();
+    if(!folderId){
+      load(false);
+      return;
+    }
+    try {
+      const { data, error } = await CP.sb().rpc('pipeline_folder_properties', { p_folder_id: folderId });
+      if(error) throw error;
+      const rows = typeof data === 'string' ? JSON.parse(data) : (data || []);
+      _pageData = rows;
+      renderList(visibleListings(), false);
+      wireCardEvents();
+    } catch(e){
+      console.error('[pipeline] selectFolder failed', e);
+      S.toast('Failed to load folder', 'error');
+    }
+  }
+
+  function openCreateFolderModal(){
+    const modal = document.createElement('div');
+    modal.id = 'pl-folder-modal';
+    modal.innerHTML = `
+      <div class="pl-import-backdrop"></div>
+      <div class="pl-import-dialog" role="dialog" aria-modal="true" aria-label="Create folder">
+        <div class="pl-import-hd">
+          <div style="font-size:.95rem;font-weight:700">Create New Folder</div>
+          <button class="pl-import-close" aria-label="Close">✕</button>
+        </div>
+        <div class="pl-import-body">
+          <div class="pl-field" style="margin-bottom:14px">
+            <label for="pl-folder-name">Folder name</label>
+            <input id="pl-folder-name" type="text" placeholder="e.g. Wisdom, Columbus Q3, Fix Descriptions" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="pl-field" style="margin-bottom:14px">
+            <label for="pl-folder-desc">Description (optional)</label>
+            <input id="pl-folder-desc" type="text" placeholder="What is this folder for?" autocomplete="off">
+          </div>
+          <div id="pl-folder-result" style="display:none"></div>
+        </div>
+        <div class="pl-import-ft">
+          <button class="btn btn-ghost" id="pl-folder-cancel">Cancel</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary" id="pl-folder-create">Create Folder →</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.pl-import-backdrop').addEventListener('click', closeFolderModal);
+    modal.querySelector('.pl-import-close').addEventListener('click', closeFolderModal);
+    document.getElementById('pl-folder-cancel').addEventListener('click', closeFolderModal);
+    document.getElementById('pl-folder-create').addEventListener('click', doCreateFolder);
+    document.getElementById('pl-folder-name').addEventListener('keydown', e => {
+      if(e.key === 'Enter') doCreateFolder();
+    });
+    setTimeout(() => document.getElementById('pl-folder-name').focus(), 50);
+  }
+
+  function closeFolderModal(){
+    const modal = document.getElementById('pl-folder-modal');
+    if(modal) modal.remove();
+  }
+
+  async function doCreateFolder(){
+    const nameInput = document.getElementById('pl-folder-name');
+    const descInput = document.getElementById('pl-folder-desc');
+    const resultEl  = document.getElementById('pl-folder-result');
+    if(!nameInput || !resultEl) return;
+    const name = nameInput.value.trim();
+    if(!name){
+      nameInput.focus();
+      return;
+    }
+    const btn = document.getElementById('pl-folder-create');
+    btn.disabled = true;
+    btn.textContent = 'Creating…';
+    try {
+      const { data, error } = await CP.sb().rpc('pipeline_folder_create', {
+        p_name: name,
+        p_description: descInput ? descInput.value.trim() || null : null
+      });
+      if(error) throw error;
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+      if(!res?.ok){
+        resultEl.style.cssText = 'display:block;padding:10px 12px;border-radius:8px;background:rgba(239,68,68,.1);color:#dc2626;font-size:.8rem;margin-top:4px';
+        resultEl.textContent = res?.error || 'Failed to create folder';
+        btn.disabled = false;
+        btn.textContent = 'Create Folder →';
+        return;
+      }
+      S.toast('Folder "' + res.name + '" created ✓', 'success');
+      closeFolderModal();
+      await loadFolders();
+    } catch(e){
+      resultEl.style.cssText = 'display:block;padding:10px 12px;border-radius:8px;background:rgba(239,68,68,.1);color:#dc2626;font-size:.8rem;margin-top:4px';
+      resultEl.textContent = e.message || 'Failed to create folder';
+      btn.disabled = false;
+      btn.textContent = 'Create Folder →';
+    }
+  }
+
+  async function addSelectedToFolder(){
+    const ids = [..._selected];
+    if(!ids.length) return;
+    if(!_folders.length){
+      S.toast('Create a folder first', 'info');
+      openCreateFolderModal();
+      return;
+    }
+    // Simple prompt-based folder selection
+    const folderNames = _folders.map(f => f.name);
+    const choice = await S.promptList ? S.promptList('Add to folder', folderNames) : null;
+    if(!choice) return;
+    let succeeded = 0;
+    for(const id of ids){
+      try {
+        const { data, error } = await CP.sb().rpc('pipeline_folder_add_property', {
+          p_property_id: id,
+          p_folder_name: choice
+        });
+        if(!error && data?.ok) succeeded++;
+      } catch(e){ /* ignore */ }
+    }
+    if(succeeded > 0){
+      S.toast(`${succeeded} listing${succeeded !== 1 ? 's' : ''} added to "${choice}" ✓`, 'success');
+      _selected.clear();
+      updateBulkBar();
+      await loadFolders();
+    } else {
+      S.toast('Failed to add listings to folder', 'error');
+    }
+  }
+
+  async function deleteActiveFolder(){
+    if(!_activeFolder) return;
+    const folder = _folders.find(f => f.id === _activeFolder);
+    if(!folder) return;
+    const ok = await S.confirm(
+      `Delete folder "${folder.name}"?`,
+      `All ${folder.property_count || 0} properties in this folder will be archived (kept in pipeline but hidden).`
+    );
+    if(!ok) return;
+    try {
+      const { data, error } = await CP.sb().rpc('pipeline_folder_delete', { p_folder_id: _activeFolder });
+      if(error) throw error;
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+      if(!res?.ok) throw new Error(res?.error || 'Failed to delete folder');
+      S.toast(`Folder "${res.name}" deleted — ${res.archived || 0} properties archived`, 'success');
+      _activeFolder = null;
+      await loadFolders();
+      load(false);
+    } catch(e){
+      S.toast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  async function publishActiveFolder(){
+    if(!_activeFolder) return;
+    const folder = _folders.find(f => f.id === _activeFolder);
+    if(!folder) return;
+    const ok = await S.confirm(
+      `Publish all in "${folder.name}"?`,
+      `This will publish all ${folder.property_count || 0} properties in this folder as drafts.`
+    );
+    if(!ok) return;
+    try {
+      const { data, error } = await CP.sb().rpc('pipeline_folder_publish', { p_folder_id: _activeFolder });
+      if(error) throw error;
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+      if(!res?.ok) throw new Error(res?.error || 'Failed to publish folder');
+      S.toast(`${res.published} published, ${res.failed} failed`, res.failed > 0 ? 'info' : 'success');
+      await loadFolders();
+      selectFolder(_activeFolder);
+    } catch(e){
+      S.toast('Publish failed: ' + e.message, 'error');
+    }
+  }
+
+  function wireFolderButtons(){
+    const addBtn = document.getElementById('pl-add-to-folder-btn');
+    if(addBtn) addBtn.addEventListener('click', addSelectedToFolder);
+
+    const pubFolderBtn = document.getElementById('pl-publish-folder-btn');
+    if(pubFolderBtn) pubFolderBtn.addEventListener('click', publishActiveFolder);
+
+    const delFolderBtn = document.getElementById('pl-delete-folder-btn');
+    if(delFolderBtn) delFolderBtn.addEventListener('click', deleteActiveFolder);
+  }
+
   // ── Main load ─────────────────────────────────────────────────────────────────
 
   async function load(showSkeleton){
@@ -1388,11 +1619,13 @@
       wireBulkBar();
       wireImportButton();
       wireRefreshButton();
+      wireFolderButtons();
       // ESC key closes the detail panel
       document.addEventListener('keydown', e => {
         if(e.key === 'Escape' && _current) closePanel();
       });
       load(false);
+      loadFolders();
     })
     .catch(err => console.error('[pipeline] boot failed', err));
 

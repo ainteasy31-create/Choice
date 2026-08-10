@@ -245,6 +245,43 @@
   }
   .importer-banner-dismiss:hover{color:var(--text)}
   .importer-banner[hidden]{display:none!important}
+
+  /* ── Folder sidebar ─────────────────────────────────────────────────────── */
+  .pl-folder-sidebar{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md,10px);
+    padding:12px 14px;margin-bottom:var(--sp-3);
+  }
+  .pl-folder-header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .pl-folder-header span{
+    font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-2);
+  }
+  .pl-folder-empty{
+    font-size:.75rem;color:var(--muted-2);text-align:center;padding:8px 0;
+  }
+  .pl-folder-item{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:6px 10px;border-radius:var(--r-sm,6px);cursor:pointer;
+    font-size:.78rem;color:var(--text);transition:background .15s;
+  }
+  .pl-folder-item:hover{background:var(--surface-2)}
+  .pl-folder-item.active{background:rgba(99,102,241,.12);color:var(--brand)}
+  .pl-folder-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pl-folder-count{
+    font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:99px;
+    background:rgba(255,255,255,.12);color:var(--muted-2);flex-shrink:0;
+  }
+  .pl-folder-item.active .pl-folder-count{background:rgba(99,102,241,.2);color:var(--brand)}
+  .pl-folder-new{
+    color:var(--brand);font-weight:600;cursor:pointer;
+    border-top:1px solid var(--border);margin-top:4px;padding-top:8px;
+  }
+  .pl-folder-actions{
+    display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+  }
+  .pl-folder-actions .btn{flex:1}
 </style>
 </head>
 <body data-page-title="Pipeline" data-page-sub="Scraped listings for review">
@@ -274,7 +311,20 @@
       })();
     </script>
 
-    <!-- Toolbar: status filter chips + source filter chips + address search -->
+    <!-- Folder sidebar -->
+    <div class="pl-folder-sidebar">
+      <div class="pl-folder-header">
+        <span>Folders</span>
+        <button class="btn btn-sm btn-ghost" id="pl-add-to-folder-btn" title="Add selected listings to a folder" style="font-size:.7rem;padding:3px 8px">+ Add to folder</button>
+      </div>
+      <div id="pl-folders"></div>
+      <div class="pl-folder-actions" id="pl-folder-actions" style="display:none">
+        <button class="btn btn-sm btn-primary" id="pl-publish-folder-btn" style="font-size:.7rem;padding:3px 8px">Publish all</button>
+        <button class="btn btn-sm btn-ghost" id="pl-delete-folder-btn" style="font-size:.7rem;padding:3px 8px;color:var(--danger)">Delete</button>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
     <div class="pl-toolbar">
       <div class="chip-row" id="status-chips" role="tablist" aria-label="Filter by status">
         <button class="chip active" data-pl-status="scraped">New <span class="chip-count" id="cnt-scraped">…</span></button>

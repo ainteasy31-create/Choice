@@ -132,6 +132,8 @@ export interface PipelineRecordInput {
   source: string;
   source_listing_id: string;
   source_url?: string | null;
+  folder_name?: string | null;
+  folder_id?: string | null;
   title?: string | null;
   address?: string | null;
   unit_number?: string | null;
