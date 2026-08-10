@@ -118,6 +118,9 @@
     const imgs = parseJSON(l.original_image_urls);
     return (imgs && imgs.length) ? imgs[0] : null;
   }
+  function photoUrls(l){
+    return parseJSON(l.original_image_urls) || [];
+  }
   // Convert a stored JSON array to a user-editable comma-separated string
   function jArrToText(v){
     if(!v || v === '[]') return '';
@@ -260,7 +263,8 @@
   // ── Render: list ────────────────────────────────────────────────────────────
 
   function renderCard(l){
-    const thumb = thumbUrl(l);
+    const photos = photoUrls(l);
+    const thumb = photos[0];
     const score = l.data_quality_score;
     const missing = parseJSON(l.missing_fields) || [];
     const isPublished = l.status === 'published';
@@ -272,10 +276,11 @@
 
     return `<div class="pl-card${isChecked ? ' pl-card-selected' : ''}" data-pl-id="${S.esc(l.id)}" role="button" tabindex="0" aria-label="${S.esc((l.address||'Listing') + ', ' + (l.city||''))}">
       <div class="pl-thumb-wrap">
-        ${thumb ? `<img class="pl-thumb" src="" data-src="${S.esc(thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ''}
+        ${photos.length > 1 ? `<div class="pl-thumb-strip">${photos.slice(0, Math.min(5, photos.length)).map((u, i) => `<img class="pl-thumb-strip-img" src="" data-src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer"${i === 0 ? ' style="display:block;flex:0 0 100%"' : ''} onerror="this.style.display='none'">`).join('')}</div>` : (thumb ? `<img class="pl-thumb" src="" data-src="${S.esc(thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : '')}
         <div class="pl-thumb-placeholder"${thumb ? ' style="display:none"' : ''}>
           <svg class="i" width="28" height="28" style="opacity:.2"><use href="#i-property"/></svg>
         </div>
+        ${photos.length > 1 ? `<div class="pl-photo-count-badge">${photos.length} photos</div>` : ''}
         <label class="pl-card-check" onclick="event.stopPropagation()" title="Select">
           <input type="checkbox" class="pl-check" data-id="${S.esc(l.id)}" ${isChecked ? 'checked' : ''} aria-label="Select listing">
         </label>
@@ -354,8 +359,8 @@
     }
     
     if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
-    return `<div class="pl-photo-strip">${imgs.slice(0,12).map(u => `<img src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>
-    <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source — will transfer to ImageKit on publish.</div>`;
+    return `<div class="pl-photo-strip">${imgs.map(u => `<img src="${S.esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>
+    <div class="pl-photo-count">${imgs.length} photo${imgs.length!==1?'s':''} from source.</div>`;
   }
 
   function missingTags(l){
@@ -1109,7 +1114,7 @@
 
   // ── Lazy-load card thumbnails via IntersectionObserver ───────────────────────
   function setupLazyLoad(){
-    const imgs = document.querySelectorAll('.pl-thumb[data-src]');
+    const imgs = document.querySelectorAll('.pl-thumb[data-src], .pl-thumb-strip-img[data-src]');
     if(!imgs.length) return;
     if(!('IntersectionObserver' in window)){
       imgs.forEach(img => { img.src = img.dataset.src; img.removeAttribute('data-src'); });
