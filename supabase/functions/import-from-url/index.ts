@@ -283,14 +283,17 @@ async function handleImport(
 
     async function uploadOne(sourceUrl: string, index: number): Promise<string | null> {
       try {
-        // Fetch the source image
+        // Fetch the source image with browser-like headers to bypass CDN blocks
         const fetchHeaders: Record<string, string> = {
-          'User-Agent': 'Mozilla/5.0 (compatible; ChoiceProperties/1.0)',
-          'Accept': 'image/*',
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
           'Referer': 'https://www.zillow.com/',
         };
         const imgRes = await fetch(sourceUrl, {
           headers: fetchHeaders,
+          redirect: 'follow',
           signal: AbortSignal.timeout(FETCH_TIMEOUT),
         });
         if (!imgRes.ok) {
