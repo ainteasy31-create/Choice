@@ -201,6 +201,84 @@
     }, overrides);
   }
 
+  // ── Zillow attrMap helper ────────────────────────────────────
+  // Zillow stores rich facts as a label→value object in prop.attrMap
+  // (and occasionally in prop.facts). The resoFacts (rf) object often
+  // lacks these. Parse attrMap to fill in bonus fields that raise the
+  // quality score (county, year_built, parking, pets, appliances,
+  // heating, cooling, laundry, basement, lot size, flooring).
+  function fromAttrMap(prop) {
+    const facts = {};
+    const src   = prop.attrMap || prop.facts || {};
+    if (Array.isArray(src)) {
+      for (const f of src) {
+        if (f && typeof f === 'object') {
+          const label = f.label || f.name || f.type || '';
+          const val   = f.value || f.text || '';
+          if (label && val != null) facts[String(label).trim().toLowerCase()] = String(val).trim();
+        }
+      }
+    } else if (src && typeof src === 'object') {
+      for (const k of Object.keys(src)) {
+        const v = src[k];
+        if (v != null && v !== '') facts[String(k).trim().toLowerCase()] = String(v).trim();
+      }
+    }
+    return facts;
+  }
+
+  function factYearBuilt(facts, current) {
+    if (current) return current;
+    for (const k of ['year built', 'yearbuilt', 'built in', 'year']) {
+      if (facts[k]) { const n = parseInt(String(facts[k]).replace(/[^0-9]/g, ''), 10); if (n && n > 1800) return n; }
+    }
+    return null;
+  }
+
+  function factLotSize(facts, current) {
+    if (current) return current;
+    for (const k of ['lot size', 'lot', 'lotsize']) {
+      if (facts[k]) {
+        const n = parseInt(String(facts[k]).replace(/[^0-9]/g, ''), 10);
+        if (n) return n;
+      }
+    }
+    return null;
+  }
+
+  function factList(facts, current, keys) {
+    if (current && current.length) return current;
+    for (const k of keys) {
+      if (facts[k]) {
+        const parts = String(facts[k]).split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.length) return parts;
+      }
+    }
+    return current || [];
+  }
+
+  function factBool(facts, current, keys) {
+    if (current != null) return current;
+    for (const k of keys) {
+      if (facts[k]) {
+        const v = String(facts[k]).toLowerCase();
+        return !(v === 'none' || v === 'no' || v === 'false' || v === '0');
+      }
+    }
+    return null;
+  }
+
+  function factPets(facts, current) {
+    if (current != null) return current;
+    for (const k of ['pet friendly', 'pets allowed', 'pets', 'pet policy']) {
+      if (facts[k]) {
+        const v = String(facts[k]).toLowerCase();
+        return !(v === 'no' || v === 'false' || v === 'not allowed');
+      }
+    }
+    return null;
+  }
+
   // ── Zillow ───────────────────────────────────────────────────
   function extractZillow(doc, url) {
     const nd = getNextData(doc);
@@ -267,14 +345,25 @@
     for (const t of (prop.tags || [])) addA(t);
     for (const f of [...(rf.communityFeatures || []), ...(rf.interiorFeatures || []), ...(rf.exteriorFeatures || []), ...(rf.poolFeatures || [])]) addA(f);
 
+    // ── attrMap fallback ───────────────────────────────────────
+    // Zillow's resoFacts sometimes omits fields that are only present
+    // in prop.attrMap (a label→value object). Parse it to fill any
+    // bonus fields that came back null from resoFacts.
+    const facts = fromAttrMap(prop);
+
     let parking = null;
     if (rf.parkingFeatures && rf.parkingFeatures.length) parking = rf.parkingFeatures.join(', ');
     else if (prop.parkingType) parking = String(prop.parkingType).replace(/_/g, ' ');
+    parking = parking || (facts.parking ? String(facts.parking) : null);
 
-    const pets = prop.isPetFriendly != null ? prop.isPetFriendly : (rf.petsAllowed != null ? rf.petsAllowed : null);
+    const pets = prop.isPetFriendly != null ? prop.isPetFriendly : (rf.petsAllowed != null ? rf.petsAllowed : factPets(facts, null));
     const petTypes = [];
     if (rf.catsAllowed) petTypes.push('cats');
     if (rf.dogsAllowed) petTypes.push('dogs');
+    if (!petTypes.length) {
+      const pv = (facts['pet types allowed'] || facts['pets']) || (pets ? 'dogs and cats' : '');
+      if (pv) [pv.match(/cat/i) && petTypes.push('cats'), pv.match(/dog/i) && petTypes.push('dogs')];
+    }
 
     let minLease = null;
     const ltRaw = rf.leaseTerm || rf.leaseTerms || rf.minimumLease || null;
@@ -286,26 +375,47 @@
       else if (/\byear\b|12[\s-]*month|annual/.test(lt)) minLease = 12;
     }
 
+    const yrBuilt = factYearBuilt(facts, yr ? parseInt(String(yr), 10) : null);
+    const lotSize = factLotSize(facts, null);
+    const heating = (rf.heating && rf.heating.length ? rf.heating.join(', ') : null)
+                  || (facts.heating ? String(facts.heating) : null);
+    const cooling = (rf.cooling && rf.cooling.length ? rf.cooling.join(', ') : null)
+                  || (facts.cooling ? String(facts.cooling) : null);
+    const laundry = (rf.laundryFeatures && rf.laundryFeatures.length ? rf.laundryFeatures.join(', ') : null)
+                  || (facts.laundry ? String(facts.laundry) : null);
+    const appliances = (rf.appliances && rf.appliances.length ? rf.appliances : factList(facts, [], ['appliances']));
+    const smoking = rf.smokingAllowed != null ? !!rf.smokingAllowed : factBool(facts, null, ['smoking']);
+
+    // Expand amenities from attrMap facts when resoFacts had none
+    if (!amenityMap.size || Object.keys(amenityMap).length < 4) {
+      const extra = factList(facts, [], ['amenities', 'features', 'interior features', 'exterior features']);
+      for (const a of extra) addA(a);
+    }
+
+    const secDeposit = safeI(rf.securityDeposit) || safeI(facts['security deposit']) || null;
+
     return basePayload('zillow', zpid, canonicalZillowUrl(url, zpid), {
       title: buildTitle(beds, propType, city, street),
       address: street, city, state, zip, lat, lng,
       monthly_rent: parseRent(prop.price || prop.unformattedPrice, prop.rentZestimate),
       bedrooms: beds, bathrooms: bathF, half_bathrooms: bathH,
       square_footage: sqft ? parseInt(String(sqft), 10) : null,
-      year_built: yr ? parseInt(String(yr), 10) : null,
+      year_built: yrBuilt,
+      lot_size_sqft: lotSize,
       floors: safeI(prop.stories || rf.stories),
       garage_spaces: safeI(prop.garageParkingCapacity || prop.garageSpaces),
       total_units: safeI(prop.unitCount),
       property_type: propType,
       description: prop.description || null,
-      neighborhood: hood, county,
+      neighborhood: hood || (facts['neighborhood'] ? String(facts['neighborhood']) : null),
+      county: county || (facts['county'] ? String(facts['county']) : null),
       location_context: ctxParts.length ? ctxParts.join('; ') : null,
-      pets_allowed: pets,
+      pets_allowed: pets != null ? !!pets : null,
       pet_types_allowed: JSON.stringify(petTypes),
-      available_date: parseDate(rf.dateAvailable || rf.availableFrom || prop.dateAvailable),
+      available_date: parseDate(rf.dateAvailable || rf.availableFrom || prop.dateAvailable || facts['available']),
       minimum_lease_months: minLease,
-      smoking_allowed: rf.smokingAllowed != null ? !!rf.smokingAllowed : null,
-      security_deposit: safeI(rf.securityDeposit),
+      smoking_allowed: smoking,
+      security_deposit: secDeposit,
       pet_deposit: safeI(rf.petFee || rf.petDepositFee),
       admin_fee: safeI(rf.adminFee),
       parking_fee: safeI(rf.parkingFee),
@@ -315,11 +425,11 @@
       move_in_special: rf.concessions ? String(rf.concessions).slice(0, 200) : null,
       parking,
       amenities: JSON.stringify(Object.keys(amenityMap)),
-      appliances: JSON.stringify(rf.appliances || []),
+      appliances: JSON.stringify(appliances),
       utilities_included: JSON.stringify(rf.utilities || rf.utilitiesIncluded || []),
-      heating_type: rf.heating && rf.heating.length ? rf.heating.join(', ') : null,
-      cooling_type: rf.cooling && rf.cooling.length ? rf.cooling.join(', ') : null,
-      laundry_type: rf.laundryFeatures && rf.laundryFeatures.length ? rf.laundryFeatures.join(', ') : null,
+      heating_type: heating,
+      cooling_type: cooling,
+      laundry_type: laundry,
       virtual_tour_url: vtour,
       has_basement: !!(rf.basement && rf.basement !== 'None' && rf.basement !== 'false' && rf.basement !== false),
       has_central_air: !!(rf.hasCooling || (rf.cooling && rf.cooling.some(c => c.toLowerCase().includes('central')))),
