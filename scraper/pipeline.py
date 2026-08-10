@@ -265,6 +265,7 @@ class BatchCriteria:
     fallback_locations: List[str] = field(default_factory=list)
     pricing_fn: Optional[Callable] = None        # fn(original_rent, seen_rents) -> (published, orig)
     batch_name: str = "batch"                    # used in logs
+    folder_name: Optional[str] = None            # optional folder to assign all published properties to
 
 
 # ---------------------------------------------------------------------------
@@ -532,6 +533,29 @@ class PipelineOrchestrator:
         self._log("\n── Steps 8–12: Stage → Publish → Activate → Photos ──")
         to_publish = self._step9_stage(to_publish)
         self._step10_patch_pipeline(to_publish)
+
+        # Assign all staged records to the specified folder (if any)
+        if criteria.folder_name and self._pipe_session:
+            self._log("\n   Assigning to folder: {}".format(criteria.folder_name))
+            for rec in to_publish:
+                pid = rec.get("id")
+                if not pid:
+                    continue
+                try:
+                    r = self._pipe_session.post(
+                        "{}/rest/v1/rpc/pipeline_folder_add_property".format(SUPABASE_URL),
+                        json={"p_property_id": pid, "p_folder_name": criteria.folder_name},
+                        timeout=15,
+                    )
+                    if r.ok:
+                        data = r.json()
+                        if isinstance(data, list):
+                            data = data[0] if data else {}
+                        if data.get("ok"):
+                            self._log("   -> {} assigned as #{}".format(
+                                rec.get("address", ""), data.get("serial", "?")))
+                except Exception as e:
+                    self._log("   WARNING: folder assignment failed: {}".format(str(e)[:80]))
 
         for rec in to_publish:
             addr = "{}, {} {}".format(
