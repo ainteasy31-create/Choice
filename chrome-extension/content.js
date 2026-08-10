@@ -77,8 +77,36 @@
           var extractor = window.CP_Extractors && window.CP_Extractors.detect(location.href);
           if (!extractor) { setError('Unsupported page'); return; }
 
-          var payload = window.CP_Extractors.extract(location.href, document);
-          if (!payload) { setError('Could not read listing'); return; }
+          var extracted = window.CP_Extractors.extract(location.href, document);
+          if (!extracted) { setError('Could not read listing'); return; }
+
+          // Map extractor output to Edge Function expected payload format
+          // (handles both live extractor field names and bundled extractor field names)
+          var payload = {
+            source: extracted.source,
+            source_listing_id: extracted.source_listing_id,
+            source_url: extracted.source_url || extracted.url || location.href,
+            title: extracted.title,
+            address: extracted.address,
+            city: extracted.city,
+            state: extracted.state,
+            zip: extracted.zip,
+            lat: extracted.lat,
+            lng: extracted.lng,
+            monthly_rent: extracted.monthly_rent != null ? extracted.monthly_rent : extracted.rent,
+            bedrooms: extracted.bedrooms != null ? extracted.bedrooms : extracted.beds,
+            bathrooms: extracted.bathrooms != null ? extracted.bathrooms : extracted.baths,
+            half_bathrooms: extracted.half_bathrooms,
+            square_footage: extracted.square_footage != null ? extracted.square_footage : extracted.sqft,
+            lot_size_sqft: extracted.lot_size_sqft != null ? extracted.lot_size_sqft : extracted.lot_sqft,
+            year_built: extracted.year_built,
+            property_type: extracted.property_type,
+            description: extracted.description,
+            available_date: extracted.available_date,
+            pets_allowed: extracted.pets_allowed,
+            original_image_urls: extracted.original_image_urls || JSON.stringify(extracted.photo_urls || []),
+            _import: 'browser-extension-v2.3.0',
+          };
 
           var url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
           var direct = await fetch(url, {
