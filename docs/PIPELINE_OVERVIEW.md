@@ -188,3 +188,33 @@ supabase functions deploy import-from-url
 | `chrome-extension/` | Chrome extension source |
 | `.pages-orion/` | Orion extension live-loader source |
 | `js/admin/pipeline.js` | Admin pipeline UI logic |
+
+---
+
+## Pipeline Folders
+
+Properties can be organized into **named folders** for easy management. Each property in a folder gets an **auto-assigned serial number** (#1, #2, #3...) based on arrival order. This lets you and AI assistants reference properties by their folder + number (e.g., "Wisdom #3").
+
+### How It Works
+- Folders are **optional** — properties exist without one by default
+- Each property can only be in one folder at a time
+- Serial numbers are per-folder, assigned automatically when a property is added
+- Deleting a folder archives all its unpublished properties (safe, not destructive)
+
+### Folder Sources
+Folders can be assigned at intake time from **any channel**:
+
+| Channel | How to specify folder |
+|---------|---------------------|
+| **Python Bulk Scraper** | `BatchCriteria(folder_name="Wisdom")` |
+| **Chrome/Orion Extension** | `body.folder_name` in the extension payload |
+| **Admin Import URL** | `?folder=Wisdom` query param |
+
+### AI Commands
+Natural-language commands that any AI can use. Full reference: `docs/AI_COMMANDS.md`
+- "Create folder Wisdom"
+- "Add property PP-ABC123 to folder Wisdom"
+- "Publish property 3 in folder Wisdom"
+- "Publish all in folder Wisdom"
+- "How many properties in folder Wisdom?"
+- "Delete folder Wisdom"
