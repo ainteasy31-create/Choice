@@ -61,7 +61,7 @@ This archive is built with standard forward-slash paths for iPhone/Orion. It con
 
 You can also download the packaged ZIP directly from the GitHub release:
 
-- **https://github.com/choice121/Choice/releases/tag/v2.2.1-orion**
+- **https://github.com/choice121/Choice/releases/tag/v2.3.0-orion**
 
 ---
 
