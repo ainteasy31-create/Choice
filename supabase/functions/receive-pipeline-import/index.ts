@@ -1,17 +1,23 @@
 // ============================================================
 // Choice Properties — receive-pipeline-import Edge Function
-// v2.2 — August 2026
+// v3.0 — August 2026
 //
 // Accepts a parsed listing payload from the Chrome/Orion extension.
 // Authenticates via a shared secret (x-import-secret header or ?secret= query)
 // — no user login required.
+//
+// v3.0: AUTO-DOWNLOADS AND UPLOADS ALL IMAGES TO IMAGEKIT AT IMPORT TIME.
+// This ensures pipeline listings show real images immediately (Zillow/Realtor
+// CDNs block hotlinking from other domains, so source URLs appear broken).
+// Images are stored in ImageKit and the ImageKit URLs are saved back to
+// original_image_urls so the admin UI displays them correctly.
 //
 // Uses permissive CORS for secrets-authenticated endpoints — the secret is
 // the real auth, not the Origin, so we echo back any Origin including
 // 'null' (WebKit extension content scripts on Orion/iOS).
 //
 // POST body: full listing fields from extension
-// Returns:   { ok: true, id, title, score, photos }
+// Returns:   { ok: true, id, title, score, photos, imagekit_photos }
 //          | { ok: false, duplicate: true, id, title }
 //          | { error: string }
 // ============================================================
@@ -34,6 +40,12 @@ import {
   BONUS_FIELDS,
   TRACKABLE_MISSING,
 } from '../_shared/pipeline-record.ts';
+
+// ── ImageKit auto-upload config ─────────────────────────────────
+const MAX_PHOTOS_TO_UPLOAD = 30;      // cap to avoid timeout
+const BATCH_SIZE = 3;                 // concurrent uploads
+const FETCH_TIMEOUT = 15_000;         // ms per image fetch
+const IMAGEKIT_UPLOAD_URL = 'https://upload.imagekit.io/api/v1/files/upload';
 
 // ── Handler ────────────────────────────────────────────────────
 Deno.serve(async (req) => {
@@ -95,6 +107,14 @@ Deno.serve(async (req) => {
   // ── Build record using shared builder ────────────────────────
   const record = buildPipelineRecord(body as unknown as Parameters<typeof buildPipelineRecord>[0]);
 
+  // ── Extract source image URLs ────────────────────────────────
+  let sourceImageUrls: string[] = [];
+  try {
+    const raw = record.original_image_urls as string;
+    const parsed = JSON.parse(raw || '[]');
+    sourceImageUrls = Array.isArray(parsed) ? parsed.filter((u: unknown) => typeof u === 'string' && u.startsWith('http')) : [];
+  } catch { /* ignore */ }
+
   // ── Insert ───────────────────────────────────────────────────
   const { error: insertErr } = await adminClient
     .schema('pipeline')
@@ -106,12 +126,130 @@ Deno.serve(async (req) => {
     return permissiveJsonErr(500, 'Database insert failed: ' + insertErr.message, req);
   }
 
-  // Count photos for the success response
-  let photoCount = 0;
-  try {
-    const urls = JSON.parse((record.original_image_urls as string) || '[]');
-    photoCount = Array.isArray(urls) ? urls.length : 0;
-  } catch { /* ignore */ }
+  // ── Auto-upload images to ImageKit (v3.0) ────────────────────
+  // Download each source image, upload to ImageKit, and update the
+  // pipeline record with ImageKit URLs so they display in the admin UI.
+  let imagekitUploaded = 0;
+  let imagekitFailed = 0;
+  const imagekitUrls: string[] = [];
+
+  const IMAGEKIT_PRIVATE_KEY = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
+  if (IMAGEKIT_PRIVATE_KEY && sourceImageUrls.length > 0) {
+    const credentials = btoa(`${IMAGEKIT_PRIVATE_KEY}:`);
+    const folderPath = `/pipeline/${record.id}`;
+
+    async function uploadOne(sourceUrl: string, index: number): Promise<string | null> {
+      try {
+        // Fetch the source image
+        const fetchHeaders: Record<string, string> = {
+          'User-Agent': 'Mozilla/5.0 (compatible; ChoiceProperties/1.0)',
+          'Accept': 'image/*',
+        };
+        if (source === 'zillow') fetchHeaders['Referer'] = 'https://www.zillow.com/';
+        const imgRes = await fetch(sourceUrl, {
+          headers: fetchHeaders,
+          signal: AbortSignal.timeout(FETCH_TIMEOUT),
+        });
+        if (!imgRes.ok) {
+          console.warn(`[receive-pipeline-import] Fetch failed (${imgRes.status}) for photo ${index + 1}: ${sourceUrl.slice(0, 80)}`);
+          return null;
+        }
+
+        const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+        const buffer = await imgRes.arrayBuffer();
+
+        // Determine file extension from content type
+        const extMap: Record<string, string> = {
+          'image/jpeg': 'jpg', 'image/jpg': 'jpg',
+          'image/png': 'png', 'image/webp': 'webp',
+        };
+        const mimeBase = contentType.split(';')[0].trim().toLowerCase();
+        const ext = extMap[mimeBase] || 'jpg';
+        const fileName = `photo_${index + 1}.${ext}`;
+
+        // Upload to ImageKit
+        const formData = new FormData();
+        formData.append('file', new Blob([buffer], { type: mimeBase }), fileName);
+        formData.append('fileName', fileName);
+        formData.append('folder', folderPath);
+
+        const ikRes = await fetch(IMAGEKIT_UPLOAD_URL, {
+          method: 'POST',
+          headers: { Authorization: `Basic ${credentials}` },
+          body: formData,
+        });
+
+        if (!ikRes.ok) {
+          const errText = await ikRes.text().catch(() => `HTTP ${ikRes.status}`);
+          console.warn(`[receive-pipeline-import] ImageKit upload failed (photo ${index + 1}): ${errText.slice(0, 200)}`);
+          return null;
+        }
+
+        const ikData = await ikRes.json();
+        return ikData.url as string;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[receive-pipeline-import] Error uploading photo ${index + 1}: ${msg}`);
+        return null;
+      }
+    }
+
+    // Process in parallel batches
+    const toUpload = sourceImageUrls.slice(0, MAX_PHOTOS_TO_UPLOAD);
+    for (let batchStart = 0; batchStart < toUpload.length; batchStart += BATCH_SIZE) {
+      const batch = toUpload.slice(batchStart, batchStart + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map((u, i) => uploadOne(u, batchStart + i))
+      );
+      for (const r of results) {
+        if (r) { imagekitUploaded++; imagekitUrls.push(r); }
+        else imagekitFailed++;
+      }
+    }
+
+    // Update the pipeline record with ImageKit URLs
+    if (imagekitUrls.length > 0) {
+      const { error: updateErr } = await adminClient
+        .schema('pipeline')
+        .from('pipeline_properties')
+        .update({
+          original_image_urls: JSON.stringify(imagekitUrls),
+          photo_import_status: 'ok',
+          last_photo_import_at: new Date().toISOString(),
+          last_photo_import_error: null,
+        })
+        .eq('id', record.id);
+
+      if (updateErr) {
+        console.warn('[receive-pipeline-import] Failed to update record with ImageKit URLs:', updateErr);
+      }
+
+      // Recalculate quality score with ImageKit URLs
+      record.original_image_urls = JSON.stringify(imagekitUrls);
+      record.data_quality_score = qualityScore(record);
+      record.missing_fields = missingFields(record);
+
+      await adminClient
+        .schema('pipeline')
+        .from('pipeline_properties')
+        .update({
+          data_quality_score: record.data_quality_score,
+          missing_fields: record.missing_fields,
+        })
+        .eq('id', record.id);
+    } else if (imagekitFailed > 0) {
+      // All uploads failed — mark for retry
+      await adminClient
+        .schema('pipeline')
+        .from('pipeline_properties')
+        .update({
+          photo_import_status: 'failed',
+          last_photo_import_error: `All ${imagekitFailed} source photo(s) failed to upload to ImageKit`,
+          last_photo_import_at: new Date().toISOString(),
+        })
+        .eq('id', record.id);
+    }
+  }
 
   // ── Optional folder assignment ─────────────────────────────────
   let folderInfo: Record<string, unknown> | null = null;
@@ -135,7 +273,9 @@ Deno.serve(async (req) => {
     id:     record.id,
     title:  String(record.title),
     score:  record.data_quality_score,
-    photos: photoCount,
+    photos: sourceImageUrls.length,
+    imagekit_photos: imagekitUploaded,
+    imagekit_failed: imagekitFailed,
     city:   safeStr(body.city),
     rent:   safeInt(body.monthly_rent),
     folder: folderInfo,

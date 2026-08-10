@@ -120,7 +120,8 @@
 
       if (resp && resp.ok) {
         var photos = resp.photos || 0;
-        btn.textContent = 'Saved! ' + photos + ' photos';
+        var ikPhotos = resp.imagekit_photos || 0;
+        btn.textContent = ikPhotos > 0 ? 'Saved! ' + ikPhotos + ' photos ✓' : 'Saved! ' + photos + ' source photos';
         btn.style.background = '#16a34a';
         setTimeout(function () { btn.remove(); }, 3000);
       } else if (resp && resp.duplicate) {
