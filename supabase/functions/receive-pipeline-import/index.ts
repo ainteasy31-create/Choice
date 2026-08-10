@@ -127,14 +127,21 @@ Deno.serve(async (req) => {
   }
 
   // ── Auto-upload images to ImageKit (v3.0) ────────────────────
-  // Download each source image, upload to ImageKit, and update the
-  // pipeline record with ImageKit URLs so they display in the admin UI.
+  // If the browser already uploaded images to ImageKit (v3.0 extension),
+  // skip server-side download. Otherwise download + upload here.
   let imagekitUploaded = 0;
   let imagekitFailed = 0;
   const imagekitUrls: string[] = [];
 
+  // Check if URLs are already ImageKit URLs (browser-side upload path)
+  const alreadyImageKit = sourceImageUrls.length > 0 && sourceImageUrls[0].includes('ik.imagekit.io');
   const IMAGEKIT_PRIVATE_KEY = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
-  if (IMAGEKIT_PRIVATE_KEY && sourceImageUrls.length > 0) {
+
+  if (alreadyImageKit) {
+    // Browser already uploaded — just use these URLs directly
+    imagekitUrls.push(...sourceImageUrls);
+    imagekitUploaded = sourceImageUrls.length;
+  } else if (IMAGEKIT_PRIVATE_KEY && sourceImageUrls.length > 0) {
     const credentials = btoa(`${IMAGEKIT_PRIVATE_KEY}:`);
     const folderPath = `/pipeline/${record.id}`;
 
