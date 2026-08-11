@@ -215,7 +215,13 @@
             })
           });
           var ikData = await ikRes.json();
-          return (ikData && ikData.url) ? ikData.url : null;
+          if (!ikData || !ikData.url) return null;
+          return {
+            url: ikData.url,
+            fileId: ikData.fileId || null,
+            width: ikData.width || null,
+            height: ikData.height || null,
+          };
         } catch (e) {
           return null;
         }

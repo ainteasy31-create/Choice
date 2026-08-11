@@ -41,8 +41,44 @@ import {
   TRACKABLE_MISSING,
 } from '../_shared/pipeline-record.ts';
 
+type ImageEntry = string | {
+  url: string;
+  fileId?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+
+function parseImageEntries(raw: unknown): ImageEntry[] {
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (entry && typeof entry === 'object' && typeof (entry as any).url === 'string') {
+        return {
+          url: (entry as any).url,
+          fileId: (entry as any).fileId ?? null,
+          width: typeof (entry as any).width === 'number' ? (entry as any).width : null,
+          height: typeof (entry as any).height === 'number' ? (entry as any).height : null,
+        };
+      }
+      return null;
+    }).filter((entry): entry is ImageEntry => entry !== null);
+  } catch {
+    return [];
+  }
+}
+
+function imageEntryUrl(entry: ImageEntry): string {
+  return typeof entry === 'string' ? entry : entry.url;
+}
+
+function imageEntryFileId(entry: ImageEntry): string | null {
+  return typeof entry === 'string' ? null : entry.fileId ?? null;
+}
+
 // ── ImageKit auto-upload config ─────────────────────────────────
-const MAX_PHOTOS_TO_UPLOAD = 30;      // cap to avoid timeout
+const MAX_PHOTOS_TO_UPLOAD = 40;      // cap to match property_photos max gallery size
 const BATCH_SIZE = 3;                 // concurrent uploads
 const FETCH_TIMEOUT = 15_000;         // ms per image fetch
 const IMAGEKIT_UPLOAD_URL = 'https://upload.imagekit.io/api/v1/files/upload';
@@ -107,13 +143,11 @@ Deno.serve(async (req) => {
   // ── Build record using shared builder ────────────────────────
   const record = buildPipelineRecord(body as unknown as Parameters<typeof buildPipelineRecord>[0]);
 
-  // ── Extract source image URLs ────────────────────────────────
-  let sourceImageUrls: string[] = [];
-  try {
-    const raw = record.original_image_urls as string;
-    const parsed = JSON.parse(raw || '[]');
-    sourceImageUrls = Array.isArray(parsed) ? parsed.filter((u: unknown) => typeof u === 'string' && u.startsWith('http')) : [];
-  } catch { /* ignore */ }
+  // ── Extract source image entries and URLs ──────────────────────
+  const sourceImageEntries = parseImageEntries(record.original_image_urls);
+  const sourceImageUrls = sourceImageEntries
+    .map(imageEntryUrl)
+    .filter((u) => typeof u === 'string' && u.startsWith('http'));
 
   // ── Insert ───────────────────────────────────────────────────
   const { error: insertErr } = await adminClient
@@ -131,22 +165,30 @@ Deno.serve(async (req) => {
   // skip server-side download. Otherwise download + upload here.
   let imagekitUploaded = 0;
   let imagekitFailed = 0;
-  const imagekitUrls: string[] = [];
+  const imagekitUrls: ImageEntry[] = [];
 
   // Check if URLs are already ImageKit URLs (browser-side upload path)
-  const alreadyImageKit = sourceImageUrls.length > 0 && sourceImageUrls[0].includes('ik.imagekit.io');
+  const alreadyImageKit = sourceImageUrls.length > 0 && sourceImageUrls.every((u) => u.includes('ik.imagekit.io'));
   const IMAGEKIT_PRIVATE_KEY = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
 
   if (alreadyImageKit) {
-    // Browser already uploaded — just use these URLs directly
-    imagekitUrls.push(...sourceImageUrls);
-    imagekitUploaded = sourceImageUrls.length;
+    // Browser already uploaded — preserve the original entries and metadata.
+    imagekitUrls.push(...sourceImageEntries);
+    imagekitUploaded = sourceImageEntries.length;
   } else if (IMAGEKIT_PRIVATE_KEY && sourceImageUrls.length > 0) {
+    const alreadyIkEntries = sourceImageEntries.filter((entry) => imageEntryUrl(entry).includes('ik.imagekit.io'));
+    imagekitUrls.push(...alreadyIkEntries);
+    imagekitUploaded = alreadyIkEntries.length;
+
+    const toUpload = sourceImageEntries
+      .filter((entry) => !imageEntryUrl(entry).includes('ik.imagekit.io'))
+      .slice(0, MAX_PHOTOS_TO_UPLOAD);
     const credentials = btoa(`${IMAGEKIT_PRIVATE_KEY}:`);
     const folderPath = `/pipeline/${record.id}`;
 
-    async function uploadOne(sourceUrl: string, index: number): Promise<string | null> {
+    async function uploadOne(sourceEntry: ImageEntry, index: number): Promise<ImageEntry | null> {
       try {
+        const sourceUrl = imageEntryUrl(sourceEntry);
         // Fetch the source image with browser-like headers to bypass CDN blocks
         const fetchHeaders: Record<string, string> = {
           'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
@@ -201,7 +243,12 @@ Deno.serve(async (req) => {
         }
 
         const ikData = await ikRes.json();
-        return ikData.url as string;
+        return {
+          url: ikData.url as string,
+          fileId: (ikData.fileId ?? null) as string | null,
+          width: typeof ikData.width === 'number' ? ikData.width : null,
+          height: typeof ikData.height === 'number' ? ikData.height : null,
+        };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`[receive-pipeline-import] Error uploading photo ${index + 1}: ${msg}`);
@@ -210,11 +257,10 @@ Deno.serve(async (req) => {
     }
 
     // Process in parallel batches
-    const toUpload = sourceImageUrls.slice(0, MAX_PHOTOS_TO_UPLOAD);
     for (let batchStart = 0; batchStart < toUpload.length; batchStart += BATCH_SIZE) {
       const batch = toUpload.slice(batchStart, batchStart + BATCH_SIZE);
       const results = await Promise.all(
-        batch.map((u, i) => uploadOne(u, batchStart + i))
+        batch.map((entry, i) => uploadOne(entry, batchStart + i))
       );
       for (const r of results) {
         if (r) { imagekitUploaded++; imagekitUrls.push(r); }
