@@ -202,41 +202,12 @@
         console.warn('[CP] ImageKit upload failed:', ikData);
         return null;
       }
-      return ikData.url;
-    } catch (e) {
-      console.warn('[CP] Photo upload error:', e.message);
-      return null;
-    }
-  }
-
-  function blobToBase64(blob) {
-    return new Promise(function(resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function() { resolve(reader.result); };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  async function handleSave() {
-    var btn = document.getElementById('cp-save-btn');
-    if (!btn) return;
-    btn.textContent = 'Saving…';
-    btn.style.background = '#818cf8';
-    btn.disabled = true;
-
-    try {
-      // Use the shared extractor registry
-      var extractor = window.CP_Extractors && window.CP_Extractors.detect(location.href);
-      if (!extractor) { setError('Unsupported page'); return; }
-
-      var extracted = window.CP_Extractors.extract(location.href, document);
-      if (!extracted) { setError('Could not read listing'); return; }
-
-      // ── Extract photo URLs ──────────────────────────────────
-      var photoUrls = [];
-      try {
-        var raw = extracted.original_image_urls || '[]';
+          return {
+            url: ikData.url,
+            fileId: ikData.fileId || null,
+            width: ikData.width || null,
+            height: ikData.height || null,
+          };
         var parsed = JSON.parse(raw);
         photoUrls = Array.isArray(parsed) ? parsed.filter(function(u) { return u && u.startsWith('http'); }) : [];
       } catch (e) {
@@ -251,11 +222,11 @@
         photoResult = await downloadAndUploadPhotos(photoUrls, 30);
       }
 
-      // ── Build payload with ImageKit URLs ────────────────────
-      // If some photos uploaded to ImageKit, use those URLs.
-      // If none uploaded, send source URLs — the server will try
-      // to download them (and the pipeline will show a retry button).
-      var finalUrls = photoResult.uploaded.length > 0 ? photoResult.uploaded : photoUrls;
+      // ── Build payload with ImageKit image objects ─────────────
+      // Preserve fileId and size metadata if upload succeeded.
+      var finalUrls = photoResult.uploaded.length > 0
+        ? photoResult.uploaded
+        : photoUrls.map(function(url) { return { url: url }; });
       var payload = {
         source: extracted.source,
         source_listing_id: extracted.source_listing_id,

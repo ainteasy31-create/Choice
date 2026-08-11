@@ -18,7 +18,43 @@ import { corsResponse } from '../_shared/cors.ts';
 import { requireAuth } from '../_shared/auth.ts';
 import { jsonResponse } from '../_shared/utils.ts';
 
-const MAX_PHOTOS     = 20;
+type ImageEntry = string | {
+  url: string;
+  fileId?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+
+function parseImageEntries(raw: unknown): ImageEntry[] {
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (entry && typeof entry === 'object' && typeof (entry as any).url === 'string') {
+        return {
+          url: (entry as any).url,
+          fileId: (entry as any).fileId ?? null,
+          width: typeof (entry as any).width === 'number' ? (entry as any).width : null,
+          height: typeof (entry as any).height === 'number' ? (entry as any).height : null,
+        };
+      }
+      return null;
+    }).filter((entry): entry is ImageEntry => entry !== null);
+  } catch {
+    return [];
+  }
+}
+
+function imageEntryUrl(entry: ImageEntry): string {
+  return typeof entry === 'string' ? entry : entry.url;
+}
+
+function imageEntryFileId(entry: ImageEntry): string | null {
+  return typeof entry === 'string' ? null : entry.fileId ?? null;
+}
+
+const MAX_PHOTOS     = 40;
 const BATCH_SIZE     = 5;   // process this many photos concurrently
 const FETCH_TIMEOUT  = 12_000; // ms per image fetch
 
@@ -90,11 +126,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: true, transferred: 0, skipped: 0, no_source: true }, 200, {}, req);
   }
 
-  const urls: string[] = (() => {
+  const urls = (() => {
     try {
-      const raw = pipeline.original_image_urls;
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      return Array.isArray(parsed) ? parsed : [];
+      return parseImageEntries(pipeline.original_image_urls);
     } catch { return []; }
   })();
 
@@ -102,28 +136,48 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: true, transferred: 0, skipped: 0 }, 200, {}, req);
   }
 
-  // Dedup guard: refuse to re-import if photos already exist.
-  const { count: existingCount } = await adminClient
+  // Dedup guard: if some photos already exist, resume the import instead
+  // of failing entirely. This allows retries after partial imports.
+  const { data: existingPhotos } = await adminClient
     .from('property_photos')
-    .select('id', { count: 'exact', head: true })
+    .select('url,file_id')
     .eq('property_id', property_id);
 
-  if (existingCount && existingCount > 0) {
+  const existingSet = new Set<string>();
+  if (Array.isArray(existingPhotos)) {
+    existingPhotos.forEach((row: { url?: string | null; file_id?: string | null }) => {
+      if (row.file_id) existingSet.add(row.file_id);
+      if (row.url) existingSet.add(row.url);
+    });
+  }
+
+  const remainingSlots = Math.max(0, MAX_PHOTOS - (Array.isArray(existingPhotos) ? existingPhotos.length : 0));
+  const toProcess = urls
+    .filter((entry) => {
+      const url = imageEntryUrl(entry);
+      const fileId = imageEntryFileId(entry);
+      return url && !existingSet.has(url) && (!fileId || !existingSet.has(fileId));
+    })
+    .slice(0, remainingSlots);
+
+  if (toProcess.length === 0) {
     return jsonResponse({
       success: false,
       already_imported: true,
-      existing: existingCount,
-      error: `Property already has ${existingCount} photo(s). Delete them first to re-import.`,
+      existing: existingPhotos?.length ?? 0,
+      error: `Property already has ${existingPhotos?.length ?? 0} photo(s). Nothing new to import.`,
     }, 409, {}, req);
   }
 
-  const toProcess = urls.slice(0, MAX_PHOTOS);
+  let nextDisplayOrder = Array.isArray(existingPhotos) ? existingPhotos.length : 0;
   const credentials = btoa(`${IMAGEKIT_PRIVATE_KEY}:`);
 
   // Per-photo transfer: fetch from CDN → upload to ImageKit → save to DB.
   // Returns true on success, false on any failure.
-  async function transferPhoto(url: string, index: number): Promise<boolean> {
+  async function transferPhoto(entry: ImageEntry, index: number): Promise<boolean> {
     try {
+      const url = imageEntryUrl(entry);
+      const fileId = imageEntryFileId(entry);
       // Orion/Chrome can upload source photos to ImageKit before the listing
       // reaches the pipeline. Those URLs are already durable and must not be
       // fetched again from the browser/CDN path (which is commonly blocked by
@@ -132,13 +186,13 @@ Deno.serve(async (req) => {
         const { error: rpcErr } = await adminClient.rpc('add_property_photo', {
           p_property_id:   property_id,
           p_url:           url,
-          p_file_id:       null,
+          p_file_id:       fileId,
           p_alt_text:      null,
           p_caption:       null,
-          p_width:         null,
-          p_height:        null,
-          p_display_order: index,
-          p_is_hero:       index === 0,
+          p_width:         typeof entry !== 'string' ? entry.width ?? null : null,
+          p_height:        typeof entry !== 'string' ? entry.height ?? null : null,
+          p_display_order: nextDisplayOrder + index,
+          p_is_hero:       nextDisplayOrder + index === 0,
         });
         if (rpcErr) {
           console.error(`[import-pipeline-photos] add_property_photo failed for existing ImageKit URL (photo ${index + 1}):`, rpcErr);
@@ -224,8 +278,8 @@ Deno.serve(async (req) => {
         p_caption:       null,
         p_width:         ikData.width  ?? null,
         p_height:        ikData.height ?? null,
-        p_display_order: index,
-        p_is_hero:       index === 0,
+        p_display_order: nextDisplayOrder + index,
+        p_is_hero:       nextDisplayOrder + index === 0,
       });
 
       if (rpcErr) {
@@ -248,7 +302,7 @@ Deno.serve(async (req) => {
   for (let batchStart = 0; batchStart < toProcess.length; batchStart += BATCH_SIZE) {
     const batch = toProcess.slice(batchStart, batchStart + BATCH_SIZE);
     const results = await Promise.all(
-      batch.map((url, i) => transferPhoto(url, batchStart + i))
+      batch.map((entry, i) => transferPhoto(entry, batchStart + i))
     );
     for (const ok of results) {
       if (ok) transferred++; else skipped++;

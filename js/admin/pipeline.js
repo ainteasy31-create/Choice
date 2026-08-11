@@ -118,19 +118,32 @@
     const map = { scraped:'', edited:'info', published:'success', archived:'' };
     return S.statusPill ? S.statusPill(status) : `<span class="pill ${map[status]||''}">${status}</span>`;
   }
+  function imageUrls(raw){
+    const imgs = parseJSON(raw) || [];
+    if (!Array.isArray(imgs)) return [];
+    return imgs.map(function(item){
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object' && typeof item.url === 'string') return item.url;
+      return null;
+    }).filter(Boolean);
+  }
   function thumbUrl(l){
-    const imgs = parseJSON(l.original_image_urls);
+    const imgs = imageUrls(l.original_image_urls);
     return (imgs && imgs.length) ? imgs[0] : null;
   }
   function photoUrls(l){
-    return parseJSON(l.original_image_urls) || [];
+    return imageUrls(l.original_image_urls);
   }
   // Convert a stored JSON array to a user-editable comma-separated string
   function jArrToText(v){
     if(!v || v === '[]') return '';
     const arr = parseJSON(v);
     if(!arr || !arr.length) return typeof v === 'string' && !v.startsWith('[') ? v : '';
-    return arr.join(', ');
+    return arr.map(function(item){
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object' && typeof item.url === 'string') return item.url;
+      return '';
+    }).filter(Boolean).join(', ');
   }
   // Convert a comma-separated text string back to a JSON array string for storage
   function textToJArr(s){
