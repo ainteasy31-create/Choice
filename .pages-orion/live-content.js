@@ -202,12 +202,53 @@
         console.warn('[CP] ImageKit upload failed:', ikData);
         return null;
       }
-          return {
-            url: ikData.url,
-            fileId: ikData.fileId || null,
-            width: ikData.width || null,
-            height: ikData.height || null,
-          };
+      return {
+        url: ikData.url,
+        fileId: ikData.fileId || null,
+        width: ikData.width || null,
+        height: ikData.height || null,
+      };
+    } catch (e) {
+      console.error('[CP] Photo upload error:', e.message);
+      return null;
+    }
+  }
+
+  async function downloadAndUploadPhotos(photoUrls, maxPhotos) {
+    var uploaded = [];
+    var failed = 0;
+    var limit = Math.min(photoUrls.length, maxPhotos || 30);
+    for (var i = 0; i < limit; i += 3) {
+      var batch = photoUrls.slice(i, i + 3);
+      var results = await Promise.all(batch.map(function(url) {
+        return uploadOnePhoto(url, i + batch.indexOf(url));
+      }));
+      for (var j = 0; j < results.length; j++) {
+        if (results[j]) uploaded.push(results[j]);
+        else failed++;
+      }
+    }
+    return { uploaded: uploaded, failed: failed };
+  }
+
+  async function handleSave() {
+    var btn = document.getElementById('cp-save-btn');
+    if (!btn) return;
+    btn.textContent = 'Saving…';
+    btn.style.background = '#818cf8';
+    btn.disabled = true;
+
+    try {
+      var extractor = window.CP_Extractors && window.CP_Extractors.detect(location.href);
+      if (!extractor) { setError('Unsupported page'); return; }
+
+      var extracted = window.CP_Extractors.extract(location.href, document);
+      if (!extracted) { setError('Could not read listing'); return; }
+
+      // ── Extract photo URLs ──────────────────────────────────
+      var photoUrls = [];
+      try {
+        var raw = extracted.original_image_urls || '[]';
         var parsed = JSON.parse(raw);
         photoUrls = Array.isArray(parsed) ? parsed.filter(function(u) { return u && u.startsWith('http'); }) : [];
       } catch (e) {
