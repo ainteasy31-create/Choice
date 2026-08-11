@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
   if (!roleRow) return jsonErr(403, 'Admin access required', req);
 
   // ── Parse body ───────────────────────────────────────────────────────────────
-  let body: { url?: string; dry_run?: boolean };
+  let body: { url?: string; dry_run?: boolean; folder_name?: string; folder_id?: string; folder?: string };
   try { body = await req.json(); } catch { return jsonErr(400, 'Invalid JSON body', req); }
 
   const rawUrl = (body.url || '').trim();
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
   if (!rawUrl.includes('zillow.com')) return jsonErr(400, 'Only Zillow URLs are supported', req);
   const dryRun = !!body.dry_run;
 
-  return await handleImport(rawUrl, dryRun, adminClient, user?.id || null, req);
+  return await handleImport(rawUrl, dryRun, adminClient, user?.id || null, req, body);
 });
 
 // ── Shared import handler ─────────────────────────────────────────────────────
@@ -129,6 +129,7 @@ async function handleImport(
   adminClient: Awaited<ReturnType<typeof createClient>>,
   userId: string | null,
   req: Request,
+  body: { url?: string; dry_run?: boolean; folder_name?: string; folder_id?: string; folder?: string } | null,
 ): Promise<Response> {
 
   // ── Fetch Zillow page ────────────────────────────────────────────────────────
@@ -196,7 +197,8 @@ async function handleImport(
   });
 
   let folderInfo: Record<string, unknown> | null = null;
-  const folderName = safeStr((req.url ? new URL(req.url).searchParams.get('folder') : null));
+  const folderName = safeStr((body?.folder_name || body?.folder || (req.url ? new URL(req.url).searchParams.get('folder') : null)) ?? null);
+  const folderId   = safeStr(body?.folder_id || null);
   
   const record = buildPipelineRecord({
     source: 'zillow',
@@ -406,14 +408,18 @@ async function handleImport(
   }
 
   // ── Optional folder assignment ─────────────────────────────────
-  if (folderName) {
+  if (folderName || folderId) {
     try {
       const { data: folderData, error: folderErr } = await adminClient.rpc('pipeline_folder_add_property', {
         p_property_id: record.id,
-        p_folder_name: folderName,
+        p_folder_name: folderName || null,
+        p_folder_id: folderId || null,
       });
       if (!folderErr && folderData?.ok) {
-        folderInfo = { folder: folderName, serial: folderData.serial };
+        folderInfo = {
+          folder: folderName || folderId || null,
+          serial: folderData.serial,
+        };
       }
     } catch (e) {
       console.warn('[import-from-url] Folder assignment failed:', e);

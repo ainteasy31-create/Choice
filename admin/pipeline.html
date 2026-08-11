@@ -307,8 +307,42 @@
   }
   .pl-folder-actions{
     display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+    flex-wrap:wrap;
   }
-  .pl-folder-actions .btn{flex:1}
+  .pl-folder-actions .btn{flex:1;min-width:0}
+
+  .pl-folder-banner{
+    display:none;
+    gap:12px;
+    align-items:center;
+    justify-content:space-between;
+    background:rgba(99,102,241,.08);
+    border:1px solid rgba(99,102,241,.2);
+    border-radius:var(--r-md,12px);
+    padding:12px 14px;
+    margin-bottom:var(--sp-3);
+  }
+  .pl-folder-banner.visible{display:flex;}
+  .pl-folder-banner-title{font-size:.86rem;font-weight:700;color:var(--brand)}
+  .pl-folder-banner-meta{font-size:.78rem;color:var(--muted-2);line-height:1.4}
+  .pl-folder-banner-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pl-folder-banner-actions .btn{padding:8px 12px;font-size:.78rem}
+
+  .pl-folder-list-wrap{overflow-x:auto;padding-bottom:4px;}
+  #pl-folders{display:flex;flex-wrap:wrap;gap:6px;}
+  .pl-folder-item{flex:0 0 auto;min-width:120px;max-width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:7px 10px;border-radius:var(--r-sm,6px);cursor:pointer;font-size:.78rem;color:var(--text);background:var(--surface);border:1px solid var(--border);transition:background .15s,border-color .15s;}
+  .pl-folder-item:hover{background:var(--surface-2)}
+  .pl-folder-item.active{background:rgba(99,102,241,.16);border-color:rgba(99,102,241,.4);color:var(--brand)}
+  .pl-folder-item .pl-folder-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .pl-folder-item .pl-folder-count{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.14);color:var(--muted-2);flex-shrink:0;}
+  .pl-folder-item.active .pl-folder-count{background:rgba(99,102,241,.24);color:var(--brand)}
+
+  @media(max-width:900px){
+    .pl-folder-list-wrap{overflow-x:auto;}
+    #pl-folders{flex-wrap:nowrap;}
+    .pl-folder-item{min-width:160px;}
+  }
 </style>
 </head>
 <body data-page-title="Pipeline" data-page-sub="Scraped listings for review">
@@ -344,12 +378,15 @@
         <span>Folders</span>
         <button class="btn btn-sm btn-ghost" id="pl-add-to-folder-btn" title="Add selected listings to a folder" style="font-size:.7rem;padding:3px 8px">+ Add to folder</button>
       </div>
-      <div id="pl-folders"></div>
+      <div class="pl-folder-list-wrap"><div id="pl-folders"></div></div>
       <div class="pl-folder-actions" id="pl-folder-actions" style="display:none">
         <button class="btn btn-sm btn-primary" id="pl-publish-folder-btn" style="font-size:.7rem;padding:3px 8px">Publish all</button>
-        <button class="btn btn-sm btn-ghost" id="pl-delete-folder-btn" style="font-size:.7rem;padding:3px 8px;color:var(--danger)">Delete</button>
+        <button class="btn btn-sm btn-ghost" id="pl-rename-folder-btn" style="font-size:.7rem;padding:3px 8px">Rename</button>
+        <button class="btn btn-sm btn-ghost" id="pl-close-folder-btn" style="font-size:.7rem;padding:3px 8px">Close folder</button>
+        <button class="btn btn-sm btn-ghost" id="pl-delete-folder-btn" style="font-size:.7rem;padding:3px 8px;color:var(--danger)">Archive folder</button>
       </div>
     </div>
+    <div class="pl-folder-banner" id="pl-folder-banner"></div>
 
     <!-- Toolbar -->
     <div class="pl-toolbar">
