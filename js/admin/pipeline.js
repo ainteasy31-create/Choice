@@ -766,6 +766,9 @@
     const existing = document.getElementById('pl-import-modal');
     if(existing) existing.remove();
 
+    const folder = _activeFolder ? _folders.find(f => f.id === _activeFolder) : null;
+    const folderNotice = folder ? `<div style="margin-bottom:14px;padding:12px 14px;border-radius:12px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.18);font-size:.82rem;color:var(--muted-2)">This listing will be imported into the active folder: <strong>${S.esc(folder.name)}</strong>.</div>` : '';
+
     const modal = document.createElement('div');
     modal.id = 'pl-import-modal';
     modal.innerHTML = `
@@ -780,10 +783,12 @@
             Paste any Zillow listing detail URL. The server will fetch and parse the listing data automatically.
             <br><span style="font-size:.75rem;opacity:.8">Note: Zillow occasionally blocks datacenter IPs. If that happens, use the iOS importer instead.</span>
           </p>
+          ${folderNotice}
           <div class="pl-field" style="margin-bottom:14px">
             <label for="pl-import-url">Zillow listing URL</label>
             <input id="pl-import-url" type="url" placeholder="https://www.zillow.com/homedetails/…" autocomplete="off" spellcheck="false">
           </div>
+          <input type="hidden" id="pl-import-folder-id" value="${folder ? S.esc(folder.id) : ''}">
           <div id="pl-import-result" style="display:none"></div>
         </div>
         <div class="pl-import-ft">
@@ -835,6 +840,7 @@
     const urlInput  = document.getElementById('pl-import-url');
     const submitBtn = document.getElementById('pl-import-submit');
     const resultEl  = document.getElementById('pl-import-result');
+    const folderId  = document.getElementById('pl-import-folder-id');
     if(!urlInput || !submitBtn || !resultEl) return;
 
     const url = urlInput.value.trim();
@@ -852,8 +858,10 @@
     resultEl.style.display = 'none';
 
     try {
+      const payload = { url };
+      if(folderId && folderId.value) payload.folder_id = folderId.value;
       const { data, error } = await CP.sb().functions.invoke('import-from-url', {
-        body: { url }
+        body: payload
       });
       if(error) throw error;
       const res = typeof data === 'string' ? JSON.parse(data) : data;
@@ -1470,6 +1478,7 @@
 
   let _folders = [];       // list of folders
   let _activeFolder = null; // currently selected folder (null = all)
+  let _pendingFolderIds = null; // selected items to assign when creating a new folder
 
   async function loadFolders(){
     try {
@@ -1477,9 +1486,51 @@
       if(error) throw error;
       _folders = typeof data === 'string' ? JSON.parse(data) : (data || []);
       renderFolderSidebar();
+      renderFolderBanner();
     } catch(e){
       console.warn('[pipeline] loadFolders failed', e);
     }
+  }
+
+  function renderFolderBanner(){
+    const banner = document.getElementById('pl-folder-banner');
+    const actions = document.getElementById('pl-folder-actions');
+    if(!_activeFolder || !banner || !actions){
+      if(banner) banner.classList.remove('visible');
+      if(actions) actions.style.display = 'none';
+      return;
+    }
+
+    const folder = _folders.find(f => f.id === _activeFolder);
+    if(!folder){
+      banner.classList.remove('visible');
+      actions.style.display = 'none';
+      return;
+    }
+
+    const published = folder.published_count || 0;
+    const archived = folder.archived_count || 0;
+    const total = folder.property_count || 0;
+    const missing = _pageData.filter(l => !l.choice_property_id && l.status !== 'archived').length;
+
+    banner.innerHTML = `
+      <div>
+        <div class="pl-folder-banner-title">Working in "${S.esc(folder.name)}"</div>
+        <div class="pl-folder-banner-meta">${total} listing${total !== 1 ? 's' : ''} · ${published} published · ${archived} archived · ${missing} needs review</div>
+      </div>
+      <div class="pl-folder-banner-actions">
+        <button class="btn btn-sm btn-outline" id="pl-banner-close-folder-btn">Close folder</button>
+        <button class="btn btn-sm btn-primary" id="pl-banner-publish-folder-btn">Publish folder</button>
+      </div>
+    `;
+
+    banner.classList.add('visible');
+    actions.style.display = 'flex';
+
+    const closeBtn = document.getElementById('pl-banner-close-folder-btn');
+    const pubBtn = document.getElementById('pl-banner-publish-folder-btn');
+    if(closeBtn) closeBtn.addEventListener('click', closeActiveFolder);
+    if(pubBtn) pubBtn.addEventListener('click', publishActiveFolder);
   }
 
   function renderFolderSidebar(){
@@ -1488,10 +1539,19 @@
     if(!_folders.length){
       wrap.innerHTML = '<div class="pl-folder-empty">No folders yet.<br><button class="btn btn-sm btn-outline" id="pl-new-folder-btn">+ New Folder</button></div>';
       const btn = document.getElementById('pl-new-folder-btn');
-      if(btn) btn.addEventListener('click', openCreateFolderModal);
+      if(btn) btn.addEventListener('click', () => openCreateFolderModal());
+      renderFolderBanner();
       return;
     }
-    wrap.innerHTML = _folders.map(f => `
+
+    const allItem = `
+      <div class="pl-folder-item${_activeFolder === null ? ' active' : ''}" data-folder-id="" role="button" tabindex="0">
+        <div class="pl-folder-name">📂 All pipeline</div>
+        <div class="pl-folder-count">${_pageData.length || ''}</div>
+      </div>
+    `;
+
+    wrap.innerHTML = allItem + _folders.map(f => `
       <div class="pl-folder-item${_activeFolder === f.id ? ' active' : ''}" data-folder-id="${S.esc(f.id)}" role="button" tabindex="0">
         <div class="pl-folder-name">📁 ${S.esc(f.name)}</div>
         <div class="pl-folder-count">${f.property_count || 0}</div>
@@ -1499,17 +1559,20 @@
     `).join('') + '<div class="pl-folder-item pl-folder-new" id="pl-new-folder-item" role="button" tabindex="0">+ New Folder</div>';
 
     wrap.querySelectorAll('.pl-folder-item[data-folder-id]').forEach(el => {
-      el.addEventListener('click', () => selectFolder(el.dataset.folderId));
+      el.addEventListener('click', () => selectFolder(el.dataset.folderId || null));
     });
     const newBtn = document.getElementById('pl-new-folder-item');
-    if(newBtn) newBtn.addEventListener('click', openCreateFolderModal);
+    if(newBtn) newBtn.addEventListener('click', () => openCreateFolderModal(_selected.size ? [..._selected] : null));
+    renderFolderBanner();
   }
 
   async function selectFolder(folderId){
     _activeFolder = folderId;
     renderFolderSidebar();
     if(!folderId){
-      load(false);
+      _selected.clear();
+      updateBulkBar();
+      await load(false);
       return;
     }
     try {
@@ -1519,13 +1582,15 @@
       _pageData = rows;
       renderList(visibleListings(), false);
       wireCardEvents();
+      renderFolderBanner();
     } catch(e){
       console.error('[pipeline] selectFolder failed', e);
       S.toast('Failed to load folder', 'error');
     }
   }
 
-  function openCreateFolderModal(){
+  function openCreateFolderModal(selectedIds = null){
+    _pendingFolderIds = Array.isArray(selectedIds) ? selectedIds : null;
     const modal = document.createElement('div');
     modal.id = 'pl-folder-modal';
     modal.innerHTML = `
@@ -1599,6 +1664,10 @@
       S.toast('Folder "' + res.name + '" created ✓', 'success');
       closeFolderModal();
       await loadFolders();
+      if(_pendingFolderIds && _pendingFolderIds.length){
+        await addSelectedToNewFolder(res.id, _pendingFolderIds);
+        _pendingFolderIds = null;
+      }
     } catch(e){
       resultEl.style.cssText = 'display:block;padding:10px 12px;border-radius:8px;background:rgba(239,68,68,.1);color:#dc2626;font-size:.8rem;margin-top:4px';
       resultEl.textContent = e.message || 'Failed to create folder';
@@ -1612,30 +1681,83 @@
     if(!ids.length) return;
     if(!_folders.length){
       S.toast('Create a folder first', 'info');
-      openCreateFolderModal();
+      openCreateFolderModal(ids);
       return;
     }
-    // Simple prompt-based folder selection
-    const folderNames = _folders.map(f => f.name);
-    const choice = await S.promptList ? S.promptList('Add to folder', folderNames) : null;
-    if(!choice) return;
+    openFolderPicker({ selectedIds: ids });
+  }
+
+  async function addSelectedToNewFolder(folderId, ids){
+    if(!folderId || !ids?.length) return;
     let succeeded = 0;
     for(const id of ids){
       try {
         const { data, error } = await CP.sb().rpc('pipeline_folder_add_property', {
           p_property_id: id,
-          p_folder_name: choice
+          p_folder_id: folderId
         });
         if(!error && data?.ok) succeeded++;
       } catch(e){ /* ignore */ }
     }
     if(succeeded > 0){
-      S.toast(`${succeeded} listing${succeeded !== 1 ? 's' : ''} added to "${choice}" ✓`, 'success');
+      S.toast(`${succeeded} listing${succeeded !== 1 ? 's' : ''} added to the new folder ✓`, 'success');
       _selected.clear();
       updateBulkBar();
       await loadFolders();
-    } else {
-      S.toast('Failed to add listings to folder', 'error');
+      selectFolder(folderId);
+    }
+  }
+
+  function openFolderPicker(options = {}){
+    const ids = Array.isArray(options.selectedIds) ? options.selectedIds : null;
+    const modal = document.createElement('div');
+    modal.id = 'pl-folder-modal';
+    modal.innerHTML = `
+      <div class="pl-import-backdrop"></div>
+      <div class="pl-import-dialog" role="dialog" aria-modal="true" aria-label="Add to folder">
+        <div class="pl-import-hd">
+          <div style="font-size:.95rem;font-weight:700">Add to folder</div>
+          <button class="pl-import-close" aria-label="Close">✕</button>
+        </div>
+        <div class="pl-import-body">
+          <div style="margin-bottom:14px;font-size:.85rem;color:var(--muted-2)">Select an existing folder or create a new one.</div>
+          <div id="pl-folder-picker-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+          <button class="btn btn-outline" id="pl-folder-picker-new">Create new folder</button>
+          <div id="pl-folder-result" style="display:none"></div>
+        </div>
+        <div class="pl-import-ft">
+          <button class="btn btn-ghost" id="pl-folder-cancel">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.pl-import-backdrop').addEventListener('click', closeFolderModal);
+    modal.querySelector('.pl-import-close').addEventListener('click', closeFolderModal);
+    document.getElementById('pl-folder-cancel').addEventListener('click', closeFolderModal);
+    document.getElementById('pl-folder-picker-new').addEventListener('click', () => {
+      closeFolderModal();
+      openCreateFolderModal(ids);
+    });
+
+    const listWrapper = document.getElementById('pl-folder-picker-list');
+    if(listWrapper){
+      if(!_folders.length){
+        listWrapper.innerHTML = '<div class="pl-folder-empty">No folders exist yet. Create one below.</div>';
+      } else {
+        listWrapper.innerHTML = _folders.map(f => `
+          <button class="btn btn-ghost" type="button" data-folder-id="${S.esc(f.id)}" style="justify-content:space-between;display:flex;align-items:center">
+            <span>${S.esc(f.name)}</span>
+            <span style="opacity:.7">${f.property_count || 0}</span>
+          </button>
+        `).join('');
+        listWrapper.querySelectorAll('button[data-folder-id]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const folderId = btn.dataset.folderId;
+            closeFolderModal();
+            await addSelectedToNewFolder(folderId, ids);
+          });
+        });
+      }
     }
   }
 
@@ -1644,21 +1766,21 @@
     const folder = _folders.find(f => f.id === _activeFolder);
     if(!folder) return;
     const ok = await S.confirm(
-      `Delete folder "${folder.name}"?`,
-      `All ${folder.property_count || 0} properties in this folder will be archived (kept in pipeline but hidden).`
+      `Archive folder "${folder.name}"?`,
+      `This will archive all non-published listings in the folder. Published listings will remain live but be removed from the folder.`
     );
     if(!ok) return;
     try {
       const { data, error } = await CP.sb().rpc('pipeline_folder_delete', { p_folder_id: _activeFolder });
       if(error) throw error;
       const res = typeof data === 'string' ? JSON.parse(data) : data;
-      if(!res?.ok) throw new Error(res?.error || 'Failed to delete folder');
-      S.toast(`Folder "${res.name}" deleted — ${res.archived || 0} properties archived`, 'success');
+      if(!res?.ok) throw new Error(res?.error || 'Failed to archive folder');
+      S.toast(`Folder "${res.name}" archived — ${res.archived || 0} properties archived`, 'success');
       _activeFolder = null;
       await loadFolders();
-      load(false);
+      await load(false);
     } catch(e){
-      S.toast('Delete failed: ' + e.message, 'error');
+      S.toast('Archive failed: ' + e.message, 'error');
     }
   }
 
@@ -1684,15 +1806,54 @@
     }
   }
 
+  async function renameActiveFolder(){
+    if(!_activeFolder) return;
+    const folder = _folders.find(f => f.id === _activeFolder);
+    if(!folder) return;
+    const name = window.prompt('Rename folder', folder.name);
+    if(!name || !name.trim() || name.trim() === folder.name) return;
+    try {
+      const { data, error } = await CP.sb().rpc('pipeline_folder_rename', {
+        p_folder_id: _activeFolder,
+        p_new_name: name.trim(),
+      });
+      if(error) throw error;
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+      if(!res?.ok){
+        S.toast('Rename failed: ' + (res?.error || 'unknown'), 'error');
+        return;
+      }
+      S.toast(`Renamed folder to "${res.name}"`, 'success');
+      await loadFolders();
+    } catch(e){
+      S.toast('Rename failed: ' + (e.message || 'unknown'), 'error');
+    }
+  }
+
+  async function closeActiveFolder(){
+    if(!_activeFolder) return;
+    _activeFolder = null;
+    _selected.clear();
+    updateBulkBar();
+    renderFolderSidebar();
+    await load(false);
+  }
+
   function wireFolderButtons(){
     const addBtn = document.getElementById('pl-add-to-folder-btn');
     if(addBtn) addBtn.addEventListener('click', addSelectedToFolder);
+
+    const renameFolderBtn = document.getElementById('pl-rename-folder-btn');
+    if(renameFolderBtn) renameFolderBtn.addEventListener('click', renameActiveFolder);
 
     const pubFolderBtn = document.getElementById('pl-publish-folder-btn');
     if(pubFolderBtn) pubFolderBtn.addEventListener('click', publishActiveFolder);
 
     const delFolderBtn = document.getElementById('pl-delete-folder-btn');
     if(delFolderBtn) delFolderBtn.addEventListener('click', deleteActiveFolder);
+
+    const closeFolderBtn = document.getElementById('pl-close-folder-btn');
+    if(closeFolderBtn) closeFolderBtn.addEventListener('click', closeActiveFolder);
   }
 
   // ── Main load ─────────────────────────────────────────────────────────────────
