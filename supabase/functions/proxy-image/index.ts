@@ -6,11 +6,11 @@
  * can call getImageData() without hitting a CORS SecurityError.
  *
  * Security:
- *  - Only ImageKit CDN URLs (ik.imagekit.io) are allowed — prevents SSRF.
+ *  - Only ImageKit and known listing-source CDN URLs are allowed — prevents SSRF.
  *  - Requires a valid Supabase session (admin JWT via ?token= or Authorization header).
  *  - Returns original Content-Type + a 60-second cache hint (images rarely change).
  *
- * Usage:  GET /proxy-image?url=https%3A%2F%2Fik.imagekit.io%2F...
+ * Usage:  GET /proxy-image?url=https%3A%2F%2Fphotos.zillowstatic.com%2F...
  *         Authorization: Bearer <supabase-jwt>
  */
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -21,8 +21,28 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
-// Only proxy images from the ImageKit CDN — no arbitrary URL fetch.
-const ALLOWED_HOST_RE = /^https:\/\/ik\.imagekit\.io\//i;
+// Only proxy images from known image hosts — no arbitrary URL fetch.
+// Source URLs need this path because Zillow/Realtor CDNs commonly reject
+// browser hotlinks from the admin domain.
+const ALLOWED_HOSTS = new Set([
+  'ik.imagekit.io',
+  'photos.zillowstatic.com',
+  'zillowstatic.com',
+  'img.realtor.com',
+  'ap.rdcpix.com',
+  'images1.apartmentfinder.com',
+  'images2.apartmentfinder.com',
+  'ssl.cdn-redfin.com',
+]);
+
+function isAllowedImageUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'https:' && ALLOWED_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 async function verifySession(req: Request): Promise<boolean> {
   const authHeader = req.headers.get('Authorization') || '';
@@ -49,8 +69,8 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const imageUrl = url.searchParams.get('url') || '';
 
-  if (!imageUrl || !ALLOWED_HOST_RE.test(imageUrl)) {
-    return new Response('Only ImageKit CDN URLs are allowed', { status: 400 });
+  if (!imageUrl || !isAllowedImageUrl(imageUrl)) {
+    return new Response('Image host is not allowed', { status: 400 });
   }
 
   const authed = await verifySession(req);
@@ -60,8 +80,21 @@ Deno.serve(async (req: Request) => {
 
   try {
     // Fetch the image from ImageKit — no CORS restriction server-side.
+    const sourceHost = new URL(imageUrl).hostname.toLowerCase();
+    const referer = sourceHost.includes('zillow')
+      ? 'https://www.zillow.com/'
+      : sourceHost.includes('realtor') || sourceHost === 'ap.rdcpix.com'
+        ? 'https://www.realtor.com/'
+        : sourceHost.includes('apartment')
+          ? 'https://www.apartments.com/'
+          : sourceHost.includes('redfin')
+            ? 'https://www.redfin.com/'
+            : undefined;
     const imgRes = await fetch(imageUrl, {
-      headers: { 'User-Agent': 'ChoiceProperties-WatermarkScanner/1.0' },
+      headers: {
+        'User-Agent': 'ChoiceProperties-WatermarkScanner/1.0',
+        ...(referer ? { Referer: referer } : {}),
+      },
       redirect: 'follow',
     });
 

@@ -370,10 +370,11 @@
     try {
       const session = await CP.sb().auth.getSession();
       const token = session?.data?.session?.access_token || '';
+      const supabaseUrl = (window.CONFIG?.SUPABASE_URL || '').replace(/\/+$/, '');
       const proxied = imgs.map(u => {
         if (u.includes('ik.imagekit.io')) return u;
-        if (!token) return u;
-        return 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/proxy-image?url=' + encodeURIComponent(u) + '&token=' + encodeURIComponent(token);
+        if (!token || !supabaseUrl) return u;
+        return supabaseUrl + '/functions/v1/proxy-image?url=' + encodeURIComponent(u) + '&token=' + encodeURIComponent(token);
       });
       return renderGallery(proxied, 'from source');
     } catch(_) {
@@ -671,6 +672,11 @@
         panelPhotos(l).then(html => {
           if(photoContainer) photoContainer.innerHTML = html;
           wireGalleryEvents();
+        }).catch(err => {
+          console.error('[pipeline] photo gallery load failed', err);
+          if(photoContainer) {
+            photoContainer.innerHTML = '<p class="pl-photo-count" style="color:var(--danger,#dc2626)">Unable to load photos. Retry opening this listing.</p>';
+          }
         });
       }
 
