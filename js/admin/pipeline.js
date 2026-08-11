@@ -353,25 +353,35 @@
 
   // ── Render: detail panel ─────────────────────────────────────────────────────
 
+  function withTimeout(promise, ms){
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Photo request timed out')), ms))
+    ]);
+  }
+
   async function panelPhotos(l){
-    const imgs = parseJSON(l.original_image_urls) || [];
+    const imgs = imageUrls(l.original_image_urls);
     
     // If published and has a choice_property_id, fetch the actual ImageKit photos
     // from property_photos (transferred by import-pipeline-photos).
     if(l.choice_property_id){
       try {
-        const { data: photos, error } = await CP.sb()
+        const photoQuery = CP.sb()
           .from('property_photos')
           .select('url,display_order')
           .eq('property_id', l.choice_property_id)
           .order('display_order', { ascending: true })
           .limit(50);
+        const { data: photos, error } = await withTimeout(photoQuery, 8000);
         
         if(!error && Array.isArray(photos) && photos.length){
           const urls = photos.map(p => p.url).filter(Boolean);
           return renderGallery(urls, 'on ImageKit');
         }
-      } catch(_){ /* fall through to source URLs */ }
+      } catch(err){
+        console.warn('[pipeline] property photo query failed; using source photos', err);
+      }
     }
     
     if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
@@ -381,7 +391,7 @@
     // proxy-image edge function so they display correctly.
     // ImageKit URLs (ik.imagekit.io) work directly.
     try {
-      const session = await CP.sb().auth.getSession();
+      const session = await withTimeout(CP.sb().auth.getSession(), 3000);
       const token = session?.data?.session?.access_token || '';
       const supabaseUrl = (window.CONFIG?.SUPABASE_URL || '').replace(/\/+$/, '');
       const proxied = imgs.map(u => {
