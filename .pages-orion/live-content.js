@@ -85,8 +85,8 @@
     // Process in parallel batches of 3
     for (var i = 0; i < limit; i += 3) {
       var batch = photoUrls.slice(i, i + 3);
-      var results = await Promise.all(batch.map(function(url) {
-        return uploadOnePhoto(url, i + batch.indexOf(url));
+      var results = await Promise.all(batch.map(function(url, batchIndex) {
+        return uploadOnePhoto(url, i + batchIndex);
       }));
       for (var j = 0; j < results.length; j++) {
         if (results[j]) uploaded.push(results[j]);
@@ -100,8 +100,26 @@
   async function downloadViaBackground(url) {
     return new Promise(function(resolve) {
       try {
-        if (!chrome.runtime || !chrome.runtime.sendMessage) {
-          resolve(null);
+        // This live file is injected into the page's main world. The
+        // extension API is only exposed to the isolated content script, so
+        // ask that script to relay the request through a postMessage bridge.
+        if (!window.chrome || !window.chrome.runtime || !window.chrome.runtime.sendMessage) {
+          var requestId = 'cp-photo-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+          var timer = setTimeout(function () {
+            window.removeEventListener('message', onResult);
+            resolve(null);
+          }, 25000);
+          function onResult(event) {
+            var data = event && event.data;
+            if (event.source !== window || !data ||
+                data.type !== 'CP_DOWNLOAD_PHOTO_RESULT' ||
+                data.requestId !== requestId) return;
+            clearTimeout(timer);
+            window.removeEventListener('message', onResult);
+            resolve(data.ok && data.dataUri ? data : null);
+          }
+          window.addEventListener('message', onResult);
+          window.postMessage({ type: 'CP_DOWNLOAD_PHOTO', requestId: requestId, url: url }, '*');
           return;
         }
         chrome.runtime.sendMessage(
@@ -132,7 +150,7 @@
       var imgRes = await fetch(url, {
         mode: 'cors',
         credentials: 'include',
-        headers: { 'Accept': 'image/*' }
+        headers: { 'Accept': 'image/jpeg,image/png,image/webp,image/*;q=0.8' }
       });
       if (!imgRes.ok) return null;
       var blob = await imgRes.blob();

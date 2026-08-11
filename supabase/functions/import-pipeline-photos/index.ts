@@ -124,6 +124,29 @@ Deno.serve(async (req) => {
   // Returns true on success, false on any failure.
   async function transferPhoto(url: string, index: number): Promise<boolean> {
     try {
+      // Orion/Chrome can upload source photos to ImageKit before the listing
+      // reaches the pipeline. Those URLs are already durable and must not be
+      // fetched again from the browser/CDN path (which is commonly blocked by
+      // WebKit and would leave the published property with zero photo rows).
+      if (url.includes('ik.imagekit.io')) {
+        const { error: rpcErr } = await adminClient.rpc('add_property_photo', {
+          p_property_id:   property_id,
+          p_url:           url,
+          p_file_id:       null,
+          p_alt_text:      null,
+          p_caption:       null,
+          p_width:         null,
+          p_height:        null,
+          p_display_order: index,
+          p_is_hero:       index === 0,
+        });
+        if (rpcErr) {
+          console.error(`[import-pipeline-photos] add_property_photo failed for existing ImageKit URL (photo ${index + 1}):`, rpcErr);
+          return false;
+        }
+        return true;
+      }
+
       // Use browser-like headers to bypass CDN blocks
       const fetchHeaders: Record<string, string> = {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',

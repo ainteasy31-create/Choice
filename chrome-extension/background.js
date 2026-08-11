@@ -132,10 +132,16 @@ async function flushQueue() {
 // to download a photo and get back a base64 data URI.
 async function downloadPhoto(url) {
   try {
+    const parsedUrl = new URL(url);
+    const allowedHosts = /(^|\.)((zillowstatic\.com)|(rdcpix\.com)|(apartments\.com)|(redfin\.com))$/i;
+    if (parsedUrl.protocol !== 'https:' || !allowedHosts.test(parsedUrl.hostname)) {
+      console.warn('[CP] Refusing photo download from unsupported host:', parsedUrl.hostname);
+      return null;
+    }
     // Try with a browser-like User-Agent and Referer
     const headers = {
       'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept': 'image/jpeg,image/png,image/webp,image/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     };
 
@@ -179,11 +185,16 @@ async function downloadPhoto(url) {
 }
 
 function blobToBase64(blob) {
-  return new Promise(function(resolve, reject) {
-    const reader = new FileReader();
-    reader.onload = function() { resolve(reader.result); };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+  // FileReader is not available in MV3/Orion service workers. Convert the
+  // response bytes directly so successful CDN downloads reach ImageKit.
+  return blob.arrayBuffer().then(function(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return 'data:' + (blob.type || 'image/jpeg') + ';base64,' + btoa(binary);
   });
 }
 

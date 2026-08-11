@@ -24,6 +24,42 @@
 
   if (document.getElementById('cp-save-btn')) return;
 
+  // Remote live-content.js is injected into the page's main world. In
+  // Orion/WebKit (and Chromium MV3), chrome.runtime is only available to
+  // this isolated content-script world, so expose a narrow postMessage
+  // bridge for the background photo downloader.
+  window.addEventListener('message', function (event) {
+    var data = event && event.data;
+    if (event.source !== window || !data || data.type !== 'CP_DOWNLOAD_PHOTO') return;
+    if (!data.requestId || typeof data.url !== 'string') return;
+    if (!/^https:\/\/([a-z0-9-]+\.)?(zillowstatic\.com|rdcpix\.com|apartments\.com|redfin\.com)\//i.test(data.url)) return;
+    try {
+      chrome.runtime.sendMessage(
+        { type: 'DOWNLOAD_PHOTO', url: data.url },
+        function (response) {
+          var runtimeError = chrome.runtime.lastError;
+          window.postMessage({
+            type: 'CP_DOWNLOAD_PHOTO_RESULT',
+            requestId: data.requestId,
+            ok: !runtimeError && !!(response && response.ok),
+            dataUri: response && response.dataUri,
+            contentType: response && response.contentType,
+            ext: response && response.ext,
+            size: response && response.size,
+            error: runtimeError ? runtimeError.message : (response && response.error)
+          }, '*');
+        }
+      );
+    } catch (error) {
+      window.postMessage({
+        type: 'CP_DOWNLOAD_PHOTO_RESULT',
+        requestId: data.requestId,
+        ok: false,
+        error: String(error && error.message || error)
+      }, '*');
+    }
+  });
+
   // ── Load live code from Cloudflare Pages ─────────────────────
   function loadScript(url) {
     return new Promise(function (resolve, reject) {
