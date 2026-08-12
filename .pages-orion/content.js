@@ -129,19 +129,81 @@
         document.body.appendChild(btn);
       }
 
-      function watchUrlChanges() {
-        setInterval(function () {
-          if (location.href !== lastUrl) {
-            lastUrl = location.href;
-            removeButton();
-            setTimeout(injectButton, 500);
-          }
-        }, 1000);
+      function dispatchNavigation() {
+        window.dispatchEvent(new Event('cp_navigation'));
       }
 
-      // ── Photo download via background worker (v3.0) ──────────
-      // The background service worker has host_permissions for
-      // Zillow/Realtor CDNs, so it can fetch images without CORS.
+      function patchHistoryNavigation() {
+        var originalPush = history.pushState;
+        var originalReplace = history.replaceState;
+
+        history.pushState = function () {
+          var result = originalPush.apply(this, arguments);
+          dispatchNavigation();
+          return result;
+        };
+
+        history.replaceState = function () {
+          var result = originalReplace.apply(this, arguments);
+          dispatchNavigation();
+          return result;
+        };
+      }
+
+      function onLocationChange() {
+        if (location.href === lastUrl) return;
+        lastUrl = location.href;
+        removeButton();
+        setTimeout(injectButton, 250);
+      }
+
+      function watchUrlChanges() {
+        patchHistoryNavigation();
+        window.addEventListener('popstate', onLocationChange);
+        window.addEventListener('cp_navigation', onLocationChange);
+
+        if (document.body) {
+          var observer = new MutationObserver(function () {
+            onLocationChange();
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+        }
+      }
+
+      function dedupePhotoUrls(urls) {
+        var seen = new Set();
+        var unique = [];
+        if (!Array.isArray(urls)) return unique;
+        urls.forEach(function(raw) {
+          if (!raw) return;
+          var url = typeof raw === 'string' ? raw.trim() : (raw.url || '');
+          if (!url) return;
+          if (!/^https?:\/\//i.test(url)) return;
+          if (seen.has(url)) return;
+          seen.add(url);
+          unique.push(url);
+        });
+        return unique;
+      }
+
+      function extractPhotoUrls(raw) {
+        var urls = [];
+        if (!raw) return urls;
+        try {
+          var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (Array.isArray(parsed)) {
+            parsed.forEach(function(item) {
+              if (!item) return;
+              if (typeof item === 'string') urls.push(item);
+              else if (typeof item === 'object' && typeof item.url === 'string') urls.push(item.url);
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+        return urls;
+      }
+
       function downloadViaBackground(url) {
         return new Promise(function(resolve) {
           try {
@@ -180,10 +242,8 @@
 
       async function uploadOnePhoto(url, index) {
         try {
-          // Download via background worker (bypasses CORS)
           var photo = await downloadViaBackground(url);
           if (!photo) {
-            // Fallback: direct fetch
             try {
               var imgRes = await fetch(url, {
                 mode: 'cors',
@@ -201,7 +261,6 @@
           }
           if (!photo) return null;
 
-          // Upload to ImageKit
           var ikRes = await fetch('https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/pipeline-photo-upload', {
             method: 'POST',
             headers: {
@@ -227,21 +286,25 @@
         }
       }
 
-      async function downloadAndUploadPhotos(photoUrls, maxPhotos) {
+      async function downloadAndUploadPhotos(photoUrls, maxPhotos, progressCallback) {
         var uploaded = [];
         var failed = 0;
-        var limit = Math.min(photoUrls.length, maxPhotos || 30);
-        for (var i = 0; i < limit; i += 3) {
-          var batch = photoUrls.slice(i, i + 3);
-          var results = await Promise.all(batch.map(function(url) {
-            return uploadOnePhoto(url, i + batch.indexOf(url));
+        var urls = dedupePhotoUrls(photoUrls);
+        var limit = Math.min(urls.length, maxPhotos || MAX_PHOTOS);
+        var total = limit;
+        for (var i = 0; i < limit; i += PHOTO_BATCH_SIZE) {
+          var batch = urls.slice(i, i + PHOTO_BATCH_SIZE);
+          if (progressCallback) progressCallback(Math.min(i, total), total);
+          var results = await Promise.all(batch.map(function(url, batchIndex) {
+            return uploadOnePhoto(url, i + batchIndex);
           }));
           for (var j = 0; j < results.length; j++) {
             if (results[j]) uploaded.push(results[j]);
             else failed++;
+            if (progressCallback) progressCallback(Math.min(i + j + 1, total), total);
           }
         }
-        return { uploaded: uploaded, failed: failed };
+        return { uploaded: uploaded, failed: failed, total: total };
       }
 
       async function handleSave() {
