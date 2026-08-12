@@ -627,7 +627,12 @@
       ${!isArchived && !isPublished ? `<button class="btn btn-ghost pl-arc-btn-panel" data-id="${S.esc(l.id)}">Archive</button>` : ''}
       <div style="flex:1"></div>
       ${!isPublished ? `<button class="btn btn-outline pl-save-btn" data-id="${S.esc(l.id)}">Save changes</button>` : ''}
-      ${!isPublished && !isArchived ? `<button class="btn btn-primary pl-pub-btn-panel" data-id="${S.esc(l.id)}">Publish as draft →</button>` : ''}
+      ${!isPublished && !isArchived ? `
+        <label style="display:flex;align-items:center;gap:8px;margin-right:auto">
+          <input type="checkbox" id="pf-delete-on-publish" style="width:16px;height:16px"> <span style="font-size:.78rem;color:var(--muted-2)">Delete from pipeline after publish</span>
+        </label>
+        <button class="btn btn-primary pl-pub-btn-panel" data-id="${S.esc(l.id)}">Publish as draft →</button>
+      ` : ''}
     </div>`;
   }
 
@@ -1160,7 +1165,11 @@ function wirePanelPhotoActions(){
     const btn = document.querySelector('.pl-pub-btn-panel');
     if(btn){ btn.disabled = true; btn.textContent = 'Publishing…'; }
 
-    const { data, error } = await CP.sb().rpc('pipeline_publish', { p_id: id, p_landlord_id: null });
+    // If the user chose to delete the pipeline record after publishing, call the new RPC
+    const deleteOnPublishEl = panel.querySelector('#pf-delete-on-publish');
+    const deleteOnPublish = deleteOnPublishEl && deleteOnPublishEl.checked;
+    const rpcName = deleteOnPublish ? 'pipeline_publish_and_delete' : 'pipeline_publish';
+    const { data, error } = await CP.sb().rpc(rpcName, { p_id: id, p_landlord_id: null });
     if(btn){ btn.disabled = false; btn.textContent = 'Publish as draft →'; }
     if(error){ S.toast('Publish failed: ' + error.message, 'error'); return; }
     const res = typeof data === 'string' ? JSON.parse(data) : data;
