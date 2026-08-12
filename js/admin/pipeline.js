@@ -738,6 +738,19 @@
         });
       }
 
+    // Autosize textareas in the panel
+    (function autosizeTextareas(){
+      try{
+        const tx = panel.querySelectorAll('textarea');
+        tx.forEach(t => {
+          const res = () => { t.style.height = 'auto'; t.style.height = Math.min(800, t.scrollHeight) + 'px'; };
+          res();
+          t.removeEventListener('input', res);
+          t.addEventListener('input', res);
+        });
+      }catch(e){}
+    })();
+
     // "Import full details" pre-fills the Import URL modal with this listing's source URL
     const reimportBtn = panel.querySelector('#pl-reimport-btn');
     if(reimportBtn) reimportBtn.addEventListener('click', () => {
