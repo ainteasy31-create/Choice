@@ -442,7 +442,7 @@
         labels.push('<div class="pl-panel-alert pl-panel-alert-success">Photos are stored on ImageKit and ready for the live listing.</div>');
       }
     } else if (hasSource) {
-      labels.push(`<div class="pl-panel-alert pl-panel-alert-info">${photos.length} source photo${photos.length!==1?'s':''} available. They will be transferred after publish.</div>`);
+      labels.push(`<div class="pl-panel-alert pl-panel-alert-info">${photos.length} source photo${photos.length!==1?'s':''} available. They will be transferred after publish. <button class="btn btn-sm btn-outline" id="pl-edit-photos-btn">Edit photos</button></div>`);
     } else {
       labels.push('<div class="pl-panel-alert pl-panel-alert-warning">No source photos found. Add at least one photo before publishing.</div>');
     }
@@ -725,6 +725,9 @@
           if(photoContainer) photoContainer.innerHTML = html;
           wireGalleryEvents();
           wirePanelPhotoActions();
+          // Wire edit photos button (if present)
+          const editBtn = panel.querySelector('#pl-edit-photos-btn');
+          if(editBtn) editBtn.addEventListener('click', e => { e.stopPropagation(); openPhotoEditor(l); });
         }).catch(err => {
           console.error('[pipeline] photo gallery load failed', err);
           if(photoContainer) {
@@ -1721,6 +1724,78 @@ function wirePanelPhotoActions(){
       btn.disabled = false;
       btn.textContent = 'Create Folder →';
     }
+  }
+
+  function openPhotoEditor(listing){
+    const imgs = imageUrls(listing.original_image_urls || '[]');
+    const modal = document.createElement('div');
+    modal.id = 'pl-photo-editor-modal';
+    modal.innerHTML = `
+      <div class="pl-import-backdrop"></div>
+      <div class="pl-import-dialog" role="dialog" aria-modal="true" aria-label="Edit photos">
+        <div class="pl-import-hd">
+          <div style="font-size:.95rem;font-weight:700">Edit photos</div>
+          <button class="pl-import-close" aria-label="Close">✕</button>
+        </div>
+        <div class="pl-import-body">
+          <p style="font-size:.82rem;color:var(--muted-2);margin:0 0 14px">Reorder or remove source photos. Changes update the pipeline record's <em>original_image_urls</em>.</p>
+          <div id="pl-photo-edit-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div class="pl-import-ft">
+          <button class="btn btn-ghost" id="pl-photo-edit-cancel">Cancel</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary" id="pl-photo-edit-save">Save changes</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('.pl-import-backdrop').addEventListener('click', closePhotoEditor);
+    modal.querySelector('.pl-import-close').addEventListener('click', closePhotoEditor);
+    document.getElementById('pl-photo-edit-cancel').addEventListener('click', closePhotoEditor);
+
+    const listEl = document.getElementById('pl-photo-edit-list');
+    function renderList(){
+      listEl.innerHTML = imgs.map((u, i) => `
+        <div style="display:flex;align-items:center;gap:8px">
+          <img src="${S.esc(u)}" style="width:84px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+          <div style="flex:1">
+            <div style="font-size:.85rem;opacity:.85">${S.esc(u)}</div>
+            <div style="margin-top:6px;display:flex;gap:6px">
+              <button class="btn btn-sm btn-ghost" data-action="up" data-idx="${i}">Up</button>
+              <button class="btn btn-sm btn-ghost" data-action="down" data-idx="${i}">Down</button>
+              <button class="btn btn-sm btn-ghost" data-action="remove" data-idx="${i}" style="color:var(--danger)">Remove</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      listEl.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const action = btn.dataset.action;
+          const idx = parseInt(btn.dataset.idx, 10);
+          if(action === 'remove') imgs.splice(idx,1);
+          else if(action === 'up' && idx > 0) { const t = imgs[idx-1]; imgs[idx-1]=imgs[idx]; imgs[idx]=t; }
+          else if(action === 'down' && idx < imgs.length-1) { const t = imgs[idx+1]; imgs[idx+1]=imgs[idx]; imgs[idx]=t; }
+          renderList();
+        });
+      });
+    }
+
+    renderList();
+
+    async function saveEdits(){
+      const { data, error } = await CP.sb().rpc('pipeline_save', { p_id: listing.id, p_patch: { original_image_urls: JSON.stringify(imgs) } });
+      if(error){ S.toast('Save failed: ' + error.message, 'error'); return; }
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+      if(!res?.ok){ S.toast('Save failed: ' + (res?.error||'unknown'), 'error'); return; }
+      S.toast('Photos updated', 'success');
+      closePhotoEditor();
+      // Refresh panel photos
+      const photoContainer = document.getElementById('panel-photos-container');
+      if(photoContainer){ panelPhotos(listing).then(html => { photoContainer.innerHTML = html; wireGalleryEvents(); wirePanelPhotoActions(); }); }
+    }
+
+    document.getElementById('pl-photo-edit-save').addEventListener('click', saveEdits);
+
+    function closePhotoEditor(){ const m = document.getElementById('pl-photo-editor-modal'); if(m) m.remove(); }
   }
 
   async function addSelectedToFolder(){
