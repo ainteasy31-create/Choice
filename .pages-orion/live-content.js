@@ -259,8 +259,10 @@
             uploadPhotosInBackground(photoUrls, function(completed, total) {
               updateProgressWidget('Photos: ' + completed + '/' + total);
             }).then(function(result) {
-              if (result.uploaded > 0) {
-                updateProgressWidget(result.uploaded + ' photos uploaded ✓');
+              if (result.uploaded.length > 0) {
+                updateProgressWidget(result.uploaded.length + ' photos uploaded ✓');
+                // v4.0: Update the pipeline record with ImageKit URLs
+                updatePipelinePhotos(payload, result.uploaded);
               } else if (result.failed > 0) {
                 updateProgressWidget('Photos queued for server retry');
               }
@@ -289,6 +291,31 @@
     } catch (e) {
       console.error('[CP]', e);
       setError('Network error');
+    }
+  }
+
+  // ── Update pipeline record with uploaded ImageKit URLs (v4.0) ──
+  // Called after background photo uploads complete. Sends _update_photos_only
+  // to the receive-pipeline-import edge function to update the record.
+  async function updatePipelinePhotos(originalPayload, uploadedPhotos) {
+    try {
+      if (!uploadedPhotos || uploadedPhotos.length === 0) return;
+      var updatePayload = Object.assign({}, originalPayload, {
+        _update_photos_only: true,
+        original_image_urls: JSON.stringify(uploadedPhotos),
+      });
+      var updateUrl = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
+      var updateRes = await fetch(updateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload),
+      });
+      var updateResp = await updateRes.json();
+      if (updateResp && updateResp.updated === 'photos_only') {
+        console.log('[CP] Pipeline photos updated:', updateResp.imagekit_photos);
+      }
+    } catch (e) {
+      console.warn('[CP] Failed to update pipeline photos:', e);
     }
   }
 

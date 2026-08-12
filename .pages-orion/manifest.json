@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Import to Choice Properties",
-  "version": "3.1.1",
+  "version": "4.0.0",
   "description": "Save listings to Choice Properties pipeline.",
   "permissions": ["storage", "tabs", "downloads", "alarms"],
   "host_permissions": [

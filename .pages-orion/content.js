@@ -1,7 +1,9 @@
 // ============================================================
-// Import to Choice Properties — Content Script v3.1.0 (Live Loader)
-// This is a THIN LOADER. It fetches the latest logic from
-// Cloudflare Pages on every page load, so updates are automatic.
+// Import to Choice Properties — Content Script v4.0.0 (Live Loader)
+// v4.0: SAVE-FIRST ARCHITECTURE
+//   The property is saved to the pipeline IMMEDIATELY and the
+//   user sees "Saved!" in under 2 seconds. Photos continue
+//   uploading in the background with a floating progress widget.
 //
 // HOW IT WORKS:
 //   1. On page load, this script fetches live-shared-extractors.js
@@ -85,16 +87,14 @@
 
   // ── Bundled fallback (used only if live fetch fails) ─────────
   function runBundledFallback() {
-    // If live extractors loaded but live-content failed, use bundled content
     if (window.CP_Extractors && !document.getElementById('cp-save-btn')) {
-      // The live-content.js should have run. If not, inject the bundled logic.
-      // Read config from window.CP_CONFIG (set by config.js) with fallback
-      // to the hardcoded value for backward compatibility with already-installed extensions.
       var EDGE_URL = (window.CP_CONFIG && window.CP_CONFIG.EDGE_URL) || 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
       var SECRET = (window.CP_CONFIG && window.CP_CONFIG.IMPORT_SECRET) || 'cp_import_7Kx3m9P2w5';
 
       // SPA navigation handling
       var lastUrl = location.href;
+      var PHOTO_BATCH_SIZE = 12;
+      var MAX_PHOTOS = 40;
 
       function isSupportedPage(url) {
         return /zillow\.com\/homedetails\//i.test(url) ||
@@ -322,24 +322,14 @@
           if (!extracted) { setError('Could not read listing'); return; }
 
           // Extract photo URLs
-          var photoUrls = [];
-          try {
-            var raw = extracted.original_image_urls || '[]';
-            var parsed = JSON.parse(raw);
-            photoUrls = Array.isArray(parsed) ? parsed.filter(function(u) { return u && u.startsWith('http'); }) : [];
-          } catch (e) {
-            photoUrls = extracted.photo_urls || [];
+          var photoUrls = extractPhotoUrls(extracted.original_image_urls);
+          if (!photoUrls.length && Array.isArray(extracted.photo_urls)) {
+            extracted.photo_urls.forEach(function(u) {
+              if (typeof u === 'string') photoUrls.push(u);
+            });
           }
 
-          // Download + upload photos via background worker
-          var photoResult = { uploaded: [], failed: 0 };
-          if (photoUrls.length > 0) {
-            btn.textContent = 'Downloading photos…';
-            photoResult = await downloadAndUploadPhotos(photoUrls, 30);
-          }
-
-          // Build payload with ImageKit URLs if available
-          var finalUrls = photoResult.uploaded.length > 0 ? photoResult.uploaded : photoUrls;
+          // v4.0: Save property FIRST, then upload photos in background
           var payload = {
             source: extracted.source,
             source_listing_id: extracted.source_listing_id,
@@ -362,8 +352,8 @@
             description: extracted.description,
             available_date: extracted.available_date,
             pets_allowed: extracted.pets_allowed,
-            original_image_urls: JSON.stringify(finalUrls),
-            _import: 'browser-extension-v3.1.0',
+            original_image_urls: JSON.stringify(photoUrls.map(function(u) { return { url: u }; })),
+            _import: 'browser-extension-v4.0.0-orion',
           };
 
           var url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
@@ -414,8 +404,6 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────
-  // Wait for DOM to be ready, then try to load live code.
-  // If live code loads, it handles everything. If not, use bundled fallback.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

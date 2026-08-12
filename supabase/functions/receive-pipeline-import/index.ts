@@ -254,6 +254,12 @@ Deno.serve(async (req) => {
     return permissiveJsonErr(400, 'Invalid JSON body', req);
   }
 
+  // ── v4.0: Photo-update-only mode ─────────────────────────────
+  // If _update_photos_only=true, the caller is the extension after it
+  // finished background photo uploads. Skip duplicate check and DB insert;
+  // only update original_image_urls, photo_import_status, and quality score.
+  const updatePhotosOnly = body._update_photos_only === true;
+
   const sourceListingId = safeStr(body.source_listing_id);
   if (!sourceListingId) {
     return permissiveJsonErr(400, 'source_listing_id is required', req);
@@ -274,16 +280,83 @@ Deno.serve(async (req) => {
   const { data: existing } = await adminClient
     .schema('pipeline')
     .from('pipeline_properties')
-    .select('id, title')
+    .select(updatePhotosOnly ? '*' : 'id, title')
     .eq('source_listing_id', sourceListingId)
     .eq('source', source)
     .maybeSingle();
 
-  if (existing) {
+  if (existing && !updatePhotosOnly) {
     return permissiveJsonOk({
       ok: false, duplicate: true,
       id: existing.id, title: existing.title,
       message: 'Already in pipeline',
+    }, req);
+  }
+
+  // ── v4.0: Photo-only update path ─────────────────────────────
+  if (updatePhotosOnly) {
+    if (!existing) {
+      return permissiveJsonErr(404, 'Pipeline record not found for photo update', req);
+    }
+
+    const photoEntries = parseImageEntries(body.original_image_urls);
+    const photoUrls = photoEntries
+      .map(imageEntryUrl)
+      .filter((u: string) => typeof u === 'string' && u.startsWith('http'));
+
+    if (photoUrls.length > 0 && photoUrls.every((u: string) => u.includes('ik.imagekit.io'))) {
+      // All photos are ImageKit URLs — update record with them
+      const updatedRecord = { ...existing, original_image_urls: JSON.stringify(photoEntries) } as Record<string, unknown>;
+      const score = qualityScore(updatedRecord);
+      const missing = missingFields(updatedRecord);
+
+      const { error: updateErr } = await adminClient
+        .schema('pipeline')
+        .from('pipeline_properties')
+        .update({
+          original_image_urls: JSON.stringify(photoEntries),
+          photo_import_status: 'ok',
+          last_photo_import_at: new Date().toISOString(),
+          last_photo_import_error: null,
+          data_quality_score: score,
+          missing_fields: missing,
+        })
+        .eq('id', existing.id);
+
+      if (updateErr) {
+        return permissiveJsonErr(500, 'Photo update failed: ' + updateErr.message, req);
+      }
+
+      return permissiveJsonOk({
+        ok: true,
+        id: existing.id,
+        title: existing.title,
+        score,
+        photos: photoUrls.length,
+        imagekit_photos: photoUrls.length,
+        photo_import: 'complete',
+        updated: 'photos_only',
+      }, req);
+    }
+
+    // No ImageKit URLs — mark as failed for retry later
+    await adminClient
+      .schema('pipeline')
+      .from('pipeline_properties')
+      .update({
+        photo_import_status: 'failed',
+        last_photo_import_error: 'Extension background photo uploads failed',
+        last_photo_import_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id);
+
+    return permissiveJsonOk({
+      ok: true,
+      id: existing.id,
+      title: existing.title,
+      photos: photoUrls.length,
+      imagekit_photos: 0,
+      photo_import: 'failed',
     }, req);
   }
 
