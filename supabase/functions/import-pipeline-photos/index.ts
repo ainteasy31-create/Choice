@@ -254,7 +254,7 @@ Deno.serve(async (req) => {
 
       const ikData = await ikRes.json();
       const ikUrl   = ikData.url as string;
-      const fileId  = (ikData.fileId ?? '') as string;
+      const ikFileId = (ikData.fileId ?? '') as string;
 
       // Reject thumbnail-sized images (< 300px in either dimension).
       // Realtor.com mixes full-size and 120×80 thumbnails in the same URL list.
@@ -263,7 +263,7 @@ Deno.serve(async (req) => {
       if ((imgW !== null && imgW < 300) || (imgH !== null && imgH < 300)) {
         console.log(`[import-pipeline-photos] Skipping thumbnail ${imgW}×${imgH} at photo ${index + 1}`);
         // Clean up the tiny file from ImageKit immediately
-        await fetch(`https://api.imagekit.io/v1/files/${fileId}`, {
+        await fetch(`https://api.imagekit.io/v1/files/${ikFileId}`, {
           method: 'DELETE',
           headers: { Authorization: `Basic ${credentials}` },
         }).catch(() => {});
@@ -273,7 +273,7 @@ Deno.serve(async (req) => {
       const { error: rpcErr } = await adminClient.rpc('add_property_photo', {
         p_property_id:   property_id,
         p_url:           ikUrl,
-        p_file_id:       fileId,
+        p_file_id:       ikFileId,
         p_alt_text:      null,
         p_caption:       null,
         p_width:         ikData.width  ?? null,
