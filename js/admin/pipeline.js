@@ -15,6 +15,8 @@
   let _dirty    = {};   // unsaved field changes
   let _landlords = [];  // cache for publish landlord picker
   let _selected  = new Set(); // IDs of selected cards for bulk actions
+  let _undoStack = [];
+  let _redoStack = [];
 
   // ── Session cache (30 s TTL — avoid re-fetch on back-navigation) ──────────
   const _CPFX = 'pl_v1_';
@@ -1423,6 +1425,32 @@ function wirePanelPhotoActions(){
     if(pubBtn){
       pubBtn.addEventListener('click', () => doBulkPublish());
     }
+
+    const delBtn = document.getElementById('pl-bulk-delete');
+    if(delBtn){
+      delBtn.addEventListener('click', async () => {
+        const ids = [..._selected];
+        if(!ids.length) return;
+        const ok = await S.confirm(`Delete ${ids.length} listing${ids.length!==1?'s':''} from pipeline?`, 'This permanently deletes pipeline records. This cannot be undone.');
+        if(!ok) return;
+        delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+        try {
+          const { data, error } = await CP.sb().rpc('pipeline_bulk_delete', { p_ids: JSON.stringify(ids) });
+          if(error) throw error;
+          const res = typeof data === 'string' ? JSON.parse(data) : data;
+          if(!res?.ok) throw new Error(res?.error || 'Delete failed');
+          // Remove from UI
+          ids.forEach(id => removeCard(id));
+          _selected.clear(); updateBulkBar(); fetchCounts().catch(()=>{});
+          S.toast(`${res.deleted || ids.length} deleted from pipeline`, 'success');
+        } catch(e){
+          console.error('[pipeline] bulk delete failed', e);
+          S.toast('Bulk delete failed: ' + (e.message||'unknown'), 'error');
+        } finally {
+          delBtn.disabled = false; delBtn.textContent = 'Delete from pipeline';
+        }
+      });
+    }
   }
 
   function wireSearch(){
@@ -1762,6 +1790,7 @@ function wirePanelPhotoActions(){
             <div style="margin-top:6px;display:flex;gap:6px">
               <button class="btn btn-sm btn-ghost" data-action="up" data-idx="${i}">Up</button>
               <button class="btn btn-sm btn-ghost" data-action="down" data-idx="${i}">Down</button>
+              <button class="btn btn-sm btn-ghost" data-action="primary" data-idx="${i}">Make primary</button>
               <button class="btn btn-sm btn-ghost" data-action="remove" data-idx="${i}" style="color:var(--danger)">Remove</button>
             </div>
           </div>
@@ -1771,7 +1800,8 @@ function wirePanelPhotoActions(){
         btn.addEventListener('click', e => {
           const action = btn.dataset.action;
           const idx = parseInt(btn.dataset.idx, 10);
-          if(action === 'remove') imgs.splice(idx,1);
+            if(action === 'remove') imgs.splice(idx,1);
+            else if(action === 'primary' && idx !== 0){ const it = imgs.splice(idx,1)[0]; imgs.unshift(it); }
           else if(action === 'up' && idx > 0) { const t = imgs[idx-1]; imgs[idx-1]=imgs[idx]; imgs[idx]=t; }
           else if(action === 'down' && idx < imgs.length-1) { const t = imgs[idx+1]; imgs[idx+1]=imgs[idx]; imgs[idx]=t; }
           renderList();
