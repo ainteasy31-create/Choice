@@ -222,6 +222,11 @@
       });
       if (!imgRes.ok) return null;
       var blob = await imgRes.blob();
+      // Optimize image on client: resize large images and convert to WebP to save bandwidth.
+      try {
+        var optimized = await optimizeImageBlob(blob, 1600, 0.85);
+        if (optimized) blob = optimized;
+      } catch (_) {}
       var base64 = await blobToBase64(blob);
       var ext = (blob.type || 'image/jpeg').split('/')[1] || 'jpg';
       if (ext === 'jpeg') ext = 'jpg';
@@ -234,6 +239,27 @@
     } catch (e) {
       return null;
     }
+  }
+
+  // Resize/convert images using canvas. Returns a Blob or null on failure.
+  function optimizeImageBlob(blob, maxWidth, quality) {
+    return new Promise(async function(resolve) {
+      try {
+        if (!self.createImageBitmap) return resolve(null);
+        const imgBitmap = await createImageBitmap(blob);
+        const ratio = Math.min(1, maxWidth / imgBitmap.width);
+        const w = Math.round(imgBitmap.width * ratio);
+        const h = Math.round(imgBitmap.height * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imgBitmap, 0, 0, w, h);
+        canvas.toBlob(function(b) { resolve(b); }, 'image/webp', quality);
+      } catch (e) {
+        resolve(null);
+      }
+    });
   }
 
   async function uploadOnePhoto(url, index) {

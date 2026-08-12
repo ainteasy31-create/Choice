@@ -143,6 +143,19 @@ Deno.serve(async (req) => {
   // ── Build record using shared builder ────────────────────────
   const record = buildPipelineRecord(body as unknown as Parameters<typeof buildPipelineRecord>[0]);
 
+  // Diagnostic telemetry: log low-quality imports for analysis (sampled original_data included by extractor)
+  try {
+    if (typeof record.data_quality_score === 'number' && record.data_quality_score < 80) {
+      console.info('[receive-pipeline-import] Low quality import:', {
+        id: record.id,
+        score: record.data_quality_score,
+        missing: record.missing_fields,
+        source_listing_id: record.source_listing_id,
+        original_data_sample: record.original_data ? (String(record.original_data).slice(0, 200)) : null,
+      });
+    }
+  } catch (_) {}
+
   // ── Extract source image entries and URLs ──────────────────────
   const sourceImageEntries = parseImageEntries(record.original_image_urls);
   const sourceImageUrls = sourceImageEntries
