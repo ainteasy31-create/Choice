@@ -662,19 +662,38 @@ def _collect_photos_detail(prop):
 # -- Quality scoring -----------------------------------------------------------
 
 def _quality_score(r):
+    detail = {
+        "core": {"fields": _IMPORTANT, "points_each": 6, "filled": [], "missing": []},
+        "bonus": {"fields": _BONUS, "points_each": 2, "filled": [], "missing": []},
+        "photos": {"points": 0, "count": 0},
+    }
     sc = 0
     for f in _IMPORTANT:
         if r.get(f) not in (None, "", "[]"):
             sc += 6
+            detail["core"]["filled"].append(f)
+        else:
+            detail["core"]["missing"].append(f)
     for f in _BONUS:
         if r.get(f) not in (None, "", "[]"):
             sc += 2
+            detail["bonus"]["filled"].append(f)
+        else:
+            detail["bonus"]["missing"].append(f)
     try:
         n = len(json.loads(r.get("original_image_urls") or "[]"))
     except (ValueError, TypeError):
         n = 0
-    sc += 6 if n >= 5 else (3 if n >= 1 else 0)
-    return min(sc, 100)
+    if n >= 5:
+        sc += 6
+        detail["photos"]["points"] = 6
+    elif n >= 1:
+        sc += 3
+        detail["photos"]["points"] = 3
+    else:
+        detail["photos"]["points"] = 0
+    detail["photos"]["count"] = n
+    return min(sc, 100), detail
 
 
 def _missing_fields(r):
@@ -893,7 +912,7 @@ def _map_listing(raw):
         "updated_at":            now,
     }
 
-    record["data_quality_score"] = _quality_score(record)
+    record["data_quality_score"], record["quality_score_detail"] = _quality_score(record)
     record["missing_fields"]     = _jdumps(_missing_fields(record))
 
     return record
@@ -1255,6 +1274,124 @@ def _enrich_from_detail(record, prop):
                 if entry not in all_amenities:
                     all_amenities.append(entry)
 
+    # -- attrMap fallback (Zillow's label->value facts object) -------------------
+    # resoFacts sometimes omits fields that are only in prop.attrMap.
+    # Parse it to fill bonus fields that raise the quality score.
+    facts = {}
+    src = prop.get("attrMap") or prop.get("facts") or {}
+    if isinstance(src, list):
+        for f in src:
+            if f and isinstance(f, dict):
+                label = f.get("label") or f.get("name") or f.get("type") or ""
+                val = f.get("value") or f.get("text") or ""
+                if label and val is not None:
+                    facts[str(label).strip().lower()] = str(val).strip()
+    elif isinstance(src, dict):
+        for k, v in src.items():
+            if v is not None and v != "":
+                facts[str(k).strip().lower()] = str(v).strip()
+
+    def _fact_year_built(current):
+        if current: return current
+        for k in ["year built", "yearbuilt", "built in", "year"]:
+            if k in facts:
+                n = _safe_int(facts[k])
+                if n and n > 1800: return n
+        return None
+
+    def _fact_lot_size(current):
+        if current: return current
+        for k in ["lot size", "lot", "lotsize"]:
+            if k in facts:
+                n = _safe_int(facts[k])
+                if n: return n
+        return None
+
+    def _fact_str(current, keys):
+        if current: return current
+        for k in keys:
+            if k in facts and facts[k]:
+                return facts[k]
+        return None
+
+    def _fact_list(current, keys):
+        if current and len(current): return current
+        for k in keys:
+            if k in facts:
+                parts = [p.strip() for p in facts[k].split(",") if p.strip()]
+                if parts: return parts
+        return current or []
+
+    def _fact_bool(current, keys):
+        if current is not None: return current
+        for k in keys:
+            if k in facts:
+                v = facts[k].lower()
+                return not (v in ("none", "no", "false", "0"))
+        return None
+
+    def _fact_pets(current):
+        if current is not None: return current
+        for k in ["pet friendly", "pets allowed", "pets", "pet policy"]:
+            if k in facts:
+                v = facts[k].lower()
+                return not (v in ("no", "false", "not allowed"))
+        return None
+
+    # Apply attrMap fallbacks for bonus fields
+    if not record.get("year_built"):
+        record["year_built"] = _fact_year_built(record.get("year_built"))
+    if not record.get("lot_size_sqft"):
+        record["lot_size_sqft"] = _fact_lot_size(record.get("lot_size_sqft"))
+    if not record.get("parking"):
+        record["parking"] = _fact_str(record.get("parking"), ["parking"])
+    if not record.get("heating_type"):
+        record["heating_type"] = _fact_str(record.get("heating_type"), ["heating", "heat type", "heat source"])
+    if not record.get("cooling_type"):
+        record["cooling_type"] = _fact_str(record.get("cooling_type"), ["cooling", "air conditioning", "a/c", "ac type"])
+    if not record.get("laundry_type"):
+        record["laundry_type"] = _fact_str(record.get("laundry_type"), ["laundry"])
+    if not record.get("appliances") or record.get("appliances") in ("[]", ""):
+        app_fallback = _fact_list(record.get("appliances"), ["appliances"])
+        if app_fallback:
+            record["appliances"] = _jdumps(app_fallback)
+    if not record.get("pets_allowed"):
+        record["pets_allowed"] = _fact_pets(record.get("pets_allowed"))
+    if not record.get("smoking_allowed"):
+        record["smoking_allowed"] = _fact_bool(record.get("smoking_allowed"), ["smoking"])
+    if not record.get("county"):
+        record["county"] = _fact_str(record.get("county"), ["county"])
+    if not record.get("neighborhood"):
+        record["neighborhood"] = _fact_str(record.get("neighborhood"), ["neighborhood"])
+
+    # Expand amenities from attrMap facts when resoFacts had none
+    if not all_amenities or len(all_amenities) < 4:
+        extra = _fact_list([], ["amenities", "features", "interior features", "exterior features"])
+        for a in extra:
+            if a and str(a).strip() not in ("None", "none", "0", "false", ""):
+                entry = str(a).strip()
+                if entry not in all_amenities:
+                    all_amenities.append(entry)
+
+    # Parse amenityCategories (structured groups of amenities)
+    try:
+        if prop.get("amenityCategories") and isinstance(prop.get("amenityCategories"), list):
+            for cat in prop.get("amenityCategories"):
+                if not cat or not isinstance(cat, dict):
+                    continue
+                if cat.get("amenities") and isinstance(cat.get("amenities"), list):
+                    for a in cat.get("amenities"):
+                        if a and str(a).strip() not in ("None", "none", "0", "false", ""):
+                            entry = str(a).strip()
+                            if entry not in all_amenities:
+                                all_amenities.append(entry)
+                if cat.get("name") and isinstance(cat.get("name"), str):
+                    name = cat["name"].strip()
+                    if name and name not in all_amenities:
+                        all_amenities.append(name)
+    except Exception:
+        pass
+
     if all_amenities:
         record["amenities"] = _jdumps(list(dict.fromkeys(all_amenities)))
 
@@ -1394,7 +1531,7 @@ def _enrich_from_detail(record, prop):
     record["original_data"] = json.dumps(od, default=str)
 
     # -- Recompute quality score & missing fields ------------------------------
-    record["data_quality_score"] = _quality_score(record)
+    record["data_quality_score"], record["quality_score_detail"] = _quality_score(record)
     record["missing_fields"]     = _jdumps(_missing_fields(record))
     record["updated_at"]         = _now()
 

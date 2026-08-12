@@ -382,14 +382,17 @@ async function handleImport(
 
       // Recalculate quality score with ImageKit URLs
       record.original_image_urls = JSON.stringify(imagekitUrls);
-      record.data_quality_score = qualityScore(record);
+      const qs = qualityScore(record);
+      record.data_quality_score = qs.score;
+      record.quality_score_detail = qs.detail;
       record.missing_fields = missingFields(record);
 
       await adminClient
         .schema('pipeline')
         .from('pipeline_properties')
         .update({
-          data_quality_score: record.data_quality_score,
+          data_quality_score: qs.score,
+          quality_score_detail: qs.detail,
           missing_fields: record.missing_fields,
         })
         .eq('id', record.id);

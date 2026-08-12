@@ -278,10 +278,134 @@ export function extractFromNextData(html: string): Record<string, unknown> | { _
     if (!t) return 'Rental';
     return t.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
   }
-  const city = addr.city || prop.city || '';
-  const title = city
-    ? ((beds ? beds + 'BR ' : '') + fmtType(propType) + ' in ' + city)
-    : (addr.streetAddress || prop.streetAddress || 'Zillow Rental');
+  // ── attrMap fallback (Zillow's label->value facts object) ─────────────────
+  // resoFacts sometimes omits fields that are only in prop.attrMap.
+  // Parse it to fill bonus fields that raise the quality score.
+  const facts: Record<string, string> = {};
+  const factsSrc = (prop.attrMap || prop.facts || {}) as Record<string, unknown> | Array<Record<string, unknown>>;
+  if (Array.isArray(factsSrc)) {
+    for (const f of factsSrc) {
+      if (f && typeof f === 'object') {
+        const label = String((f as Record<string, unknown>).label || (f as Record<string, unknown>).name || (f as Record<string, unknown>).type || '').trim().toLowerCase();
+        const val = String((f as Record<string, unknown>).value || (f as Record<string, unknown>).text || '').trim();
+        if (label && val) facts[label] = val;
+      }
+    }
+  } else if (factsSrc && typeof factsSrc === 'object') {
+    for (const [k, v] of Object.entries(factsSrc as Record<string, unknown>)) {
+      if (v != null && v !== '') facts[String(k).trim().toLowerCase()] = String(v).trim();
+    }
+  }
+
+  function factYearBuilt(current: number | null): number | null {
+    if (current) return current;
+    for (const k of ['year built', 'yearbuilt', 'built in', 'year']) {
+      if (facts[k]) { const n = parseInt(facts[k].replace(/[^0-9]/g, ''), 10); if (n && n > 1800) return n; }
+    }
+    return null;
+  }
+
+  function factLotSize(current: number | null): number | null {
+    if (current) return current;
+    for (const k of ['lot size', 'lot', 'lotsize']) {
+      if (facts[k]) { const n = parseInt(facts[k].replace(/[^0-9]/g, ''), 10); if (n) return n; }
+    }
+    return null;
+  }
+
+  function factStr(current: string | null, keys: string[]): string | null {
+    if (current) return current;
+    for (const k of keys) {
+      if (facts[k]) return facts[k];
+    }
+    return null;
+  }
+
+  function factList(current: string | null, keys: string[]): string[] {
+    if (current && current.length) return JSON.parse(current);
+    for (const k of keys) {
+      if (facts[k]) {
+        const parts = facts[k].split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.length) return parts;
+      }
+    }
+    return [];
+  }
+
+  function factBool(current: boolean | null, keys: string[]): boolean | null {
+    if (current != null) return current;
+    for (const k of keys) {
+      if (facts[k]) {
+        const v = facts[k].toLowerCase();
+        return !(v === 'none' || v === 'no' || v === 'false' || v === '0');
+      }
+    }
+    return null;
+  }
+
+  function factPets(current: boolean | null): boolean | null {
+    if (current != null) return current;
+    for (const k of ['pet friendly', 'pets allowed', 'pets', 'pet policy']) {
+      if (facts[k]) {
+        const v = facts[k].toLowerCase();
+        return !(v === 'no' || v === 'false' || v === 'not allowed');
+      }
+    }
+    return null;
+  }
+
+  const yrBuilt = factYearBuilt(prop.yearBuilt || rf.yearBuilt || null);
+  const lotSize = factLotSize(lotSqft);
+  const parking = parking || factStr(null, ['parking']);
+  const heatingType = ((rf.heating as string[] | undefined)?.join(', ') || null) || factStr(null, ['heating', 'heat type', 'heat source']);
+  const coolingType = ((rf.cooling as string[] | undefined)?.join(', ') || null) || factStr(null, ['cooling', 'air conditioning', 'a/c', 'ac type']);
+  const laundryType = ((rf.laundryFeatures as string[] | undefined)?.join(', ') || null) || factStr(null, ['laundry']);
+  const appliances = (rf.appliances && rf.appliances.length ? rf.appliances : factList(null, ['appliances'])) as string[];
+  const smoking = rf.smokingAllowed != null ? !!rf.smokingAllowed : factBool(null, ['smoking']);
+  const pets = prop.isPetFriendly ?? (rf.petsAllowed !== undefined ? rf.petsAllowed : factPets(null));
+
+  // Expand amenities from attrMap facts when resoFacts had none
+  if (!Object.keys(amenityMap).length || Object.keys(amenityMap).length < 4) {
+    const extra = factList([], ['amenities', 'features', 'interior features', 'exterior features']);
+    for (const a of extra) {
+      const s = String(a).trim();
+      if (s && s !== 'None' && s !== 'none' && s !== '0' && s !== 'false' && s !== '') amenityMap[s] = true;
+    }
+  }
+
+  // Parse amenityCategories (structured groups of amenities)
+  try {
+    if (prop.amenityCategories && Array.isArray(prop.amenityCategories)) {
+      for (const cat of prop.amenityCategories) {
+        if (!cat || typeof cat !== 'object') continue;
+        const c = cat as Record<string, unknown>;
+        if (c.amenities && Array.isArray(c.amenities)) {
+          for (const a of c.amenities) {
+            const s = typeof a === 'string' ? a : (a && typeof a === 'object' ? String((a as Record<string, unknown>).name || '') : '');
+            const ss = s.trim();
+            if (ss && ss !== 'None' && ss !== 'none' && ss !== '0' && ss !== 'false' && ss !== '') amenityMap[ss] = true;
+          }
+        }
+        if (c.name && typeof c.name === 'string') {
+          const n = c.name.trim();
+          if (n && n !== 'None' && n !== 'none') amenityMap[n] = true;
+        }
+      }
+    }
+  } catch (_) {}
+
+  const secDeposit = safeInt(rf.securityDeposit) || safeInt(facts['security deposit']) || null;
+
+  // Sample a small original_data excerpt to help debugging missing fields
+  let sampled: Record<string, unknown> | null = null;
+  try {
+    sampled = {
+      zpid: zpid,
+      attrMap: sampleValue(prop.attrMap || prop.facts || {}, 2),
+      amenityCategories: sampleValue(prop.amenityCategories || [], 2),
+      resoFacts: sampleValue(rf || {}, 2),
+    };
+  } catch (_) { sampled = null; }
 
   return {
     source: 'zillow',
@@ -299,8 +423,8 @@ export function extractFromNextData(html: string): Record<string, unknown> | { _
     bathrooms: bathF,
     half_bathrooms: bathH,
     square_footage: prop.livingArea || prop.area || null,
-    lot_size_sqft: lotSqft,
-    year_built: prop.yearBuilt || rf.yearBuilt || null,
+    lot_size_sqft: lotSize,
+    year_built: yrBuilt,
     floors: prop.stories || rf.stories || null,
     garage_spaces: prop.garageParkingCapacity || prop.garageSpaces || rf.garageSpaces || null,
     total_units: prop.unitCount || prop.numberOfUnitsTotal || null,
@@ -311,10 +435,10 @@ export function extractFromNextData(html: string): Record<string, unknown> | { _
     location_context: ctxParts.length ? ctxParts.join('; ') : null,
     available_date: normalizeDate(rf.dateAvailable || rf.availableFrom || prop.dateAvailable),
     minimum_lease_months: minLease,
-    pets_allowed: prop.isPetFriendly ?? (rf.petsAllowed !== undefined ? rf.petsAllowed : null),
+    pets_allowed: pets,
     pet_types_allowed: JSON.stringify(petTypes),
-    smoking_allowed: rf.smokingAllowed != null ? !!rf.smokingAllowed : null,
-    security_deposit: safeInt(rf.securityDeposit),
+    smoking_allowed: smoking,
+    security_deposit: secDeposit,
     pet_deposit: safeInt(rf.petFee || rf.petDepositFee || rf.petDeposit),
     admin_fee: safeInt(rf.adminFee),
     parking_fee: safeInt(rf.parkingFee),
@@ -324,16 +448,17 @@ export function extractFromNextData(html: string): Record<string, unknown> | { _
     move_in_special: rf.concessions ? String(rf.concessions).slice(0, 200) : null,
     parking,
     amenities: JSON.stringify(Object.keys(amenityMap)),
-    appliances: JSON.stringify(rf.appliances || []),
+    appliances: JSON.stringify(appliances),
     utilities_included: JSON.stringify(rf.utilities || rf.utilitiesIncluded || []),
-    heating_type: (rf.heating as string[] | undefined)?.join(', ') || null,
-    cooling_type: (rf.cooling as string[] | undefined)?.join(', ') || null,
-    laundry_type: (rf.laundryFeatures as string[] | undefined)?.join(', ') || null,
+    heating_type: heatingType,
+    cooling_type: coolingType,
+    laundry_type: laundryType,
     has_basement: basement,
     has_central_air: centralAir,
     virtual_tour_url: prop.virtualTourUrl || prop.threeDimensionalTourUrl || null,
     original_image_urls: JSON.stringify(photosCapped),
     agent_name: ai.agentName || null,
     broker_name: ai.brokerName || null,
+    original_data: sampled ? JSON.stringify(sampled) : null,
   };
 }

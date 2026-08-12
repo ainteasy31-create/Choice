@@ -99,6 +99,43 @@ def _load_dotenv():
 _load_dotenv()
 
 # ---------------------------------------------------------------------------
+# Cross-source duplicate detection helpers
+# ---------------------------------------------------------------------------
+
+_STREET_SUFFIX_MAP = {
+    "street": "st", "st": "st", "avenue": "ave", "ave": "ave",
+    "boulevard": "blvd", "blvd": "blvd", "drive": "dr", "dr": "dr",
+    "road": "rd", "rd": "rd", "lane": "ln", "ln": "ln",
+    "court": "ct", "ct": "ct", "place": "pl", "pl": "pl",
+    "circle": "cir", "cir": "cir", "way": "way", "trail": "trl",
+    "parkway": "pkwy", "pkwy": "pkwy", "highway": "hwy", "hwy": "hwy",
+    "north": "n", "south": "s", "east": "e", "west": "w",
+    "northeast": "ne", "northwest": "nw", "southeast": "se", "southwest": "sw",
+}
+
+def _normalize_address(addr: Optional[str]) -> str:
+    if not addr:
+        return ""
+    s = addr.lower()
+    s = re.sub(r"#[^\s,]*", "", s)
+    s = re.sub(r"apt\.?\s*[^\s,]*", "", s)
+    s = re.sub(r"unit\s*[^\s,]*", "", s)
+    s = re.sub(r"suite\s*[^\s,]*", "", s)
+    words = s.split()
+    normed = []
+    for w in words:
+        w_clean = re.sub(r"[^a-z]", "", w)
+        normed.append(_STREET_SUFFIX_MAP.get(w_clean, w_clean))
+    return " ".join(normed)
+
+def _address_match_key(rec: Dict) -> str:
+    addr = _normalize_address(rec.get("address"))
+    city = (rec.get("city") or "").lower().strip()
+    state = (rec.get("state") or "").lower().strip()
+    zip5 = (rec.get("zip") or "")[:5]
+    return f"{zip5}|{state}|{city}|{addr}"
+
+# ---------------------------------------------------------------------------
 # Optional dependency guards
 # ---------------------------------------------------------------------------
 try:
@@ -284,6 +321,7 @@ class PipelineResult:
     photos_ok: int = 0
     photos_failed: int = 0
     watermarked_dropped: int = 0
+    cross_source_dedup: int = 0
     errors: List[str] = field(default_factory=list)
     published_urls: List[str] = field(default_factory=list)
 
@@ -301,6 +339,7 @@ class PipelineResult:
             "Photos OK            : {}".format(self.photos_ok),
             "Photo failures       : {}".format(self.photos_failed),
             "Watermarked dropped  : {}".format(self.watermarked_dropped),
+            "Cross-source dedup   : {}".format(self.cross_source_dedup),
         ]
         if self.errors:
             lines.append("\nErrors:")
@@ -382,6 +421,13 @@ class PipelineOrchestrator:
         result.after_dedup = len(records)
         self._log("   After dedup: {}".format(result.after_dedup))
 
+        # ── Step 2b: Cross-source duplicate detection ─────────────────────
+        self._log("\n── Step 2b: Cross-source dedup ──")
+        pre_cross = len(records)
+        records = self._step2b_cross_source_dedup(records)
+        result.cross_source_dedup = pre_cross - len(records)
+        self._log("   Cross-source duplicates removed: {}".format(result.cross_source_dedup))
+
         # ── Step 3: Criteria filter + watermark filter ────────────────────
         self._log("\n── Step 3: Filtering against criteria + competitor watermark ──")
         records, dropped = self._step3_filter(records, criteria)
@@ -414,6 +460,7 @@ class PipelineOrchestrator:
             )
             fb_recs = self._step1_scrape(fb_criteria)
             fb_recs = self._step2_availability_dedup(fb_recs)
+            fb_recs = self._step2b_cross_source_dedup(fb_recs)
             existing_sids = {r.get("source_listing_id") for r in records}
             fb_recs = [r for r in fb_recs if r.get("source_listing_id") not in existing_sids]
             fb_recs, _ = self._step3_filter(fb_recs, criteria)
@@ -725,6 +772,7 @@ class PipelineOrchestrator:
             )
             fb_recs = self._step1_scrape(fb_criteria)
             fb_recs = self._step2_availability_dedup(fb_recs)
+            fb_recs = self._step2b_cross_source_dedup(fb_recs)
             existing_sids = {r.get("source_listing_id") for r in records}
             fb_recs = [r for r in fb_recs if r.get("source_listing_id") not in existing_sids]
             fb_recs, _ = self._step3_filter(fb_recs, criteria)
@@ -968,6 +1016,31 @@ class PipelineOrchestrator:
             seen_sids.add(sid)
             unique.append(rec)
         return unique
+
+    def _step2b_cross_source_dedup(self, records: List[Dict]) -> List[Dict]:
+        """Remove cross-source duplicates (same address, different source).
+
+        Groups records by normalized address key and keeps the record with
+        the highest data_quality_score. This handles the case where the same
+        property is scraped from both Zillow and Realtor.com.
+        """
+        groups: Dict[str, List[Dict]] = {}
+        for rec in records:
+            key = _address_match_key(rec)
+            groups.setdefault(key, []).append(rec)
+
+        deduped = []
+        for key, recs in groups.items():
+            if len(recs) == 1:
+                deduped.append(recs[0])
+            else:
+                best = max(recs, key=lambda r: r.get("data_quality_score") or 0)
+                deduped.append(best)
+                if self.verbose:
+                    sources = [r.get("source") for r in recs]
+                    self._log("   [CROSS-DEDUP] {} — kept {} (score {}), dropped {}"
+                              .format(key, best.get("source"), best.get("data_quality_score"), sources))
+        return deduped
 
     def _step3_filter(
         self, records: List[Dict], criteria: BatchCriteria

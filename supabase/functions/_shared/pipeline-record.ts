@@ -28,15 +28,30 @@ export function isEmpty(v: unknown): boolean {
   return v === null || v === undefined || v === '' || v === '[]';
 }
 
-export function qualityScore(r: Record<string, unknown>): number {
+export function qualityScore(r: Record<string, unknown>): { score: number; detail: Record<string, unknown> } {
+  const detail: Record<string, unknown> = {
+    core: { fields: CORE_FIELDS, points_each: 6, filled: [] as string[], missing: [] as string[] },
+    bonus: { fields: BONUS_FIELDS, points_each: 2, filled: [] as string[], missing: [] as string[] },
+    photos: { points: 0, count: 0 },
+  };
   let sc = 0;
-  for (const f of CORE_FIELDS)  if (!isEmpty(r[f])) sc += 6;
-  for (const f of BONUS_FIELDS) if (!isEmpty(r[f])) sc += 2;
+  for (const f of CORE_FIELDS) {
+    if (!isEmpty(r[f])) { sc += 6; detail.core.filled.push(f); }
+    else { detail.core.missing.push(f); }
+  }
+  for (const f of BONUS_FIELDS) {
+    if (!isEmpty(r[f])) { sc += 2; detail.bonus.filled.push(f); }
+    else { detail.bonus.missing.push(f); }
+  }
   try {
     const urls = JSON.parse((r.original_image_urls as string) || '[]');
-    sc += Array.isArray(urls) && urls.length >= 5 ? 6 : urls.length >= 1 ? 3 : 0;
+    const n = Array.isArray(urls) ? urls.length : 0;
+    if (n >= 5) { sc += 6; detail.photos.points = 6; }
+    else if (n >= 1) { sc += 3; detail.photos.points = 3; }
+    else { detail.photos.points = 0; }
+    detail.photos.count = n;
   } catch { /* ignore */ }
-  return Math.min(sc, 100);
+  return { score: Math.min(sc, 100), detail };
 }
 
 export function missingFields(r: Record<string, unknown>): string {
@@ -314,7 +329,9 @@ export function buildPipelineRecord(body: PipelineRecordInput): Record<string, u
     updated_at:           safeStr(body.updated_at) ?? now,
   };
 
-  record.data_quality_score = qualityScore(record);
+  const qs = qualityScore(record);
+  record.data_quality_score = qs.score;
+  record.quality_score_detail = qs.detail;
   record.missing_fields     = missingFields(record);
 
   return record;

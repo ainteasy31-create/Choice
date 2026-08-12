@@ -392,8 +392,12 @@ export function extractFromNextData(html: string): Record<string, unknown> | { _
 `;
 
 const denoTarget = path.join(ROOT, 'supabase', 'functions', '_shared', 'zillow-extract.ts');
-fs.writeFileSync(denoTarget, denoContent, 'utf8');
-console.log('✓ Generated supabase/functions/_shared/zillow-extract.ts');
+if (!fs.existsSync(denoTarget) || !fs.readFileSync(denoTarget, 'utf8').includes('attrMap fallback')) {
+  fs.writeFileSync(denoTarget, denoContent, 'utf8');
+  console.log('✓ Generated supabase/functions/_shared/zillow-extract.ts');
+} else {
+  console.log('✓ Preserved supabase/functions/_shared/zillow-extract.ts (contains attrMap fallback)');
+}
 
 console.log('\n✅ All extractor variants generated successfully.');
 console.log('   Edit src/extractors/shared-extractors.js to update all variants.');

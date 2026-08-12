@@ -469,16 +469,38 @@ _TRACKABLE_MISSING = [
 ]
 
 def _quality_score(r):
+    detail = {
+        "core": {"fields": _IMPORTANT, "points_each": 6, "filled": [], "missing": []},
+        "bonus": {"fields": _BONUS, "points_each": 2, "filled": [], "missing": []},
+        "photos": {"points": 0, "count": 0},
+    }
     sc = 0
     for f in _IMPORTANT:
         if r.get(f) not in (None, "", "[]"):
             sc += 6
+            detail["core"]["filled"].append(f)
+        else:
+            detail["core"]["missing"].append(f)
     for f in _BONUS:
         if r.get(f) not in (None, "", "[]"):
             sc += 2
-    n = len(json.loads(r.get("original_image_urls") or "[]"))
-    sc += 10 if n >= 12 else (7 if n >= 6 else (4 if n >= 3 else (1 if n >= 1 else 0)))
-    return min(sc, 100)
+            detail["bonus"]["filled"].append(f)
+        else:
+            detail["bonus"]["missing"].append(f)
+    try:
+        n = len(json.loads(r.get("original_image_urls") or "[]"))
+    except (ValueError, TypeError):
+        n = 0
+    if n >= 5:
+        sc += 6
+        detail["photos"]["points"] = 6
+    elif n >= 1:
+        sc += 3
+        detail["photos"]["points"] = 3
+    else:
+        detail["photos"]["points"] = 0
+    detail["photos"]["count"] = n
+    return min(sc, 100), detail
 
 def _missing_fields(r):
     return [f for f in _TRACKABLE_MISSING if r.get(f) in (None, "", "[]")]
@@ -938,7 +960,7 @@ def _map_realtor_property(prop):
         "scraped_at":            now,
         "updated_at":            now,
     }
-    record["data_quality_score"] = _quality_score(record)
+    record["data_quality_score"], record["quality_score_detail"] = _quality_score(record)
     record["missing_fields"]     = _jdumps(_missing_fields(record))
 
     # listed_at fallback: compute from days_on_mls if list_date was unavailable
@@ -1263,7 +1285,7 @@ def _enrich_realtor_from_detail(record, prop):
         record["title"] = bed_pfx + type_lbl + " in " + record["city"]
 
     # ── Re-score ───────────────────────────────────────────────────────────────
-    record["data_quality_score"] = _quality_score(record)
+    record["data_quality_score"], record["quality_score_detail"] = _quality_score(record)
     record["missing_fields"]     = _jdumps(_missing_fields(record))
 
     return record

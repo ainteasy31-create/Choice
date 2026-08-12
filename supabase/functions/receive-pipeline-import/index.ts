@@ -205,14 +205,15 @@ async function uploadPhotosAsync(
 
       // Recalculate quality score with ImageKit URLs
       const updatedRecord = { ...record, original_image_urls: JSON.stringify(imagekitUrls) };
-      const score = qualityScore(updatedRecord);
+      const qs = qualityScore(updatedRecord);
       const missing = missingFields(updatedRecord);
 
       await adminClient
         .schema('pipeline')
         .from('pipeline_properties')
         .update({
-          data_quality_score: score,
+          data_quality_score: qs.score,
+          quality_score_detail: qs.detail,
           missing_fields: missing,
         })
         .eq('id', record.id);
@@ -307,7 +308,7 @@ Deno.serve(async (req) => {
     if (photoUrls.length > 0 && photoUrls.every((u: string) => u.includes('ik.imagekit.io'))) {
       // All photos are ImageKit URLs — update record with them
       const updatedRecord = { ...existing, original_image_urls: JSON.stringify(photoEntries) } as Record<string, unknown>;
-      const score = qualityScore(updatedRecord);
+      const qs = qualityScore(updatedRecord);
       const missing = missingFields(updatedRecord);
 
       const { error: updateErr } = await adminClient
@@ -318,7 +319,8 @@ Deno.serve(async (req) => {
           photo_import_status: 'ok',
           last_photo_import_at: new Date().toISOString(),
           last_photo_import_error: null,
-          data_quality_score: score,
+          data_quality_score: qs.score,
+          quality_score_detail: qs.detail,
           missing_fields: missing,
         })
         .eq('id', existing.id);
@@ -399,13 +401,14 @@ Deno.serve(async (req) => {
   // ── If photos are already on ImageKit, update quality score immediately ──
   if (alreadyImageKit) {
     const updatedRecord = { ...record, original_image_urls: JSON.stringify(sourceImageEntries) };
-    const score = qualityScore(updatedRecord);
+    const qs = qualityScore(updatedRecord);
     const missing = missingFields(updatedRecord);
     await adminClient
       .schema('pipeline')
       .from('pipeline_properties')
       .update({
-        data_quality_score: score,
+        data_quality_score: qs.score,
+        quality_score_detail: qs.detail,
         missing_fields: missing,
         photo_import_status: 'ok',
         last_photo_import_at: new Date().toISOString(),
