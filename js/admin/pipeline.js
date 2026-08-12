@@ -28,7 +28,11 @@
   function fmt$$(n){ return n != null ? '$' + Number(n).toLocaleString() : '—'; }
   function fmtBeds(l){ return [l.bedrooms != null ? l.bedrooms + ' bd' : null, l.bathrooms != null ? l.bathrooms + ' ba' : null].filter(Boolean).join(' · ') || '—'; }
   function fmtSqft(l){ return l.square_footage ? l.square_footage.toLocaleString() + ' sqft' : ''; }
-  function parseJSON(s){ try{ return s ? JSON.parse(s) : null; }catch(_){ return null; } }
+  function parseJSON(s){
+    if(s == null || s === '') return null;
+    if(typeof s !== 'string') return s;
+    try{ return JSON.parse(s); }catch(_){ return null; }
+  }
 
   // ── Pre-publish validation gate ──────────────────────────────────────────────
   // Mirrors validate_for_publish() in scraper/enrichment.py.
@@ -45,9 +49,8 @@
     const desc = listing.description || '';
 
     // 1. Image check — check both source URLs AND ImageKit URLs
-    const sourceUrls = parseJSON(listing.original_image_urls) || [];
+    const sourceUrls = imageUrls(listing.original_image_urls);
     const hasImages = sourceUrls.length > 0;
-    const hasImageKit = sourceUrls.some(u => u.includes('ik.imagekit.io'));
 
     if (listing.choice_property_id) {
       // Already published once — count confirmed ImageKit photos.
@@ -67,10 +70,11 @@
     }
 
     // 2. Rent must be set and reasonable
-    if (!listing.monthly_rent || listing.monthly_rent <= 0) {
+    const monthlyRent = Number(listing.monthly_rent);
+    if (!Number.isFinite(monthlyRent) || monthlyRent <= 0) {
       failures.push('Monthly rent is not set');
-    } else if (listing.monthly_rent > 100000) {
-      failures.push('Monthly rent looks incorrect ($' + listing.monthly_rent + ') — please verify');
+    } else if (monthlyRent > 100000) {
+      failures.push('Monthly rent looks incorrect ($' + monthlyRent + ') — please verify');
     }
 
     // 3. Free-application language in description
@@ -474,7 +478,7 @@
     const editedFields = parseJSON(l.edited_fields) || [];
     const enriched = isEnriched(l);
     const srcType  = importSource(l);
-    const photoCount = (parseJSON(l.original_image_urls) || []).length;
+    const photoCount = imageUrls(l.original_image_urls).length;
 
     return `
     <div class="pl-panel-hd">
