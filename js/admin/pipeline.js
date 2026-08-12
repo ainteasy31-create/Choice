@@ -327,6 +327,7 @@
       <div class="pl-card-ft" onclick="event.stopPropagation()">
         ${!isArchived ? `<button class="btn btn-sm btn-ghost pl-arc-btn" data-id="${S.esc(l.id)}" title="Archive">Archive</button>` : '<span class="pill pill-muted" style="font-size:.68rem">Archived</span>'}
         ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-primary pl-pub-btn" data-id="${S.esc(l.id)}" title="Publish to site">Publish →</button>` : ''}
+        ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-ghost pl-del-btn" data-id="${S.esc(l.id)}" title="Delete from pipeline" style="color:var(--danger)">Delete</button>` : ''}
         ${l.photo_import_status === 'failed' && !isArchived ? `<button class="btn btn-sm btn-outline pl-retry-photos-btn" data-id="${S.esc(l.id)}" data-prop-id="${S.esc(l.choice_property_id || '')}" title="Retry downloading photos to ImageKit">Retry photos</button>` : ''}
         ${isPublished && l.choice_property_id ? `<a class="btn btn-sm btn-ghost" href="/admin/property-detail.html?id=${S.esc(l.choice_property_id)}" target="_blank" onclick="event.stopPropagation()">Edit ↗</a>` : ''}
       </div>
@@ -716,6 +717,29 @@
 
       const pubBtn = panel.querySelector('.pl-pub-btn-panel');
       if(pubBtn) pubBtn.addEventListener('click', () => doPublish(l.id));
+
+      const delBtn = panel.querySelector('.pl-del-btn');
+      if(delBtn) delBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const ok = await S.confirm('Delete this listing from the pipeline?', 'This permanently deletes the pipeline record — it cannot be undone.');
+        if(!ok) return;
+        delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+        try {
+          const { data, error } = await CP.sb().rpc('pipeline_delete', { p_id: l.id });
+          if(error) throw error;
+          const res = typeof data === 'string' ? JSON.parse(data) : data;
+          if(!res?.ok) throw new Error(res?.error || 'Delete failed');
+          S.toast('Deleted from pipeline', 'success');
+          removeCard(l.id);
+          closePanel();
+          fetchCounts().catch(()=>{});
+        } catch(err){
+          console.error('[pipeline] delete failed', err);
+          S.toast('Delete failed: ' + (err.message||'unknown'), 'error');
+        } finally {
+          delBtn.disabled = false; delBtn.textContent = 'Delete';
+        }
+      });
 
       // Load photos asynchronously (may fetch from ImageKit for published listings)
       // FIX: photoCount was referenced from renderPanel() scope (undefined here),
