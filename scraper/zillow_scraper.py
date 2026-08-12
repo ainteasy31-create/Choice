@@ -1315,7 +1315,13 @@ def _enrich_from_detail(record, prop):
         return None
 
     def _fact_list(current, keys):
-        if current and len(current): return current
+        if current:
+            try:
+                parsed = json.loads(current)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    return parsed
+            except (ValueError, TypeError):
+                pass
         for k in keys:
             if k in facts:
                 parts = [p.strip() for p in facts[k].split(",") if p.strip()]

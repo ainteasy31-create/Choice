@@ -17,6 +17,86 @@
   let _selected  = new Set(); // IDs of selected cards for bulk actions
   let _undoStack = [];
   let _redoStack = [];
+  let _undoCounter = 0;
+  let _viewMode = 'list'; // 'list' | 'kanban'
+
+  function _pushUndo(action){
+    _undoStack.push(action);
+    _undoCounter++;
+    if(_undoStack.length > 50) _undoStack.shift();
+    _redoStack = [];
+  }
+
+  function _showUndoToast(action){
+    const toast = document.createElement('div');
+    toast.className = 'undo-toast';
+    toast.innerHTML = `
+      <span style="flex:1;min-width:0;font-size:.82rem">${action.label}</span>
+      <button class="undo-btn" id="undo-btn-${_undoCounter}">Undo</button>
+    `;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('visible'));
+
+    const btn = toast.querySelector('.undo-btn');
+    const cleanup = () => { toast.classList.remove('visible'); setTimeout(() => toast.remove(), 300); };
+    btn.addEventListener('click', () => { doUndo(action); cleanup(); });
+    setTimeout(cleanup, 8000);
+  }
+
+  async function doUndo(action){
+    try {
+      switch(action.type){
+        case 'save': {
+          const { error } = await CP.sb().rpc('pipeline_save', { p_id: action.id, p_patch: action.prev });
+          if(error) throw error;
+          Object.assign(_pageData.find(l => l.id === action.id) || {}, action.prev);
+          refreshCard(action.id);
+          S.toast('Undo: changes reverted', 'info');
+          break;
+        }
+        case 'archive': {
+          const { data, error } = await CP.sb().rpc('pipeline_unarchive', { p_id: action.id });
+          if(error) throw error;
+          const rec = action.record;
+          if(rec){
+            rec.status = rec.status || 'scraped';
+            _pageData.push(rec);
+            renderList(visibleListings(), false);
+            wireCardEvents();
+          }
+          S.toast('Undo: listing restored', 'info');
+          break;
+        }
+        case 'delete': {
+          const { data, error } = await CP.sb().rpc('pipeline_restore', { p_payload: action.record });
+          if(error) throw error;
+          _pageData.push(action.record);
+          renderList(visibleListings(), false);
+          wireCardEvents();
+          S.toast('Undo: listing restored', 'info');
+          break;
+        }
+        case 'publish': {
+          const { data, error } = await CP.sb().rpc('pipeline_unpublish', { p_id: action.id });
+          if(error) throw error;
+          const rec = _pageData.find(l => l.id === action.id);
+          if(rec){ rec.status = action.prevStatus || 'edited'; rec.choice_property_id = null; refreshCard(action.id); }
+          S.toast('Undo: unpublished', 'info');
+          break;
+        }
+        case 'photo_edit': {
+          const { data, error } = await CP.sb().rpc('pipeline_save', { p_id: action.id, p_patch: { original_image_urls: action.prevUrls } });
+          if(error) throw error;
+          const rec = _pageData.find(l => l.id === action.id);
+          if(rec){ rec.original_image_urls = action.prevUrls; refreshCard(action.id); }
+          S.toast('Undo: photos reverted', 'info');
+          break;
+        }
+      }
+    } catch(e){
+      S.toast('Undo failed: ' + (e.message || 'unknown'), 'error');
+    }
+  }
 
   // ── Session cache (30 s TTL — avoid re-fetch on back-navigation) ──────────
   const _CPFX = 'pl_v1_';
@@ -97,9 +177,20 @@
   }
 
   function qsClass(score){ if(score == null) return ''; return score >= 80 ? 'qs-high' : score >= 60 ? 'qs-mid' : 'qs-low'; }
-  function qsBadge(score){
+  function qsBadge(score, detail){
     if(score == null) return '';
-    return `<span class="qs-badge ${qsClass(score)}" title="Data quality score">Q: ${score}</span>`;
+    let tip = 'Data quality score';
+    try {
+      const d = typeof detail === 'string' ? JSON.parse(detail) : detail;
+      if (d && typeof d === 'object') {
+        const core = (d.core && d.core.filled && d.core.missing) ? `${d.core.filled.length}/${d.core.fields.length} core` : null;
+        const bonus = (d.bonus && d.bonus.filled && d.bonus.missing) ? `${d.bonus.filled.length}/${d.bonus.fields.length} bonus` : null;
+        const photos = (d.photos && d.photos.count != null) ? `${d.photos.count} photos` : null;
+        const parts = [core, bonus, photos].filter(Boolean);
+        if (parts.length) tip = parts.join(' | ');
+      }
+    } catch (_) {}
+    return `<span class="qs-badge ${qsClass(score)}" title="${tip}">Q: ${score}</span>`;
   }
   function statusChip(status){
     const map = { scraped:'', edited:'info', published:'success', archived:'' };
@@ -290,7 +381,7 @@
         </label>
         <div class="pl-card-badges">
           ${l.source ? `<span class="src-badge src-${S.esc(l.source)}">${srcLabel}</span>` : ''}
-          ${qsBadge(score)}
+          ${qsBadge(score, l.quality_score_detail)}
           ${folderBadge}
           ${srcImp === 'admin-url' ? `<span class="qs-badge qs-high" title="Imported via admin URL import">🖥 Desktop</span>` : ''}
           ${isPublished && l.choice_property_id ? `<a href="/property.html?id=${S.esc(l.choice_property_id)}" class="qs-badge qs-high" style="text-decoration:none;pointer-events:auto" target="_blank" onclick="event.stopPropagation()">Live ↗</a>` : ''}
@@ -323,9 +414,13 @@
     const wrap = document.getElementById('pl-list');
     updateSearchCount(listings);
     if(!append){
-      wrap.innerHTML = listings.length
-        ? listings.map(renderCard).join('')
-        : `<div class="pl-empty">
+      const frag = document.createDocumentFragment();
+      const tmp = document.createElement('div');
+      if(listings.length){
+        tmp.innerHTML = listings.map(renderCard).join('');
+        while(tmp.firstChild) frag.appendChild(tmp.firstChild);
+      } else {
+        tmp.innerHTML = `<div class="pl-empty">
              <svg class="i"><use href="#i-check"/></svg>
              <h3>${_search ? 'No matches' : 'Nothing here'}</h3>
              <p>${_search
@@ -333,8 +428,16 @@
                : 'No listings with status "' + _status + '"' + (_source ? ' from ' + _source : '') + ' in the pipeline.'
              }</p>
            </div>`;
+        while(tmp.firstChild) frag.appendChild(tmp.firstChild);
+      }
+      wrap.innerHTML = '';
+      wrap.appendChild(frag);
     } else {
-      listings.forEach(l => wrap.insertAdjacentHTML('beforeend', renderCard(l)));
+      const frag = document.createDocumentFragment();
+      const tmp = document.createElement('div');
+      tmp.innerHTML = listings.map(renderCard).join('');
+      while(tmp.firstChild) frag.appendChild(tmp.firstChild);
+      wrap.appendChild(frag);
     }
     document.getElementById('load-more-wrap').style.display = _hasMore && !_search ? '' : 'none';
   }
@@ -709,6 +812,7 @@
         const ok = await S.confirm('Delete this listing from the pipeline?', 'This permanently deletes the pipeline record — it cannot be undone.');
         if(!ok) return;
         delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+        const record = Object.assign({}, l);
         try {
           const { data, error } = await CP.sb().rpc('pipeline_delete', { p_id: l.id });
           if(error) throw error;
@@ -718,6 +822,8 @@
           removeCard(l.id);
           closePanel();
           fetchCounts().catch(()=>{});
+          _pushUndo({ type: 'delete', id: l.id, record, label: 'Delete' });
+          _showUndoToast({ type: 'delete', id: l.id, record, label: 'Delete' });
         } catch(err){
           console.error('[pipeline] delete failed', err);
           S.toast('Delete failed: ' + (err.message||'unknown'), 'error');
@@ -1093,6 +1199,8 @@ function wirePanelPhotoActions(){
   async function doSave(id){
     const patch = collectPatch();
     if(!Object.keys(patch).length){ S.toast('No changes to save', 'info'); return; }
+    const prev = {};
+    Object.keys(patch).forEach(k => { prev[k] = _current[k]; });
     _cClear();
     const btn = document.querySelector('.pl-save-btn');
     if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -1106,11 +1214,15 @@ function wirePanelPhotoActions(){
     if(_current.status === 'scraped') _current.status = 'edited';
     refreshCard(id);
     fetchCounts().catch(()=>{});
+    _pushUndo({ type: 'save', id, prev, label: 'Save changes' });
+    _showUndoToast({ type: 'save', id, prev, label: 'Save changes' });
   }
 
   async function doArchive(id){
     const ok = await S.confirm('Archive this listing?', 'It will be hidden from the pipeline. You can still find it under the Archived filter.');
     if(!ok) return;
+    const listing = _pageData.find(l => l.id === id);
+    const record = listing ? Object.assign({}, listing) : null;
     _cClear();
     const { data, error } = await CP.sb().rpc('pipeline_archive', { p_id: id });
     if(error){ S.toast('Archive failed: ' + error.message, 'error'); return; }
@@ -1120,6 +1232,10 @@ function wirePanelPhotoActions(){
     removeCard(id);
     closePanel();
     fetchCounts().catch(()=>{});
+    if(record){
+      _pushUndo({ type: 'archive', id, record, label: 'Archive' });
+      _showUndoToast({ type: 'archive', id, record, label: 'Archive' });
+    }
   }
 
   // Transfer source photos to ImageKit in the background after publish
@@ -1189,6 +1305,7 @@ function wirePanelPhotoActions(){
     if(!ok) return;
     _cClear();
 
+    const prevStatus = _current ? _current.status : null;
     const btn = document.querySelector('.pl-pub-btn-panel');
     if(btn){ btn.disabled = true; btn.textContent = 'Publishing…'; }
 
@@ -1207,6 +1324,10 @@ function wirePanelPhotoActions(){
     removeCard(id);
     closePanel();
     fetchCounts().catch(()=>{});
+    if(!deleteOnPublish && prevStatus){
+      _pushUndo({ type: 'publish', id, prevStatus, label: 'Publish' });
+      _showUndoToast({ type: 'publish', id, prevStatus, label: 'Publish' });
+    }
 
     // Transfer photos in background (non-blocking)
     doTransferPhotos(id, propId);
@@ -1472,6 +1593,128 @@ function wirePanelPhotoActions(){
           delBtn.disabled = false; delBtn.textContent = 'Delete from pipeline';
         }
       });
+    }
+  }
+
+  function wireViewToggle(){
+    const btn = document.getElementById('pl-view-toggle');
+    if(!btn) return;
+    btn.addEventListener('click', async () => {
+      _viewMode = _viewMode === 'list' ? 'kanban' : 'list';
+      btn.innerHTML = _viewMode === 'list'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+      btn.title = _viewMode === 'list' ? 'Switch to pipeline view' : 'Switch to list view';
+      await load(false);
+    });
+  }
+
+  // ── Kanban / Pipeline board ──────────────────────────────────────────────────
+  const KANBAN_COLS = [
+    { key: 'scraped', label: 'New', icon: '🆕' },
+    { key: 'edited',  label: 'Edited', icon: '✏️' },
+    { key: 'published', label: 'Published', icon: '🚀' },
+    { key: 'archived', label: 'Archived', icon: '🗄️' },
+  ];
+
+  function renderKanban(){
+    const list = document.getElementById('pl-list');
+    const wrap = document.createElement('div');
+    wrap.className = 'pl-kanban';
+    wrap.id = 'pl-kanban';
+
+    const cols = KANBAN_COLS.map(col => {
+      const items = _pageData.filter(l => (l.status || 'scraped') === col.key);
+      const cards = items.map(l => {
+        const photos = photoUrls(l);
+        const thumb = photos[0];
+        const score = l.data_quality_score;
+        return `
+          <div class="pl-kanban-card" draggable="true" data-pl-id="${S.esc(l.id)}" data-pl-status="${col.key}">
+            <div class="pl-kanban-addr">${S.esc(l.address || '(no address)')}</div>
+            <div class="pl-kanban-meta">${S.esc([l.city, l.state].filter(Boolean).join(', '))} · ${fmtBeds(l)}${l.square_footage ? ' · ' + fmtSqft(l) : ''}</div>
+            <div class="pl-kanban-foot">
+              ${l.source ? `<span class="qs-badge src-${S.esc(l.source)}" style="font-size:.6rem;padding:1px 6px">${l.source === 'zillow' ? 'Zillow' : l.source === 'realtor' ? 'Realtor' : S.esc(l.source)}</span>` : ''}
+              ${score != null ? `<span class="qs-badge ${qsClass(score)}" style="font-size:.6rem;padding:1px 6px">Q:${score}</span>` : ''}
+              ${thumb ? `<img src="${S.esc(thumb)}" style="width:28px;height:20px;object-fit:cover;border-radius:4px;margin-left:auto" loading="lazy">` : ''}
+            </div>
+          </div>
+        `;
+      }).join('') || '<div class="pl-kanban-empty">No listings</div>';
+
+      return `
+        <div class="pl-kanban-col" data-status="${col.key}">
+          <div class="pl-kanban-col-hd">
+            <span class="pl-kanban-col-title">${col.icon} ${col.label}</span>
+            <span class="pl-kanban-col-count">${items.length}</span>
+          </div>
+          <div class="pl-kanban-col-body" data-status="${col.key}">${cards}</div>
+        </div>
+      `;
+    }).join('');
+
+    list.innerHTML = '';
+    list.appendChild(wrap);
+    wrap.innerHTML = cols;
+    wireKanbanEvents();
+  }
+
+  function wireKanbanEvents(){
+    const cols = document.querySelectorAll('.pl-kanban-col-body');
+    cols.forEach(col => {
+      col.addEventListener('dragover', e => { e.preventDefault(); col.style.background = 'rgba(99,102,241,.06)'; });
+      col.addEventListener('dragleave', () => { col.style.background = ''; });
+      col.addEventListener('drop', async e => {
+        e.preventDefault();
+        col.style.background = '';
+        const card = e.dataTransfer.getData('text/plain');
+        if(!card) return;
+        const newStatus = col.dataset.status;
+        const listing = _pageData.find(l => l.id === card);
+        if(!listing || listing.status === newStatus) return;
+        const oldStatus = listing.status;
+        const prev = { status: oldStatus };
+        try {
+          const { data, error } = await CP.sb().rpc('pipeline_save', { p_id: card, p_patch: { status: newStatus } });
+          if(error) throw error;
+          listing.status = newStatus;
+          renderKanban();
+          _pushUndo({ type: 'archive', id: card, record: Object.assign({}, listing, { status: oldStatus }), label: `Move to ${newStatus}` });
+          _showUndoToast({ type: 'archive', id: card, record: Object.assign({}, listing, { status: oldStatus }), label: `Moved to ${newStatus}` });
+          S.toast(`Moved to ${newStatus}`, 'success');
+        } catch(err){
+          S.toast('Move failed: ' + (err.message || 'unknown'), 'error');
+        }
+      });
+    });
+
+    document.querySelectorAll('.pl-kanban-card').forEach(card => {
+      card.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', card.dataset.plId);
+        card.classList.add('dragging');
+      });
+      card.addEventListener('dragend', () => card.classList.remove('dragging'));
+      card.addEventListener('click', () => {
+        const id = card.dataset.plId;
+        const listing = _pageData.find(l => l.id === id);
+        if(listing) openPanel(listing);
+      });
+    });
+  }
+
+  async function loadKanban(){
+    const list = document.getElementById('pl-list');
+    list.innerHTML = '<div class="pl-empty" style="padding:40px"><div class="skeleton sk-line" style="width:60%;margin:0 auto"></div></div>';
+    try {
+      const [listings] = await Promise.all([
+        fetchListings(_status, 0),
+        fetchCounts()
+      ]);
+      _pageData = listings;
+      renderKanban();
+    } catch(e){
+      console.error('[pipeline] kanban load failed', e);
+      list.innerHTML = `<div class="pl-empty"><svg class="i"><use href="#i-alert"/></svg><h3>Failed to load</h3><p>${S.esc(e.message||'Unknown error')}</p></div>`;
     }
   }
 
@@ -1928,25 +2171,49 @@ function wirePanelPhotoActions(){
 
     function renderList(){
       listEl.innerHTML = imgs.map((u, i) => `
-        <div class="pl-photo-edit-item">
-          <img src="${S.esc(u)}" alt="">
+        <div class="pl-photo-edit-item${i === 0 ? ' pl-photo-primary' : ''}" draggable="true" data-idx="${i}">
+          <img src="${S.esc(u)}" alt="" draggable="false">
           <div style="flex:1;min-width:0">
             <div style="font-size:.72rem;color:var(--muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${S.esc(u)}</div>
             <div class="pl-photo-edit-actions" style="margin-top:6px">
-              <button class="btn btn-sm btn-ghost" data-action="up" data-idx="${i}">↑</button>
-              <button class="btn btn-sm btn-ghost" data-action="down" data-idx="${i}">↓</button>
-              ${i !== 0 ? `<button class="btn btn-sm btn-ghost" data-action="primary" data-idx="${i}">Primary</button>` : '<span class="qs-badge qs-high" style="align-self:center">Primary</span>'}
-              <button class="btn btn-sm btn-ghost" data-action="remove" data-idx="${i}" style="color:var(--danger)">✕</button>
+              <button class="btn btn-sm btn-ghost" data-action="up" data-idx="${i}" title="Move up">↑</button>
+              <button class="btn btn-sm btn-ghost" data-action="down" data-idx="${i}" title="Move down">↓</button>
+              ${i !== 0 ? `<button class="btn btn-sm btn-ghost" data-action="primary" data-idx="${i}" title="Set as primary">★ Primary</button>` : '<span class="qs-badge qs-high" style="align-self:center">★ Primary</span>'}
+              <button class="btn btn-sm btn-ghost" data-action="remove" data-idx="${i}" style="color:var(--danger)" title="Remove">✕</button>
             </div>
           </div>
         </div>
       `).join('');
+
+      let dragSrcIdx = null;
+      listEl.querySelectorAll('.pl-photo-edit-item').forEach(item => {
+        item.addEventListener('dragstart', e => {
+          dragSrcIdx = parseInt(item.dataset.idx, 10);
+          e.dataTransfer.effectAllowed = 'move';
+          item.classList.add('dragging');
+        });
+        item.addEventListener('dragend', () => item.classList.remove('dragging'));
+        item.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; item.style.borderColor = 'var(--brand)'; });
+        item.addEventListener('dragleave', () => { item.style.borderColor = ''; });
+        item.addEventListener('drop', e => {
+          e.preventDefault();
+          item.style.borderColor = '';
+          const targetIdx = parseInt(item.dataset.idx, 10);
+          if(dragSrcIdx == null || dragSrcIdx === targetIdx) return;
+          const moved = imgs.splice(dragSrcIdx, 1)[0];
+          imgs.splice(targetIdx, 0, moved);
+          dragSrcIdx = null;
+          renderList();
+        });
+      });
+
       listEl.querySelectorAll('button[data-action]').forEach(btn => {
         btn.addEventListener('click', e => {
+          e.stopPropagation();
           const action = btn.dataset.action;
           const idx = parseInt(btn.dataset.idx, 10);
-            if(action === 'remove') imgs.splice(idx,1);
-            else if(action === 'primary' && idx !== 0){ const it = imgs.splice(idx,1)[0]; imgs.unshift(it); }
+             if(action === 'remove') imgs.splice(idx,1);
+             else if(action === 'primary' && idx !== 0){ const it = imgs.splice(idx,1)[0]; imgs.unshift(it); }
           else if(action === 'up' && idx > 0) { const t = imgs[idx-1]; imgs[idx-1]=imgs[idx]; imgs[idx]=t; }
           else if(action === 'down' && idx < imgs.length-1) { const t = imgs[idx+1]; imgs[idx+1]=imgs[idx]; imgs[idx]=t; }
           renderList();
@@ -2005,6 +2272,7 @@ function wirePanelPhotoActions(){
     renderList();
 
     async function saveEdits(){
+      const prevUrls = listing.original_image_urls;
       const { data, error } = await CP.sb().rpc('pipeline_save', { p_id: listing.id, p_patch: { original_image_urls: JSON.stringify(imgs) } });
       if(error){ S.toast('Save failed: ' + error.message, 'error'); return; }
       const res = typeof data === 'string' ? JSON.parse(data) : data;
@@ -2014,6 +2282,8 @@ function wirePanelPhotoActions(){
       // Refresh panel photos
       const photoContainer = document.getElementById('panel-photos-container');
       if(photoContainer){ panelPhotos(listing).then(html => { photoContainer.innerHTML = html; wireGalleryEvents(); wirePanelPhotoActions(); }); }
+      _pushUndo({ type: 'photo_edit', id: listing.id, prevUrls, label: 'Edit photos' });
+      _showUndoToast({ type: 'photo_edit', id: listing.id, prevUrls, label: 'Edit photos' });
     }
 
     document.getElementById('pl-photo-edit-save').addEventListener('click', saveEdits);
@@ -2210,13 +2480,20 @@ function wirePanelPhotoActions(){
       list.innerHTML = '<div class="pl-empty" style="padding:40px"><div class="skeleton sk-line" style="width:60%;margin:0 auto"></div></div>';
     }
     try {
+      const savedStatus = _status;
+      if(_viewMode === 'kanban') _status = 'all';
       const [listings] = await Promise.all([
         fetchListings(_status, 0),
         fetchCounts()
       ]);
+      _status = savedStatus;
       _pageData = listings;
-      renderList(visibleListings(), false);
-      wireCardEvents();
+      if(_viewMode === 'kanban'){
+        renderKanban();
+      } else {
+        renderList(visibleListings(), false);
+        wireCardEvents();
+      }
     } catch(e){
       console.error('[pipeline] load failed', e);
       list.innerHTML = `<div class="pl-empty"><svg class="i"><use href="#i-alert"/></svg><h3>Failed to load</h3><p>${S.esc(e.message||'Unknown error')}</p></div>`;
@@ -2245,6 +2522,7 @@ function wirePanelPhotoActions(){
       wireImportButton();
       wireRefreshButton();
       wireFolderButtons();
+      wireViewToggle();
       // ESC key closes the detail panel
       document.addEventListener('keydown', e => {
         if(e.key === 'Escape' && _current) closePanel();
