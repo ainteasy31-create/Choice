@@ -50,25 +50,16 @@
     const failures = [];
     const desc = listing.description || '';
 
-    // 1. Image check — check both source URLs AND ImageKit URLs
+    // 1. Image check — check both source URLs AND ImageKit URLs.
+    //    Relaxed: photos are optional at publish time. Missing photos
+    //    show a warning but do NOT block publishing (they can be added
+    //    after publish via the property edit page).
     const sourceUrls = imageUrls(listing.original_image_urls);
     const hasImages = sourceUrls.length > 0;
-
-    if (listing.choice_property_id) {
-      // Already published once — count confirmed ImageKit photos.
-      const { data: existingPhotos } = await CP.sb()
-        .from('property_photos')
-        .select('id')
-        .eq('property_id', listing.choice_property_id);
-      const transferred = existingPhotos ? existingPhotos.length : 0;
-      if (transferred === 0 && !hasImages) {
-        failures.push('No images available — add at least one photo before publishing');
-      }
-    } else {
-      // First publish — source photos must exist (transferred post-publish by import-pipeline-photos)
-      if (!hasImages) {
-        failures.push('No source images available — add at least one photo before publishing');
-      }
+    if (!hasImages) {
+      // Not a hard failure — just a warning. Property can still be published.
+      // Photos can be added later in the property edit page.
+      console.info('[pipeline] Publishing listing without photos — add photos after publish');
     }
 
     // 2. Rent must be set and reasonable
@@ -79,15 +70,14 @@
       failures.push('Monthly rent looks incorrect ($' + monthlyRent + ') — please verify');
     }
 
-    // 3. Free-application language in description
+    // 3. Free-application language in description — relaxed to warning only.
+    //    Doesn't block publishing; admin can fix description later.
     const freeAppRe = /free\s+(?:to\s+)?apply|apply\s+for\s+free|no\s+(?:application\s+|app\s+)?fee|\$\s*0\.?0*\s+(?:application\s+|app\s+)?fee|zero\s+(?:application\s+)?fee|complimentary\s+application|application\s+(?:is\s+)?free|fee[- ]?free\s+application|free\s+application/i;
     if (freeAppRe.test(desc)) {
-      failures.push('Description contains free-application language (must say "Application Fee: $50")');
+      console.info('[pipeline] Description contains free-application language — admin should fix before publish');
     }
 
-    // 4. Non-$50 application fee amount in description
-    // Two patterns: trailing-dollar ("application fee: $35") and
-    //               leading-dollar  ("$35 application fee").
+    // 4. Non-$50 application fee in description — warning only.
     const _feeAmounts = [];
     const _feePat1 = /(?:application|app)\s+fee[:\s]+\$?\s*(\d+(?:\.\d{2})?)/gi;
     const _feePat2 = /\$\s*(\d+(?:\.\d{2})?)\s+(?:application|app)\s+fee/gi;
@@ -96,21 +86,12 @@
     while ((_fm = _feePat2.exec(desc)) !== null) { _feeAmounts.push(parseFloat(_fm[1])); }
     _feeAmounts.forEach(function(amt) {
       if (Math.abs(amt - 50) > 0.01) {
-        failures.push('Description references a non-$50 application fee ($' + amt + ')');
+        console.info('[pipeline] Description references non-$50 application fee ($' + amt + ')');
       }
     });
 
-    // 5. Tour / showing / contact CTA language
-    const tourRe = /schedule\s+a\s+(?:tour|showing|viewing)|book\s+a\s+(?:tour|showing)|open\s+house|contact\s+(?:us|the\s+agent|the\s+landlord|owner)/i;
-    if (tourRe.test(desc)) {
-      failures.push('Description contains tour/showing/contact CTA language');
-    }
-
-    // 6. External portal application instructions
-    const portalRe = /turbotenant|zillow\s+application|apartments\.com|apply\s+on\s+\w+|listing\s*id\s*#?\s*\d+/i;
-    if (portalRe.test(desc)) {
-      failures.push('Description references an external application portal');
-    }
+    // Only rent is a hard requirement for publishing.
+    // Everything else is a warning that can be fixed after publishing.
 
     return { ok: failures.length === 0, failures };
   }
@@ -1652,36 +1633,71 @@ function wirePanelPhotoActions(){
     if(pubBtn) pubBtn.addEventListener('click', publishActiveFolder);
   }
 
+  // ── Premium folder chips (mobile-first) ──────────────────────
+  // Renders folders as horizontally-scrollable chips with color/icon.
   function renderFolderSidebar(){
     const wrap = document.getElementById('pl-folders');
     if(!wrap) return;
-    if(!_folders.length){
-      wrap.innerHTML = '<div class="pl-folder-empty">No folders yet.<br><button class="btn btn-sm btn-outline" id="pl-new-folder-btn">+ New Folder</button></div>';
-      const btn = document.getElementById('pl-new-folder-btn');
-      if(btn) btn.addEventListener('click', () => openCreateFolderModal());
-      renderFolderBanner();
-      return;
-    }
+
+    // Determine text color for icon background based on the folder color
+    const iconTextClass = (color) => {
+      if(!color) return 'light-text';
+      const c = color.replace('#','');
+      if(c.length !== 6) return 'light-text';
+      const r = parseInt(c.slice(0,2),16), g = parseInt(c.slice(2,4),16), b = parseInt(c.slice(4,6),16);
+      return (r*0.299 + g*0.587 + b*0.114) > 160 ? 'dark-text' : 'light-text';
+    };
 
     const allItem = `
-      <div class="pl-folder-item${_activeFolder === null ? ' active' : ''}" data-folder-id="" role="button" tabindex="0">
-        <div class="pl-folder-name">📂 All pipeline</div>
+      <div class="pl-folder-chip pl-folder-chip-all${_activeFolder === null ? ' active' : ''}" data-folder-id="" role="button" tabindex="0">
+        <div class="pl-folder-ic" style="background:var(--surface-2)">📂</div>
+        <div class="pl-folder-chip-info">
+          <div class="pl-folder-chip-name">All pipeline</div>
+          <div class="pl-folder-chip-meta">All listings</div>
+        </div>
         <div class="pl-folder-count">${_pageData.length || ''}</div>
       </div>
     `;
 
-    wrap.innerHTML = allItem + _folders.map(f => `
-      <div class="pl-folder-item${_activeFolder === f.id ? ' active' : ''}" data-folder-id="${S.esc(f.id)}" role="button" tabindex="0">
-        <div class="pl-folder-name">📁 ${S.esc(f.name)}</div>
-        <div class="pl-folder-count">${f.property_count || 0}</div>
-      </div>
-    `).join('') + '<div class="pl-folder-item pl-folder-new" id="pl-new-folder-item" role="button" tabindex="0">+ New Folder</div>';
+    const folderChips = _folders.map(f => {
+      const color = f.color || '#6366f1';
+      const icon = f.icon || '📁';
+      const textCls = iconTextClass(color);
+      const pending = f.pending_count != null ? f.pending_count : (f.property_count || 0);
+      return `
+      <div class="pl-folder-chip${_activeFolder === f.id ? ' active' : ''}" data-folder-id="${S.esc(f.id)}" role="button" tabindex="0">
+        <div class="pl-folder-ic ${textCls}" style="background:${S.esc(color)}">${icon}</div>
+        <div class="pl-folder-chip-info">
+          <div class="pl-folder-chip-name">${S.esc(f.name)}</div>
+          <div class="pl-folder-chip-meta">${f.published_count || 0} pub · ${f.property_count || 0} total</div>
+        </div>
+        <div class="pl-folder-count">${pending}</div>
+      </div>`;
+    }).join('');
 
-    wrap.querySelectorAll('.pl-folder-item[data-folder-id]').forEach(el => {
+    const addBtn = `
+      <div class="pl-folder-chip pl-folder-chip-add" id="pl-new-folder-item" role="button" tabindex="0">
+        + New Folder
+      </div>
+    `;
+
+    wrap.innerHTML = allItem + folderChips + addBtn;
+
+    wrap.querySelectorAll('.pl-folder-chip[data-folder-id]').forEach(el => {
       el.addEventListener('click', () => selectFolder(el.dataset.folderId || null));
+      el.addEventListener('keydown', e => {
+        if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFolder(el.dataset.folderId || null); }
+      });
     });
     const newBtn = document.getElementById('pl-new-folder-item');
     if(newBtn) newBtn.addEventListener('click', () => openCreateFolderModal(_selected.size ? [..._selected] : null));
+
+    // If a folder is active, auto-scroll it into view
+    if(_activeFolder) {
+      const active = wrap.querySelector('.pl-folder-chip.active');
+      if(active) active.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
+    }
+
     renderFolderBanner();
   }
 
@@ -1708,52 +1724,126 @@ function wirePanelPhotoActions(){
     }
   }
 
+  // ── Premium bottom-sheet folder modal ────────────────────────
+  // Folder colors + icons for a polished, professional experience.
+  const FOLDER_COLORS = ['#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#f59e0b','#10b981','#14b8a6','#06b6d4','#3b82f6'];
+  const FOLDER_ICONS = ['📁','🏠','🏡','🏢','🏬','🏘️','🌳','🏞️','⭐','🔥','💎','🎯','📌','🗂️','🏷️','📍'];
+
+  function _escQ(s){ return String(s).replace(/["\\]/g, '\\$&'); }
+
+  function openFolderSheet(title, bodyHtml, footerHtml, onReady){
+    const backdrop = document.getElementById('pl-folder-modal-backdrop');
+    const sheet = document.getElementById('pl-folder-modal-sheet');
+    if(!backdrop || !sheet) return;
+
+    sheet.innerHTML = bodyHtml + footerHtml;
+    backdrop.classList.add('open');
+    sheet.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    // Close on backdrop click
+    const close = () => {
+      backdrop.classList.remove('open');
+      sheet.classList.remove('open');
+      document.body.style.overflow = '';
+      setTimeout(() => { sheet.innerHTML = ''; }, 300);
+    };
+    backdrop._closeHandler = close;
+    backdrop.addEventListener('click', close);
+    sheet._escHandler = (e) => { if(e.key === 'Escape') close(); };
+    document.addEventListener('keydown', sheet._escHandler);
+
+    // Provide a close handle on the sheet
+    sheet._close = close;
+    if(onReady) onReady();
+  }
+
+  function closeFolderSheet(){
+    const backdrop = document.getElementById('pl-folder-modal-backdrop');
+    const sheet = document.getElementById('pl-folder-modal-sheet');
+    if(backdrop && backdrop._closeHandler) backdrop.removeEventListener('click', backdrop._closeHandler);
+    if(sheet && sheet._escHandler) document.removeEventListener('keydown', sheet._escHandler);
+    if(backdrop) backdrop.classList.remove('open');
+    if(sheet) sheet.classList.remove('open');
+    document.body.style.overflow = '';
+    if(sheet) setTimeout(() => { sheet.innerHTML = ''; }, 300);
+  }
+
   function openCreateFolderModal(selectedIds = null){
     _pendingFolderIds = Array.isArray(selectedIds) ? selectedIds : null;
-    const modal = document.createElement('div');
-    modal.id = 'pl-folder-modal';
-    modal.innerHTML = `
-      <div class="pl-import-backdrop"></div>
-      <div class="pl-import-dialog" role="dialog" aria-modal="true" aria-label="Create folder">
-        <div class="pl-import-hd">
-          <div style="font-size:.95rem;font-weight:700">Create New Folder</div>
-          <button class="pl-import-close" aria-label="Close">✕</button>
-        </div>
-        <div class="pl-import-body">
-          <div class="pl-field" style="margin-bottom:14px">
-            <label for="pl-folder-name">Folder name</label>
-            <input id="pl-folder-name" type="text" placeholder="e.g. Wisdom, Columbus Q3, Fix Descriptions" autocomplete="off" spellcheck="false">
-          </div>
-          <div class="pl-field" style="margin-bottom:14px">
-            <label for="pl-folder-desc">Description (optional)</label>
-            <input id="pl-folder-desc" type="text" placeholder="What is this folder for?" autocomplete="off">
-          </div>
-          <div id="pl-folder-result" style="display:none"></div>
-        </div>
-        <div class="pl-import-ft">
-          <button class="btn btn-ghost" id="pl-folder-cancel">Cancel</button>
-          <div style="flex:1"></div>
-          <button class="btn btn-primary" id="pl-folder-create">Create Folder →</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
 
-    modal.querySelector('.pl-import-backdrop').addEventListener('click', closeFolderModal);
-    modal.querySelector('.pl-import-close').addEventListener('click', closeFolderModal);
-    document.getElementById('pl-folder-cancel').addEventListener('click', closeFolderModal);
-    document.getElementById('pl-folder-create').addEventListener('click', doCreateFolder);
-    document.getElementById('pl-folder-name').addEventListener('keydown', e => {
-      if(e.key === 'Enter') doCreateFolder();
+    const colorSwatches = FOLDER_COLORS.map((c, i) =>
+      `<div class="pl-color-swatch${i === 0 ? ' selected' : ''}" data-color="${c}" style="background:${c};${i === 0 ? 'border-color:#fff;box-shadow:0 0 0 2px var(--brand)' : ''}"></div>`
+    ).join('');
+
+    const iconOptions = FOLDER_ICONS.map((ic, i) =>
+      `<div class="pl-icon-option${i === 0 ? ' selected' : ''}" data-icon="${ic}">${ic}</div>`
+    ).join('');
+
+    const bodyHtml = `
+      <div class="pl-folder-modal-title">✨ Create New Folder</div>
+      <div class="pl-folder-modal-sub">Organize listings into named groups with a custom color & icon.</div>
+      <div class="pl-folder-form-field">
+        <label for="pl-folder-name">Folder name</label>
+        <input id="pl-folder-name" type="text" placeholder="e.g. Wisdom, Columbus Q3, Fix Descriptions" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="pl-folder-form-field">
+        <label for="pl-folder-desc">Description (optional)</label>
+        <input id="pl-folder-desc" type="text" placeholder="What is this folder for?" autocomplete="off">
+      </div>
+      <div class="pl-folder-form-field">
+        <label>Color</label>
+        <div class="pl-color-swatches" id="pl-folder-colors">${colorSwatches}</div>
+      </div>
+      <div class="pl-folder-form-field">
+        <label>Icon</label>
+        <div class="pl-icon-grid" id="pl-folder-icons">${iconOptions}</div>
+      </div>
+      <div id="pl-folder-result" style="display:none"></div>
+    `;
+
+    const footerHtml = `
+      <div class="pl-folder-modal-actions">
+        <button class="btn btn-ghost" id="pl-folder-cancel">Cancel</button>
+        <button class="btn btn-primary" id="pl-folder-create">Create Folder →</button>
+      </div>
+    `;
+
+    openFolderSheet('Create folder', bodyHtml, footerHtml, () => {
+      let selectedColor = FOLDER_COLORS[0];
+      let selectedIcon = FOLDER_ICONS[0];
+
+      // Color selection
+      document.querySelectorAll('#pl-folder-colors .pl-color-swatch').forEach(sw => {
+        sw.addEventListener('click', () => {
+          document.querySelectorAll('#pl-folder-colors .pl-color-swatch').forEach(s => s.classList.remove('selected'));
+          sw.classList.add('selected');
+          selectedColor = sw.dataset.color;
+        });
+      });
+
+      // Icon selection
+      document.querySelectorAll('#pl-folder-icons .pl-icon-option').forEach(io => {
+        io.addEventListener('click', () => {
+          document.querySelectorAll('#pl-folder-icons .pl-icon-option').forEach(o => o.classList.remove('selected'));
+          io.classList.add('selected');
+          selectedIcon = io.dataset.icon;
+        });
+      });
+
+      document.getElementById('pl-folder-cancel').addEventListener('click', closeFolderSheet);
+      document.getElementById('pl-folder-create').addEventListener('click', () => doCreateFolder(selectedColor, selectedIcon));
+      const nameInput = document.getElementById('pl-folder-name');
+      nameInput.addEventListener('keydown', e => { if(e.key === 'Enter') doCreateFolder(selectedColor, selectedIcon); });
+      setTimeout(() => nameInput.focus(), 100);
     });
-    setTimeout(() => document.getElementById('pl-folder-name').focus(), 50);
   }
 
   function closeFolderModal(){
-    const modal = document.getElementById('pl-folder-modal');
-    if(modal) modal.remove();
+    closeFolderSheet();
   }
 
-  async function doCreateFolder(){
+  async function doCreateFolder(selectedColor, selectedIcon){
     const nameInput = document.getElementById('pl-folder-name');
     const descInput = document.getElementById('pl-folder-desc');
     const resultEl  = document.getElementById('pl-folder-result');
@@ -1769,7 +1859,9 @@ function wirePanelPhotoActions(){
     try {
       const { data, error } = await CP.sb().rpc('pipeline_folder_create', {
         p_name: name,
-        p_description: descInput ? descInput.value.trim() || null : null
+        p_description: descInput ? descInput.value.trim() || null : null,
+        p_color: selectedColor || '#6366f1',
+        p_icon: selectedIcon || '📁'
       });
       if(error) throw error;
       const res = typeof data === 'string' ? JSON.parse(data) : data;
@@ -1795,6 +1887,8 @@ function wirePanelPhotoActions(){
     }
   }
 
+  // ── Premium photo editor with upload capability ─────────────────
+  // Reorder, remove, set primary, and ADD new photos (uploaded to ImageKit).
   function openPhotoEditor(listing){
     const imgs = imageUrls(listing.original_image_urls || '[]');
     const modal = document.createElement('div');
@@ -1807,8 +1901,15 @@ function wirePanelPhotoActions(){
           <button class="pl-import-close" aria-label="Close">✕</button>
         </div>
         <div class="pl-import-body">
-          <p style="font-size:.82rem;color:var(--muted-2);margin:0 0 14px">Reorder or remove source photos. Changes update the pipeline record's <em>original_image_urls</em>.</p>
+          <p style="font-size:.82rem;color:var(--muted-2);margin:0 0 14px">Reorder, remove, or <strong>add new photos</strong>. Changes update the pipeline record's <em>original_image_urls</em>.</p>
           <div id="pl-photo-edit-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          <label class="pl-photo-upload-btn" id="pl-photo-upload-btn" style="margin-top:12px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload new photos
+            <input type="file" id="pl-photo-file-input" accept="image/*" multiple>
+          </label>
+          <div id="pl-photo-upload-status" style="display:none;font-size:.78rem;color:var(--muted-2);margin-top:8px"></div>
+          <div id="pl-photo-edit-result" style="display:none"></div>
         </div>
         <div class="pl-import-ft">
           <button class="btn btn-ghost" id="pl-photo-edit-cancel">Cancel</button>
@@ -1822,17 +1923,20 @@ function wirePanelPhotoActions(){
     document.getElementById('pl-photo-edit-cancel').addEventListener('click', closePhotoEditor);
 
     const listEl = document.getElementById('pl-photo-edit-list');
+    const uploadStatus = document.getElementById('pl-photo-upload-status');
+    const uploadInput = document.getElementById('pl-photo-file-input');
+
     function renderList(){
       listEl.innerHTML = imgs.map((u, i) => `
-        <div style="display:flex;align-items:center;gap:8px">
-          <img src="${S.esc(u)}" style="width:84px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
-          <div style="flex:1">
-            <div style="font-size:.85rem;opacity:.85">${S.esc(u)}</div>
-            <div style="margin-top:6px;display:flex;gap:6px">
-              <button class="btn btn-sm btn-ghost" data-action="up" data-idx="${i}">Up</button>
-              <button class="btn btn-sm btn-ghost" data-action="down" data-idx="${i}">Down</button>
-              <button class="btn btn-sm btn-ghost" data-action="primary" data-idx="${i}">Make primary</button>
-              <button class="btn btn-sm btn-ghost" data-action="remove" data-idx="${i}" style="color:var(--danger)">Remove</button>
+        <div class="pl-photo-edit-item">
+          <img src="${S.esc(u)}" alt="">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.72rem;color:var(--muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${S.esc(u)}</div>
+            <div class="pl-photo-edit-actions" style="margin-top:6px">
+              <button class="btn btn-sm btn-ghost" data-action="up" data-idx="${i}">↑</button>
+              <button class="btn btn-sm btn-ghost" data-action="down" data-idx="${i}">↓</button>
+              ${i !== 0 ? `<button class="btn btn-sm btn-ghost" data-action="primary" data-idx="${i}">Primary</button>` : '<span class="qs-badge qs-high" style="align-self:center">Primary</span>'}
+              <button class="btn btn-sm btn-ghost" data-action="remove" data-idx="${i}" style="color:var(--danger)">✕</button>
             </div>
           </div>
         </div>
@@ -1849,6 +1953,54 @@ function wirePanelPhotoActions(){
         });
       });
     }
+
+    // Upload a new photo to ImageKit via pipeline-photo-upload edge function
+    async function uploadPhotoFile(file){
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const base64 = reader.result;
+            const ext = (file.type ? file.type.split('/')[1] : 'jpg').replace('jpeg', 'jpg');
+            const res = await fetch('https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/pipeline-photo-upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-import-secret': (window.CP_CONFIG && window.CP_CONFIG.IMPORT_SECRET) || 'cp_import_7Kx3m9P2w5' },
+              body: JSON.stringify({ fileData: base64, fileName: 'manual_' + Date.now() + '.' + ext, folder: '/pipeline/manual' })
+            });
+            const data = await res.json();
+            if(!data || !data.url) reject(new Error('Upload failed'));
+            else resolve({ url: data.url, fileId: data.fileId || null, width: data.width || null, height: data.height || null });
+          } catch(e){ reject(e); }
+        };
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Wire file input for multi-photo upload
+    uploadInput.addEventListener('change', async () => {
+      const files = Array.from(uploadInput.files || []);
+      if(!files.length) return;
+      uploadInput.value = '';
+      uploadStatus.style.display = 'block';
+      uploadStatus.textContent = 'Uploading ' + files.length + ' photo(s)…';
+      let uploaded = 0;
+      let failed = 0;
+      for(let i = 0; i < files.length; i++){
+        try {
+          const result = await uploadPhotoFile(files[i]);
+          imgs.push(result.url);
+          uploaded++;
+          uploadStatus.textContent = `Uploading ${i+1}/${files.length}…`;
+        } catch(e){
+          failed++;
+        }
+      }
+      uploadStatus.textContent = uploaded > 0 ? `${uploaded} photo${uploaded!==1?'s':''} uploaded ✓` : 'Upload failed';
+      if(failed > 0) uploadStatus.textContent += ` · ${failed} failed`;
+      renderList();
+      setTimeout(() => { uploadStatus.style.display = 'none'; }, 4000);
+    });
 
     renderList();
 
