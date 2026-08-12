@@ -55,7 +55,7 @@ function imageEntryFileId(entry: ImageEntry): string | null {
 }
 
 const MAX_PHOTOS     = 40;
-const BATCH_SIZE     = 5;   // process this many photos concurrently
+const BATCH_SIZE     = 12;  // process this many photos concurrently (increased from 5)
 const FETCH_TIMEOUT  = 12_000; // ms per image fetch
 
 Deno.serve(async (req) => {

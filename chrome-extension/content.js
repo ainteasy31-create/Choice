@@ -1,7 +1,9 @@
 // ============================================================
-// Import to Choice Properties — Content Script v2.3.0 (Live Loader)
-// This is a THIN LOADER. It fetches the latest logic from
-// Cloudflare Pages on every page load, so updates are automatic.
+// Import to Choice Properties — Content Script v4.0.0 (Live Loader)
+// v4.0: SAVE-FIRST ARCHITECTURE
+//   The property is saved to the pipeline IMMEDIATELY and the
+//   user sees "Saved!" in under 2 seconds. Photos continue
+//   uploading in the background with a floating progress widget.
 //
 // HOW IT WORKS:
 //   1. On page load, this script fetches live-shared-extractors.js
@@ -84,17 +86,13 @@
 
   // ── Bundled fallback (used only if live fetch fails) ─────────
   function runBundledFallback() {
-    // If live extractors loaded but live-content failed, use bundled content
     if (window.CP_Extractors && !document.getElementById('cp-save-btn')) {
-      // The live-content.js should have run. If not, inject the bundled logic.
-      // Read config from window.CP_CONFIG (set by config.js) with fallback
-      // to the hardcoded value for backward compatibility with already-installed extensions.
       var EDGE_URL = (window.CP_CONFIG && window.CP_CONFIG.EDGE_URL) || 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
       var SECRET = (window.CP_CONFIG && window.CP_CONFIG.IMPORT_SECRET) || 'cp_import_7Kx3m9P2w5';
 
       // SPA navigation handling
       var lastUrl = location.href;
-      var PHOTO_BATCH_SIZE = 5;
+      var PHOTO_BATCH_SIZE = 12;
       var MAX_PHOTOS = 40;
 
       function isSupportedPage(url) {
@@ -171,9 +169,7 @@
         }
       }
 
-      // ── Photo download via background worker (v3.0) ──────────
-      // The background service worker has host_permissions for
-      // Zillow/Realtor CDNs, so it can fetch images without CORS.
+      // ── Photo download via background worker ─────────────────
       function downloadViaBackground(url) {
         return new Promise(function(resolve) {
           try {
@@ -244,6 +240,27 @@
         });
       }
 
+      // Resize/convert images using canvas. Returns a Blob or null on failure.
+      function optimizeImageBlob(blob, maxWidth, quality) {
+        return new Promise(async function(resolve) {
+          try {
+            if (!self.createImageBitmap) return resolve(null);
+            const imgBitmap = await createImageBitmap(blob);
+            const ratio = Math.min(1, maxWidth / imgBitmap.width);
+            const w = Math.round(imgBitmap.width * ratio);
+            const h = Math.round(imgBitmap.height * ratio);
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(imgBitmap, 0, 0, w, h);
+            canvas.toBlob(function(b) { resolve(b); }, 'image/webp', quality);
+          } catch (e) {
+            resolve(null);
+          }
+        });
+      }
+
       async function uploadOnePhoto(url, index) {
         try {
           // Download via background worker (bypasses CORS)
@@ -298,35 +315,6 @@
         }
       }
 
-      // Resize/convert images using canvas. Returns a Blob or null on failure.
-          // Optimize image via Web Worker to keep main thread responsive.
-          const _imageWorker = (function(){
-            try {
-              return new Worker(chrome.runtime.getURL('image-worker.js'));
-            } catch(e){
-              return null;
-            }
-          })();
-
-          function optimizeImageBlob(blob, maxWidth, quality){
-            return new Promise(async function(resolve){
-              if(!_imageWorker || !('createImageBitmap' in self)) return resolve(null);
-              try {
-                const id = Math.random().toString(36).slice(2);
-                const buffer = await blob.arrayBuffer();
-                const onmsg = function(ev){
-                  if(!ev.data || ev.data.id !== id) return;
-                  _imageWorker.removeEventListener('message', onmsg);
-                  if(!ev.data.ok) return resolve(null);
-                  const out = new Blob([ev.data.buffer], { type: ev.data.type });
-                  resolve(out);
-                };
-                _imageWorker.addEventListener('message', onmsg);
-                _imageWorker.postMessage({ id, buffer, maxWidth, quality }, [buffer]);
-              } catch(e){ resolve(null); }
-            });
-          }
-
       async function downloadAndUploadPhotos(photoUrls, maxPhotos, progressCallback) {
         var uploaded = [];
         var failed = 0;
@@ -370,14 +358,13 @@
         }
       }
 
-      // ── Preview / edit modal (mobile-first) ─────────────────────────
+      // ── Preview / edit modal (mobile-first) ─────────────────
       function escapeHtml(str){
         if(str === null || str === undefined) return '';
-        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        return String(str).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"').replace(/'/g,'&#39;');
       }
 
       function openPreviewModal(extracted, triggerBtn) {
-        // Remove if existing
         var existing = document.getElementById('cp-preview-modal');
         if (existing) existing.remove();
 
@@ -425,12 +412,10 @@
 
         document.body.appendChild(modal);
 
-        // Wire events
         modal.querySelector('.cp-backdrop').addEventListener('click', closePreviewModal);
         modal.querySelector('#cp-preview-close').addEventListener('click', closePreviewModal);
         modal.querySelector('#cp-prev-cancel').addEventListener('click', closePreviewModal);
         modal.querySelector('#cp-prev-confirm').addEventListener('click', function () {
-          // Gather edited values and start import
           var updated = Object.assign({}, extracted);
           updated.title = document.getElementById('cp-prev-title').value.trim();
           updated.address = document.getElementById('cp-prev-address').value.trim();
@@ -442,7 +427,6 @@
           updated.description = document.getElementById('cp-prev-desc').value.trim();
           var folderName = document.getElementById('cp-prev-folder').value.trim();
           closePreviewModal();
-          // Start the original import flow but include folder_name if provided
           startImportProcess(updated, triggerBtn, folderName || null);
         });
 
@@ -459,15 +443,7 @@
             extracted.photo_urls.forEach(function(u) { if (typeof u === 'string') photoUrls.push(u); });
           }
 
-          var photoResult = { uploaded: [], failed: 0, total: 0 };
-          if (photoUrls.length > 0) {
-            btn.textContent = 'Extracting photos…';
-            photoResult = await downloadAndUploadPhotos(photoUrls, MAX_PHOTOS, function(completed, total) {
-              btn.textContent = 'Importing photos ' + completed + '/' + total + '…';
-            });
-          }
-
-          var finalUrls = photoResult.uploaded.length > 0 ? photoResult.uploaded : photoUrls;
+          // v4.0: Save property FIRST, then upload photos in background
           var payload = {
             source: extracted.source,
             source_listing_id: extracted.source_listing_id,
@@ -490,8 +466,8 @@
             description: extracted.description,
             available_date: extracted.available_date,
             pets_allowed: extracted.pets_allowed,
-            original_image_urls: JSON.stringify(finalUrls),
-            _import: 'browser-extension-v3.1.0',
+            original_image_urls: JSON.stringify(photoUrls.map(function(u) { return { url: u }; })),
+            _import: 'browser-extension-v4.0.0',
           };
           if (folderName) payload.folder_name = folderName;
 
@@ -539,8 +515,6 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────
-  // Wait for DOM to be ready, then try to load live code.
-  // If live code loads, it handles everything. If not, use bundled fallback.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

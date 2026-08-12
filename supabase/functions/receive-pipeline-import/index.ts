@@ -1,20 +1,23 @@
 // ============================================================
 // Choice Properties — receive-pipeline-import Edge Function
-// v3.0 — August 2026
+// v4.0 — August 2026
 //
-// Accepts a parsed listing payload from the Chrome/Orion extension.
-// Authenticates via a shared secret (x-import-secret header or ?secret= query)
-// — no user login required.
+// v4.0: SAVE-FIRST ARCHITECTURE
+//   The property record is saved to the database IMMEDIATELY and
+//   the response is returned to the client within ~1 second.
+//   Photo downloads/upload happen ASYNCHRONOUSLY in the background
+//   after the response is sent.
 //
-// v3.0: AUTO-DOWNLOADS AND UPLOADS ALL IMAGES TO IMAGEKIT AT IMPORT TIME.
-// This ensures pipeline listings show real images immediately (Zillow/Realtor
-// CDNs block hotlinking from other domains, so source URLs appear broken).
-// Images are stored in ImageKit and the ImageKit URLs are saved back to
-// original_image_urls so the admin UI displays them correctly.
+//   This means the user sees "Saved!" in under 2 seconds and can
+//   move on to the next property. Photos continue uploading in the
+//   background and the pipeline record is updated when they complete.
 //
-// Uses permissive CORS for secrets-authenticated endpoints — the secret is
-// the real auth, not the Origin, so we echo back any Origin including
-// 'null' (WebKit extension content scripts on Orion/iOS).
+//   FALLBACK: If the client already uploaded photos to ImageKit
+//   (browser-side upload path), those URLs are preserved and the
+//   server skips the async photo job entirely.
+//
+//   RETRY: The import-pipeline-photos edge function handles retries
+//   for any photos that fail to upload client-side.
 //
 // POST body: full listing fields from extension
 // Returns:   { ok: true, id, title, score, photos, imagekit_photos }
@@ -28,17 +31,9 @@ import {
   buildPipelineRecord,
   safeStr,
   safeInt,
-  safeFloat,
   normalizeSource,
-  normalizePropType,
-  normalizeDate,
   qualityScore,
   missingFields,
-  genId,
-  isEmpty,
-  CORE_FIELDS,
-  BONUS_FIELDS,
-  TRACKABLE_MISSING,
 } from '../_shared/pipeline-record.ts';
 
 type ImageEntry = string | {
@@ -63,7 +58,7 @@ function parseImageEntries(raw: unknown): ImageEntry[] {
         };
       }
       return null;
-    }).filter((entry): entry is ImageEntry => entry !== null);
+    }).filter((entry: ImageEntry | null): entry is ImageEntry => entry !== null);
   } catch {
     return [];
   }
@@ -73,116 +68,27 @@ function imageEntryUrl(entry: ImageEntry): string {
   return typeof entry === 'string' ? entry : entry.url;
 }
 
-function imageEntryFileId(entry: ImageEntry): string | null {
-  return typeof entry === 'string' ? null : entry.fileId ?? null;
-}
+// ── Async photo uploader (runs after response is sent) ──────────
+// This function is fire-and-forget. It runs in the background after
+// the HTTP response has been sent to the client.
+async function uploadPhotosAsync(
+  record: Record<string, unknown>,
+  sourceImageEntries: ImageEntry[],
+  sourceImageUrls: string[],
+  adminClient: ReturnType<typeof createClient>,
+  IMAGEKIT_PRIVATE_KEY: string,
+): Promise<void> {
+  const MAX_PHOTOS_TO_UPLOAD = 40;
+  const BATCH_SIZE = 12; // increased from 3 for faster parallel uploads
+  const FETCH_TIMEOUT = 15_000;
+  const IMAGEKIT_UPLOAD_URL = 'https://upload.imagekit.io/api/v1/files/upload';
 
-// ── ImageKit auto-upload config ─────────────────────────────────
-const MAX_PHOTOS_TO_UPLOAD = 40;      // cap to match property_photos max gallery size
-const BATCH_SIZE = 3;                 // concurrent uploads
-const FETCH_TIMEOUT = 15_000;         // ms per image fetch
-const IMAGEKIT_UPLOAD_URL = 'https://upload.imagekit.io/api/v1/files/upload';
-
-// ── Handler ────────────────────────────────────────────────────
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return permissiveCorsResponse(req);
-  if (req.method !== 'POST')   return permissiveJsonErr(405, 'Method not allowed', req);
-
-  // ── Auth: shared secret ──────────────────────────────────────
-  const IMPORT_SECRET = Deno.env.get('SHORTCUT_IMPORT_SECRET');
-  if (!IMPORT_SECRET) return permissiveJsonErr(500, 'Import secret not configured', req);
-
-  // Read secret from query parameter (for Orion/iOS compatibility) or header
-  const url = new URL(req.url);
-  const incoming = url.searchParams.get('secret') || req.headers.get('x-import-secret');
-  if (!incoming || incoming !== IMPORT_SECRET) {
-    return permissiveJsonErr(401, 'Invalid import secret', req);
-  }
-
-  // ── Parse body ───────────────────────────────────────────────
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return permissiveJsonErr(400, 'Invalid JSON body', req);
-  }
-
-  const sourceListingId = safeStr(body.source_listing_id);
-  if (!sourceListingId) {
-    return permissiveJsonErr(400, 'source_listing_id is required', req);
-  }
-
-  let source: string;
-  try {
-    source = normalizeSource(body.source);
-  } catch (err) {
-    return permissiveJsonErr(400, err instanceof Error ? err.message : 'Unsupported source', req);
-  }
-
-  // ── Duplicate check ──────────────────────────────────────────
-  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-  const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const adminClient  = createClient(SUPABASE_URL, SERVICE_KEY);
-
-  const { data: existing } = await adminClient
-    .schema('pipeline')
-    .from('pipeline_properties')
-    .select('id, title')
-    .eq('source_listing_id', sourceListingId)
-    .eq('source', source)
-    .maybeSingle();
-
-  if (existing) {
-    return permissiveJsonOk({
-      ok: false, duplicate: true,
-      id: existing.id, title: existing.title,
-      message: 'Already in pipeline',
-    }, req);
-  }
-
-  // ── Build record using shared builder ────────────────────────
-  const record = buildPipelineRecord(body as unknown as Parameters<typeof buildPipelineRecord>[0]);
-
-  // Diagnostic telemetry: log low-quality imports for analysis (sampled original_data included by extractor)
-  try {
-    if (typeof record.data_quality_score === 'number' && record.data_quality_score < 80) {
-      console.info('[receive-pipeline-import] Low quality import:', {
-        id: record.id,
-        score: record.data_quality_score,
-        missing: record.missing_fields,
-        source_listing_id: record.source_listing_id,
-        original_data_sample: record.original_data ? (String(record.original_data).slice(0, 200)) : null,
-      });
-    }
-  } catch (_) {}
-
-  // ── Extract source image entries and URLs ──────────────────────
-  const sourceImageEntries = parseImageEntries(record.original_image_urls);
-  const sourceImageUrls = sourceImageEntries
-    .map(imageEntryUrl)
-    .filter((u) => typeof u === 'string' && u.startsWith('http'));
-
-  // ── Insert ───────────────────────────────────────────────────
-  const { error: insertErr } = await adminClient
-    .schema('pipeline')
-    .from('pipeline_properties')
-    .insert(record);
-
-  if (insertErr) {
-    console.error('Insert error:', insertErr);
-    return permissiveJsonErr(500, 'Database insert failed: ' + insertErr.message, req);
-  }
-
-  // ── Auto-upload images to ImageKit (v3.1) ────────────────────
-  // If the browser already uploaded images to ImageKit (v3.1 extension),
-  // skip server-side download. Otherwise download + upload here.
   let imagekitUploaded = 0;
   let imagekitFailed = 0;
   const imagekitUrls: ImageEntry[] = [];
 
   // Check if URLs are already ImageKit URLs (browser-side upload path)
   const alreadyImageKit = sourceImageUrls.length > 0 && sourceImageUrls.every((u) => u.includes('ik.imagekit.io'));
-  const IMAGEKIT_PRIVATE_KEY = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
 
   if (alreadyImageKit) {
     // Browser already uploaded — preserve the original entries and metadata.
@@ -202,7 +108,6 @@ Deno.serve(async (req) => {
     async function uploadOne(sourceEntry: ImageEntry, index: number): Promise<ImageEntry | null> {
       try {
         const sourceUrl = imageEntryUrl(sourceEntry);
-        // Fetch the source image with browser-like headers to bypass CDN blocks
         const fetchHeaders: Record<string, string> = {
           'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
           'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -210,6 +115,7 @@ Deno.serve(async (req) => {
           'Cache-Control': 'no-cache',
         };
         // Add Referer based on source site
+        const source = safeStr(record.source);
         if (source === 'zillow') fetchHeaders['Referer'] = 'https://www.zillow.com/';
         else if (source === 'realtor') fetchHeaders['Referer'] = 'https://www.realtor.com/';
         else if (source === 'apartments') fetchHeaders['Referer'] = 'https://www.apartments.com/';
@@ -228,7 +134,6 @@ Deno.serve(async (req) => {
         const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
         const buffer = await imgRes.arrayBuffer();
 
-        // Determine file extension from content type
         const extMap: Record<string, string> = {
           'image/jpeg': 'jpg', 'image/jpg': 'jpg',
           'image/png': 'png', 'image/webp': 'webp',
@@ -299,16 +204,16 @@ Deno.serve(async (req) => {
       }
 
       // Recalculate quality score with ImageKit URLs
-      record.original_image_urls = JSON.stringify(imagekitUrls);
-      record.data_quality_score = qualityScore(record);
-      record.missing_fields = missingFields(record);
+      const updatedRecord = { ...record, original_image_urls: JSON.stringify(imagekitUrls) };
+      const score = qualityScore(updatedRecord);
+      const missing = missingFields(updatedRecord);
 
       await adminClient
         .schema('pipeline')
         .from('pipeline_properties')
         .update({
-          data_quality_score: record.data_quality_score,
-          missing_fields: record.missing_fields,
+          data_quality_score: score,
+          missing_fields: missing,
         })
         .eq('id', record.id);
     } else if (imagekitFailed > 0) {
@@ -323,6 +228,116 @@ Deno.serve(async (req) => {
         })
         .eq('id', record.id);
     }
+  }
+}
+
+// ── Handler ────────────────────────────────────────────────────
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return permissiveCorsResponse(req);
+  if (req.method !== 'POST')   return permissiveJsonErr(405, 'Method not allowed', req);
+
+  // ── Auth: shared secret ──────────────────────────────────────
+  const IMPORT_SECRET = Deno.env.get('SHORTCUT_IMPORT_SECRET');
+  if (!IMPORT_SECRET) return permissiveJsonErr(500, 'Import secret not configured', req);
+
+  const url = new URL(req.url);
+  const incoming = url.searchParams.get('secret') || req.headers.get('x-import-secret');
+  if (!incoming || incoming !== IMPORT_SECRET) {
+    return permissiveJsonErr(401, 'Invalid import secret', req);
+  }
+
+  // ── Parse body ───────────────────────────────────────────────
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return permissiveJsonErr(400, 'Invalid JSON body', req);
+  }
+
+  const sourceListingId = safeStr(body.source_listing_id);
+  if (!sourceListingId) {
+    return permissiveJsonErr(400, 'source_listing_id is required', req);
+  }
+
+  let source: string;
+  try {
+    source = normalizeSource(body.source);
+  } catch (err) {
+    return permissiveJsonErr(400, err instanceof Error ? err.message : 'Unsupported source', req);
+  }
+
+  // ── Duplicate check ──────────────────────────────────────────
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const adminClient  = createClient(SUPABASE_URL, SERVICE_KEY);
+
+  const { data: existing } = await adminClient
+    .schema('pipeline')
+    .from('pipeline_properties')
+    .select('id, title')
+    .eq('source_listing_id', sourceListingId)
+    .eq('source', source)
+    .maybeSingle();
+
+  if (existing) {
+    return permissiveJsonOk({
+      ok: false, duplicate: true,
+      id: existing.id, title: existing.title,
+      message: 'Already in pipeline',
+    }, req);
+  }
+
+  // ── Build record using shared builder ────────────────────────
+  const record = buildPipelineRecord(body as unknown as Parameters<typeof buildPipelineRecord>[0]);
+
+  // Diagnostic telemetry: log low-quality imports for analysis
+  try {
+    if (typeof record.data_quality_score === 'number' && record.data_quality_score < 80) {
+      console.info('[receive-pipeline-import] Low quality import:', {
+        id: record.id,
+        score: record.data_quality_score,
+        missing: record.missing_fields,
+        source_listing_id: record.source_listing_id,
+        original_data_sample: record.original_data ? (String(record.original_data).slice(0, 200)) : null,
+      });
+    }
+  } catch (_) {}
+
+  // ── Extract source image entries and URLs ──────────────────────
+  const sourceImageEntries = parseImageEntries(record.original_image_urls);
+  const sourceImageUrls = sourceImageEntries
+    .map(imageEntryUrl)
+    .filter((u: string) => typeof u === 'string' && u.startsWith('http'));
+
+  // ── Check if URLs are already ImageKit URLs (browser-side upload path) ──
+  const alreadyImageKit = sourceImageUrls.length > 0 && sourceImageUrls.every((u: string) => u.includes('ik.imagekit.io'));
+
+  // ── Insert ───────────────────────────────────────────────────
+  const { error: insertErr } = await adminClient
+    .schema('pipeline')
+    .from('pipeline_properties')
+    .insert(record);
+
+  if (insertErr) {
+    console.error('Insert error:', insertErr);
+    return permissiveJsonErr(500, 'Database insert failed: ' + insertErr.message, req);
+  }
+
+  // ── If photos are already on ImageKit, update quality score immediately ──
+  if (alreadyImageKit) {
+    const updatedRecord = { ...record, original_image_urls: JSON.stringify(sourceImageEntries) };
+    const score = qualityScore(updatedRecord);
+    const missing = missingFields(updatedRecord);
+    await adminClient
+      .schema('pipeline')
+      .from('pipeline_properties')
+      .update({
+        data_quality_score: score,
+        missing_fields: missing,
+        photo_import_status: 'ok',
+        last_photo_import_at: new Date().toISOString(),
+      })
+      .eq('id', record.id);
   }
 
   // ── Optional folder assignment ─────────────────────────────────
@@ -342,16 +357,48 @@ Deno.serve(async (req) => {
     }
   }
 
-  return permissiveJsonOk({
+  // ── Return immediately (v4.0: save-first architecture) ──────
+  // Fire off async photo uploads AFTER sending the response.
+  // The client doesn't need to wait for photos to finish.
+  const IMAGEKIT_PRIVATE_KEY = Deno.env.get('IMAGEKIT_PRIVATE_KEY') || '';
+
+  // Use edge functions' waitUntil or just fire-and-forget
+  // Since Deno.serve doesn't have waitUntil, we use a background promise
+  const photoPromise = (async () => {
+    try {
+      await uploadPhotosAsync(
+        record as unknown as Record<string, unknown>,
+        sourceImageEntries,
+        sourceImageUrls,
+        adminClient,
+        IMAGEKIT_PRIVATE_KEY,
+      );
+    } catch (err) {
+      console.error('[receive-pipeline-import] Background photo upload failed:', err);
+    }
+  })();
+
+  // Don't await photoPromise — return immediately
+  // But keep a reference to prevent the function from exiting before the response
+  // is sent. The photo upload continues in the background.
+  const response = permissiveJsonOk({
     ok:     true,
     id:     record.id,
     title:  String(record.title),
     score:  record.data_quality_score,
     photos: sourceImageUrls.length,
-    imagekit_photos: imagekitUploaded,
-    imagekit_failed: imagekitFailed,
+    imagekit_photos: alreadyImageKit ? sourceImageUrls.length : 0,
+    imagekit_failed: 0,
+    photo_import: alreadyImageKit ? 'complete' : 'background',
     city:   safeStr(body.city),
     rent:   safeInt(body.monthly_rent),
     folder: folderInfo,
   }, req);
+
+  // Fire and forget the photo upload — don't await
+  photoPromise.catch((err) => {
+    console.error('[receive-pipeline-import] Background photo upload error:', err);
+  });
+
+  return response;
 });

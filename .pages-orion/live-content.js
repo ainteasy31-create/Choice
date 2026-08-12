@@ -1,18 +1,19 @@
 // ============================================================
 // Choice Properties — Live Content Script (auto-updated)
-// v3.1 — Background-worker photo download + ImageKit upload
-// ============================================================
-// This file is hosted on Cloudflare Pages and fetched by the
-// extension's thin loader (content.js) on every page load.
-// Edit this file → push to GitHub → Cloudflare auto-deploys
-// → extension picks up changes automatically. No reinstall needed.
+// v4.0 — August 2026
 //
-// v3.1: PHOTOS ARE DOWNLOADED VIA THE BACKGROUND SERVICE WORKER
-// (which has host_permissions for Zillow/Realtor CDNs, bypassing
-// CORS restrictions that block content-script fetches) and uploaded
-// to ImageKit BEFORE the listing is sent to the pipeline.
+// v4.0: SAVE-FIRST ARCHITECTURE
+//   The property is saved to the pipeline IMMEDIATELY and the
+//   user sees "Saved!" in under 2 seconds. Photos continue
+//   uploading in the background with a floating progress widget.
 //
-// FALLBACK CHAIN:
+//   PHOTO UPLOAD PIPELINE:
+//   1. Save property → get pipeline ID (instant)
+//   2. Show "Saved!" button, user can navigate away
+//   3. Photos upload in background (12 concurrent)
+//   4. Pipeline record is updated when all photos complete
+//
+//   FALLBACK CHAIN:
 //   1. Background worker download (best — no CORS issues)
 //   2. Direct content-script fetch (works for some CDNs)
 //   3. Send source URLs to server — server tries to download
@@ -24,11 +25,11 @@
   // ── Config ──────────────────────────────────────────────────
   var EDGE_URL = (window.CP_CONFIG && window.CP_CONFIG.EDGE_URL) || 'https://tlfmwetmhthpyrytrcfo.supabase.co/functions/v1/receive-pipeline-import';
   var SECRET   = (window.CP_CONFIG && window.CP_CONFIG.IMPORT_SECRET) || 'cp_import_7Kx3m9P2w5';
-  var VERSION  = '3.1.0-live';
+  var VERSION  = '4.0.0-live';
 
   // ── SPA navigation handling ─────────────────────────────────
   var lastUrl = location.href;
-  var PHOTO_BATCH_SIZE = 5;
+  var PHOTO_BATCH_SIZE = 12; // increased from 5 for faster parallel uploads
   var MAX_PHOTOS = 40;
 
   function isSupportedPage(url) {
@@ -105,10 +106,7 @@
     }
   }
 
-  // ── Photo download + upload helpers (v3.1) ──────────────────
-  // Downloads each image via the background service worker (which
-  // has host_permissions for Zillow/Realtor CDNs, bypassing CORS)
-  // and uploads to ImageKit via the pipeline-photo-upload edge function.
+  // ── Photo download + upload helpers (v4.0) ──────────────────
   function dedupePhotoUrls(urls) {
     var seen = new Set();
     var unique = [];
@@ -143,12 +141,167 @@
     return urls;
   }
 
-  async function downloadAndUploadPhotos(photoUrls, maxPhotos, progressCallback) {
+  // ── Floating progress widget (v4.0) ─────────────────────────
+  // Shows a small floating indicator when photos are uploading in the background
+  var progressWidget = null;
+
+  function showProgressWidget() {
+    hideProgressWidget();
+    progressWidget = document.createElement('div');
+    progressWidget.id = 'cp-progress-widget';
+    progressWidget.textContent = 'Saving property…';
+    Object.assign(progressWidget.style, {
+      position: 'fixed', bottom: 'max(80px, env(safe-area-inset-bottom))', right: 'max(24px, env(safe-area-inset-right))',
+      zIndex: '2147483647',
+      padding: '10px 18px', background: '#1e293b', color: '#e2e8f0',
+      border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+      fontFamily: '-apple-system, sans-serif', fontSize: '13px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+      display: 'flex', alignItems: 'center', gap: '8px',
+      transition: 'opacity 0.3s',
+    });
+    document.body.appendChild(progressWidget);
+  }
+
+  function updateProgressWidget(text) {
+    if (progressWidget) progressWidget.textContent = text;
+  }
+
+  function hideProgressWidget() {
+    if (progressWidget) {
+      progressWidget.remove();
+      progressWidget = null;
+    }
+  }
+
+  // ── v4.0: Save property first, then upload photos in background ──
+  async function handleSave() {
+    var btn = document.getElementById('cp-save-btn');
+    if (!btn) return;
+    btn.textContent = 'Saving…';
+    btn.style.background = '#818cf8';
+    btn.disabled = true;
+
+    try {
+      var extractor = window.CP_Extractors && window.CP_Extractors.detect(location.href);
+      if (!extractor) { setError('Unsupported page'); return; }
+
+      var extracted = window.CP_Extractors.extract(location.href, document);
+      if (!extracted) { setError('Could not read listing'); return; }
+
+      // ── Extract photo URLs ──────────────────────────────────
+      var photoUrls = extractPhotoUrls(extracted.original_image_urls);
+      if (!photoUrls.length && Array.isArray(extracted.photo_urls)) {
+        extracted.photo_urls.forEach(function(u) {
+          if (typeof u === 'string') photoUrls.push(u);
+        });
+      }
+
+      // ── v4.0: Save property FIRST, then upload photos ───────
+      // Build payload with source URLs (no ImageKit upload yet)
+      var payload = {
+        source: extracted.source,
+        source_listing_id: extracted.source_listing_id,
+        source_url: extracted.source_url || extracted.url || location.href,
+        title: extracted.title,
+        address: extracted.address,
+        city: extracted.city,
+        state: extracted.state,
+        zip: extracted.zip,
+        lat: extracted.lat,
+        lng: extracted.lng,
+        monthly_rent: extracted.monthly_rent != null ? extracted.monthly_rent : extracted.rent,
+        bedrooms: extracted.bedrooms != null ? extracted.bedrooms : extracted.beds,
+        bathrooms: extracted.bathrooms != null ? extracted.bathrooms : extracted.baths,
+        half_bathrooms: extracted.half_bathrooms,
+        square_footage: extracted.square_footage != null ? extracted.square_footage : extracted.sqft,
+        lot_size_sqft: extracted.lot_size_sqft != null ? extracted.lot_size_sqft : extracted.lot_sqft,
+        year_built: extracted.year_built,
+        property_type: extracted.property_type,
+        description: extracted.description,
+        available_date: extracted.available_date,
+        pets_allowed: extracted.pets_allowed,
+        original_image_urls: JSON.stringify(photoUrls.map(function(u) { return { url: u }; })),
+        _import: 'browser-extension-v4.0.0-live',
+      };
+
+      // ── Save property immediately ───────────────────────────
+      btn.textContent = 'Saving to pipeline…';
+      var url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
+      var saveRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      var resp = await saveRes.json();
+
+      if (resp && resp.ok) {
+        var ikPhotos = resp.imagekit_photos || 0;
+        var photoImport = resp.photo_import;
+
+        if (photoImport === 'complete') {
+          // Photos were already uploaded (browser-side upload path)
+          btn.textContent = 'Saved! ' + ikPhotos + ' photos ✓';
+          btn.style.background = '#16a34a';
+          setTimeout(function () { btn.remove(); }, 3000);
+        } else {
+          // v4.0: Property saved, photos uploading in background
+          btn.textContent = 'Saved! ✓';
+          btn.style.background = '#16a34a';
+
+          // Show progress widget for background photo uploads
+          showProgressWidget();
+          updateProgressWidget('Photos uploading…');
+
+          // Start background photo uploads
+          // We don't await this — it runs in the background
+          if (photoUrls.length > 0) {
+            uploadPhotosInBackground(photoUrls, function(completed, total) {
+              updateProgressWidget('Photos: ' + completed + '/' + total);
+            }).then(function(result) {
+              if (result.uploaded > 0) {
+                updateProgressWidget(result.uploaded + ' photos uploaded ✓');
+              } else if (result.failed > 0) {
+                updateProgressWidget('Photos queued for server retry');
+              }
+              setTimeout(hideProgressWidget, 4000);
+            }).catch(function() {
+              updateProgressWidget('Photo upload queued');
+              setTimeout(hideProgressWidget, 3000);
+            });
+          } else {
+            hideProgressWidget();
+          }
+
+          setTimeout(function () { btn.remove(); }, 3000);
+        }
+      } else if (resp && resp.duplicate) {
+        btn.textContent = 'Already in pipeline';
+        btn.style.background = '#a16207';
+        setTimeout(function () { btn.remove(); }, 3000);
+      } else if (resp && resp.queued) {
+        btn.textContent = 'Queued offline (' + resp.queueLength + ')';
+        btn.style.background = '#d97706';
+        setTimeout(function () { btn.remove(); }, 3000);
+      } else {
+        setError(resp && resp.error ? resp.error.slice(0, 40) : 'Server error');
+      }
+    } catch (e) {
+      console.error('[CP]', e);
+      setError('Network error');
+    }
+  }
+
+  // ── Background photo upload (v4.0) ──────────────────────────
+  // Runs after the property is saved. Uploads photos in the background
+  // and updates the pipeline record when complete.
+  async function uploadPhotosInBackground(photoUrls, progressCallback) {
     var uploaded = [];
     var failed = 0;
     var urls = dedupePhotoUrls(photoUrls);
-    var limit = Math.min(urls.length, maxPhotos || MAX_PHOTOS);
+    var limit = Math.min(urls.length, MAX_PHOTOS);
     var total = limit;
+
     for (var i = 0; i < limit; i += PHOTO_BATCH_SIZE) {
       var batch = urls.slice(i, i + PHOTO_BATCH_SIZE);
       if (progressCallback) progressCallback(Math.min(i, total), total);
@@ -168,9 +321,6 @@
   async function downloadViaBackground(url) {
     return new Promise(function(resolve) {
       try {
-        // This live file is injected into the page's main world. The
-        // extension API is only exposed to the isolated content script, so
-        // ask that script to relay the request through a postMessage bridge.
         if (!window.chrome || !window.chrome.runtime || !window.chrome.runtime.sendMessage) {
           var requestId = 'cp-photo-' + Date.now() + '-' + Math.random().toString(36).slice(2);
           var timer = setTimeout(function () {
@@ -194,7 +344,6 @@
           { type: 'DOWNLOAD_PHOTO', url: url },
           function(response) {
             if (chrome.runtime.lastError) {
-              console.warn('[CP] Background download error:', chrome.runtime.lastError.message);
               resolve(null);
               return;
             }
@@ -206,7 +355,6 @@
           }
         );
       } catch (e) {
-        console.warn('[CP] Background download exception:', e.message);
         resolve(null);
       }
     });
@@ -308,112 +456,14 @@
     }
   }
 
-  async function handleSave() {
-    var btn = document.getElementById('cp-save-btn');
-    if (!btn) return;
-    btn.textContent = 'Saving…';
-    btn.style.background = '#818cf8';
-    btn.disabled = true;
-
-    try {
-      var extractor = window.CP_Extractors && window.CP_Extractors.detect(location.href);
-      if (!extractor) { setError('Unsupported page'); return; }
-
-      var extracted = window.CP_Extractors.extract(location.href, document);
-      if (!extracted) { setError('Could not read listing'); return; }
-
-      // ── Extract photo URLs ──────────────────────────────────
-      var photoUrls = extractPhotoUrls(extracted.original_image_urls);
-      if (!photoUrls.length && Array.isArray(extracted.photo_urls)) {
-        extracted.photo_urls.forEach(function(u) {
-          if (typeof u === 'string') photoUrls.push(u);
-        });
-      }
-
-      // ── Download + upload photos (v3.1) ─────────────────────
-      // Show progress: "Importing photos 1/40…"
-      var photoResult = { uploaded: [], failed: 0, total: 0 };
-      if (photoUrls.length > 0) {
-        btn.textContent = 'Extracting photos…';
-        photoResult = await downloadAndUploadPhotos(photoUrls, MAX_PHOTOS, function(completed, total) {
-          btn.textContent = 'Importing photos ' + completed + '/' + total + '…';
-        });
-      }
-
-      // ── Build payload with ImageKit image objects ─────────────
-      // Preserve fileId and size metadata if upload succeeded.
-      var finalUrls = photoResult.uploaded.length > 0
-        ? photoResult.uploaded
-        : photoUrls.map(function(url) { return { url: url }; });
-      var payload = {
-        source: extracted.source,
-        source_listing_id: extracted.source_listing_id,
-        source_url: extracted.source_url || extracted.url || location.href,
-        title: extracted.title,
-        address: extracted.address,
-        city: extracted.city,
-        state: extracted.state,
-        zip: extracted.zip,
-        lat: extracted.lat,
-        lng: extracted.lng,
-        monthly_rent: extracted.monthly_rent != null ? extracted.monthly_rent : extracted.rent,
-        bedrooms: extracted.bedrooms != null ? extracted.bedrooms : extracted.beds,
-        bathrooms: extracted.bathrooms != null ? extracted.bathrooms : extracted.baths,
-        half_bathrooms: extracted.half_bathrooms,
-        square_footage: extracted.square_footage != null ? extracted.square_footage : extracted.sqft,
-        lot_size_sqft: extracted.lot_size_sqft != null ? extracted.lot_size_sqft : extracted.lot_sqft,
-        year_built: extracted.year_built,
-        property_type: extracted.property_type,
-        description: extracted.description,
-        available_date: extracted.available_date,
-        pets_allowed: extracted.pets_allowed,
-        original_image_urls: JSON.stringify(finalUrls),
-        _import: 'browser-extension-v3.1.0-live',
-      };
-
-      // ── Send to pipeline ────────────────────────────────────
-      btn.textContent = 'Saving to pipeline…';
-      var url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
-      var direct = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      var resp = await direct.json();
-
-      if (resp && resp.ok) {
-        var photos = resp.photos || 0;
-        var ikPhotos = resp.imagekit_photos || 0;
-        var failedPhotos = resp.imagekit_failed || 0;
-        if (ikPhotos > 0) {
-          btn.textContent = 'Saved! ' + ikPhotos + ' photos ✓';
-        } else if (failedPhotos > 0) {
-          btn.textContent = 'Saved! Photos pending retry';
-        } else {
-          btn.textContent = 'Saved! ' + photos + ' source photos';
-        }
-        btn.style.background = '#16a34a';
-        setTimeout(function () { btn.remove(); }, 3000);
-      } else if (resp && resp.duplicate) {
-        btn.textContent = 'Already in pipeline';
-        btn.style.background = '#a16207';
-        setTimeout(function () { btn.remove(); }, 3000);
-      } else if (resp && resp.queued) {
-        btn.textContent = 'Queued offline (' + resp.queueLength + ')';
-        btn.style.background = '#d97706';
-        setTimeout(function () { btn.remove(); }, 3000);
-      } else {
-        setError(resp && resp.error ? resp.error.slice(0, 40) : 'Server error');
-      }
-    } catch (e) {
-      console.error('[CP]', e);
-      setError('Network error');
-    }
+  function blobToBase64(blob) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function() { resolve(reader.result); };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
-
-  // ── Init ────────────────────────────────────────────────────
-  injectButton();
-  watchUrlChanges();
 
   function setError(msg) {
     var btn = document.getElementById('cp-save-btn');
@@ -425,4 +475,8 @@
       if (btn) { btn.textContent = 'Save to Pipeline'; btn.style.background = '#6366f1'; }
     }, 4000);
   }
+
+  // ── Init ────────────────────────────────────────────────────
+  injectButton();
+  watchUrlChanges();
 })();
