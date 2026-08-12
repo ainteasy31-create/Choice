@@ -15,6 +15,8 @@
   let _dirty    = {};   // unsaved field changes
   let _landlords = [];  // cache for publish landlord picker
   let _selected  = new Set(); // IDs of selected cards for bulk actions
+  let _undoStack = [];
+  let _redoStack = [];
 
   // ── Session cache (30 s TTL — avoid re-fetch on back-navigation) ──────────
   const _CPFX = 'pl_v1_';
@@ -329,6 +331,7 @@
       <div class="pl-card-ft" onclick="event.stopPropagation()">
         ${!isArchived ? `<button class="btn btn-sm btn-ghost pl-arc-btn" data-id="${S.esc(l.id)}" title="Archive">Archive</button>` : '<span class="pill pill-muted" style="font-size:.68rem">Archived</span>'}
         ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-primary pl-pub-btn" data-id="${S.esc(l.id)}" title="Publish to site">Publish →</button>` : ''}
+        ${!isPublished && !isArchived ? `<button class="btn btn-sm btn-ghost pl-del-btn" data-id="${S.esc(l.id)}" title="Delete from pipeline" style="color:var(--danger)">Delete</button>` : ''}
         ${l.photo_import_status === 'failed' && !isArchived ? `<button class="btn btn-sm btn-outline pl-retry-photos-btn" data-id="${S.esc(l.id)}" data-prop-id="${S.esc(l.choice_property_id || '')}" title="Retry downloading photos to ImageKit">Retry photos</button>` : ''}
         ${isPublished && l.choice_property_id ? `<a class="btn btn-sm btn-ghost" href="/admin/property-detail.html?id=${S.esc(l.choice_property_id)}" target="_blank" onclick="event.stopPropagation()">Edit ↗</a>` : ''}
       </div>
@@ -446,7 +449,7 @@
         labels.push('<div class="pl-panel-alert pl-panel-alert-success">Photos are stored on ImageKit and ready for the live listing.</div>');
       }
     } else if (hasSource) {
-      labels.push(`<div class="pl-panel-alert pl-panel-alert-info">${photos.length} source photo${photos.length!==1?'s':''} available. They will be transferred after publish.</div>`);
+      labels.push(`<div class="pl-panel-alert pl-panel-alert-info">${photos.length} source photo${photos.length!==1?'s':''} available. They will be transferred after publish. <button class="btn btn-sm btn-outline" id="pl-edit-photos-btn">Edit photos</button></div>`);
     } else {
       labels.push('<div class="pl-panel-alert pl-panel-alert-warning">No source photos found. Add at least one photo before publishing.</div>');
     }
@@ -631,7 +634,12 @@
       ${!isArchived && !isPublished ? `<button class="btn btn-ghost pl-arc-btn-panel" data-id="${S.esc(l.id)}">Archive</button>` : ''}
       <div style="flex:1"></div>
       ${!isPublished ? `<button class="btn btn-outline pl-save-btn" data-id="${S.esc(l.id)}">Save changes</button>` : ''}
-      ${!isPublished && !isArchived ? `<button class="btn btn-primary pl-pub-btn-panel" data-id="${S.esc(l.id)}">Publish as draft →</button>` : ''}
+      ${!isPublished && !isArchived ? `
+        <label style="display:flex;align-items:center;gap:8px;margin-right:auto">
+          <input type="checkbox" id="pf-delete-on-publish" style="width:16px;height:16px"> <span style="font-size:.78rem;color:var(--muted-2)">Delete from pipeline after publish</span>
+        </label>
+        <button class="btn btn-primary pl-pub-btn-panel" data-id="${S.esc(l.id)}">Publish as draft →</button>
+      ` : ''}
     </div>`;
   }
 
@@ -714,6 +722,29 @@
       const pubBtn = panel.querySelector('.pl-pub-btn-panel');
       if(pubBtn) pubBtn.addEventListener('click', () => doPublish(l.id));
 
+      const delBtn = panel.querySelector('.pl-del-btn');
+      if(delBtn) delBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const ok = await S.confirm('Delete this listing from the pipeline?', 'This permanently deletes the pipeline record — it cannot be undone.');
+        if(!ok) return;
+        delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+        try {
+          const { data, error } = await CP.sb().rpc('pipeline_delete', { p_id: l.id });
+          if(error) throw error;
+          const res = typeof data === 'string' ? JSON.parse(data) : data;
+          if(!res?.ok) throw new Error(res?.error || 'Delete failed');
+          S.toast('Deleted from pipeline', 'success');
+          removeCard(l.id);
+          closePanel();
+          fetchCounts().catch(()=>{});
+        } catch(err){
+          console.error('[pipeline] delete failed', err);
+          S.toast('Delete failed: ' + (err.message||'unknown'), 'error');
+        } finally {
+          delBtn.disabled = false; delBtn.textContent = 'Delete';
+        }
+      });
+
       // Load photos asynchronously (may fetch from ImageKit for published listings)
       // FIX: photoCount was referenced from renderPanel() scope (undefined here),
       // so panelPhotos() never ran and "Loading…" stayed stuck on screen.
@@ -724,6 +755,9 @@
           if(photoContainer) photoContainer.innerHTML = html;
           wireGalleryEvents();
           wirePanelPhotoActions();
+          // Wire edit photos button (if present)
+          const editBtn = panel.querySelector('#pl-edit-photos-btn');
+          if(editBtn) editBtn.addEventListener('click', e => { e.stopPropagation(); openPhotoEditor(l); });
         }).catch(err => {
           console.error('[pipeline] photo gallery load failed', err);
           if(photoContainer) {
@@ -731,6 +765,19 @@
           }
         });
       }
+
+    // Autosize textareas in the panel
+    (function autosizeTextareas(){
+      try{
+        const tx = panel.querySelectorAll('textarea');
+        tx.forEach(t => {
+          const res = () => { t.style.height = 'auto'; t.style.height = Math.min(800, t.scrollHeight) + 'px'; };
+          res();
+          t.removeEventListener('input', res);
+          t.addEventListener('input', res);
+        });
+      }catch(e){}
+    })();
 
     // "Import full details" pre-fills the Import URL modal with this listing's source URL
     const reimportBtn = panel.querySelector('#pl-reimport-btn');
@@ -1164,7 +1211,11 @@ function wirePanelPhotoActions(){
     const btn = document.querySelector('.pl-pub-btn-panel');
     if(btn){ btn.disabled = true; btn.textContent = 'Publishing…'; }
 
-    const { data, error } = await CP.sb().rpc('pipeline_publish', { p_id: id, p_landlord_id: null });
+    // If the user chose to delete the pipeline record after publishing, call the new RPC
+    const deleteOnPublishEl = panel.querySelector('#pf-delete-on-publish');
+    const deleteOnPublish = deleteOnPublishEl && deleteOnPublishEl.checked;
+    const rpcName = deleteOnPublish ? 'pipeline_publish_and_delete' : 'pipeline_publish';
+    const { data, error } = await CP.sb().rpc(rpcName, { p_id: id, p_landlord_id: null });
     if(btn){ btn.disabled = false; btn.textContent = 'Publish as draft →'; }
     if(error){ S.toast('Publish failed: ' + error.message, 'error'); return; }
     const res = typeof data === 'string' ? JSON.parse(data) : data;
@@ -1414,6 +1465,32 @@ function wirePanelPhotoActions(){
     const pubBtn = document.getElementById('pl-bulk-pub');
     if(pubBtn){
       pubBtn.addEventListener('click', () => doBulkPublish());
+    }
+
+    const delBtn = document.getElementById('pl-bulk-delete');
+    if(delBtn){
+      delBtn.addEventListener('click', async () => {
+        const ids = [..._selected];
+        if(!ids.length) return;
+        const ok = await S.confirm(`Delete ${ids.length} listing${ids.length!==1?'s':''} from pipeline?`, 'This permanently deletes pipeline records. This cannot be undone.');
+        if(!ok) return;
+        delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+        try {
+          const { data, error } = await CP.sb().rpc('pipeline_bulk_delete', { p_ids: JSON.stringify(ids) });
+          if(error) throw error;
+          const res = typeof data === 'string' ? JSON.parse(data) : data;
+          if(!res?.ok) throw new Error(res?.error || 'Delete failed');
+          // Remove from UI
+          ids.forEach(id => removeCard(id));
+          _selected.clear(); updateBulkBar(); fetchCounts().catch(()=>{});
+          S.toast(`${res.deleted || ids.length} deleted from pipeline`, 'success');
+        } catch(e){
+          console.error('[pipeline] bulk delete failed', e);
+          S.toast('Bulk delete failed: ' + (e.message||'unknown'), 'error');
+        } finally {
+          delBtn.disabled = false; delBtn.textContent = 'Delete from pipeline';
+        }
+      });
     }
   }
 
@@ -1716,6 +1793,80 @@ function wirePanelPhotoActions(){
       btn.disabled = false;
       btn.textContent = 'Create Folder →';
     }
+  }
+
+  function openPhotoEditor(listing){
+    const imgs = imageUrls(listing.original_image_urls || '[]');
+    const modal = document.createElement('div');
+    modal.id = 'pl-photo-editor-modal';
+    modal.innerHTML = `
+      <div class="pl-import-backdrop"></div>
+      <div class="pl-import-dialog" role="dialog" aria-modal="true" aria-label="Edit photos">
+        <div class="pl-import-hd">
+          <div style="font-size:.95rem;font-weight:700">Edit photos</div>
+          <button class="pl-import-close" aria-label="Close">✕</button>
+        </div>
+        <div class="pl-import-body">
+          <p style="font-size:.82rem;color:var(--muted-2);margin:0 0 14px">Reorder or remove source photos. Changes update the pipeline record's <em>original_image_urls</em>.</p>
+          <div id="pl-photo-edit-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div class="pl-import-ft">
+          <button class="btn btn-ghost" id="pl-photo-edit-cancel">Cancel</button>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary" id="pl-photo-edit-save">Save changes</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('.pl-import-backdrop').addEventListener('click', closePhotoEditor);
+    modal.querySelector('.pl-import-close').addEventListener('click', closePhotoEditor);
+    document.getElementById('pl-photo-edit-cancel').addEventListener('click', closePhotoEditor);
+
+    const listEl = document.getElementById('pl-photo-edit-list');
+    function renderList(){
+      listEl.innerHTML = imgs.map((u, i) => `
+        <div style="display:flex;align-items:center;gap:8px">
+          <img src="${S.esc(u)}" style="width:84px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+          <div style="flex:1">
+            <div style="font-size:.85rem;opacity:.85">${S.esc(u)}</div>
+            <div style="margin-top:6px;display:flex;gap:6px">
+              <button class="btn btn-sm btn-ghost" data-action="up" data-idx="${i}">Up</button>
+              <button class="btn btn-sm btn-ghost" data-action="down" data-idx="${i}">Down</button>
+              <button class="btn btn-sm btn-ghost" data-action="primary" data-idx="${i}">Make primary</button>
+              <button class="btn btn-sm btn-ghost" data-action="remove" data-idx="${i}" style="color:var(--danger)">Remove</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      listEl.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const action = btn.dataset.action;
+          const idx = parseInt(btn.dataset.idx, 10);
+            if(action === 'remove') imgs.splice(idx,1);
+            else if(action === 'primary' && idx !== 0){ const it = imgs.splice(idx,1)[0]; imgs.unshift(it); }
+          else if(action === 'up' && idx > 0) { const t = imgs[idx-1]; imgs[idx-1]=imgs[idx]; imgs[idx]=t; }
+          else if(action === 'down' && idx < imgs.length-1) { const t = imgs[idx+1]; imgs[idx+1]=imgs[idx]; imgs[idx]=t; }
+          renderList();
+        });
+      });
+    }
+
+    renderList();
+
+    async function saveEdits(){
+      const { data, error } = await CP.sb().rpc('pipeline_save', { p_id: listing.id, p_patch: { original_image_urls: JSON.stringify(imgs) } });
+      if(error){ S.toast('Save failed: ' + error.message, 'error'); return; }
+      const res = typeof data === 'string' ? JSON.parse(data) : data;
+      if(!res?.ok){ S.toast('Save failed: ' + (res?.error||'unknown'), 'error'); return; }
+      S.toast('Photos updated', 'success');
+      closePhotoEditor();
+      // Refresh panel photos
+      const photoContainer = document.getElementById('panel-photos-container');
+      if(photoContainer){ panelPhotos(listing).then(html => { photoContainer.innerHTML = html; wireGalleryEvents(); wirePanelPhotoActions(); }); }
+    }
+
+    document.getElementById('pl-photo-edit-save').addEventListener('click', saveEdits);
+
+    function closePhotoEditor(){ const m = document.getElementById('pl-photo-editor-modal'); if(m) m.remove(); }
   }
 
   async function addSelectedToFolder(){

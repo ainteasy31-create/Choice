@@ -257,9 +257,14 @@
                 headers: { 'Accept': 'image/*' }
               });
               if (imgRes.ok) {
-                var blob = await imgRes.blob();
-                var base64 = await blobToBase64(blob);
-                var ext = (blob.type || 'image/jpeg').split('/')[1] || 'jpg';
+                        var blob = await imgRes.blob();
+                        // Optimize image on client: resize large images and convert to WebP to save bandwidth.
+                        try {
+                          var optimized = await optimizeImageBlob(blob, 1600, 0.85);
+                          if (optimized) blob = optimized;
+                        } catch (_) {}
+                        var base64 = await blobToBase64(blob);
+                        var ext = (blob.type || 'image/jpeg').split('/')[1] || 'jpg';
                 if (ext === 'jpeg') ext = 'jpg';
                 photo = { dataUri: base64, ext: ext };
               }
@@ -292,6 +297,35 @@
           return null;
         }
       }
+
+      // Resize/convert images using canvas. Returns a Blob or null on failure.
+          // Optimize image via Web Worker to keep main thread responsive.
+          const _imageWorker = (function(){
+            try {
+              return new Worker(chrome.runtime.getURL('image-worker.js'));
+            } catch(e){
+              return null;
+            }
+          })();
+
+          function optimizeImageBlob(blob, maxWidth, quality){
+            return new Promise(async function(resolve){
+              if(!_imageWorker || !('createImageBitmap' in self)) return resolve(null);
+              try {
+                const id = Math.random().toString(36).slice(2);
+                const buffer = await blob.arrayBuffer();
+                const onmsg = function(ev){
+                  if(!ev.data || ev.data.id !== id) return;
+                  _imageWorker.removeEventListener('message', onmsg);
+                  if(!ev.data.ok) return resolve(null);
+                  const out = new Blob([ev.data.buffer], { type: ev.data.type });
+                  resolve(out);
+                };
+                _imageWorker.addEventListener('message', onmsg);
+                _imageWorker.postMessage({ id, buffer, maxWidth, quality }, [buffer]);
+              } catch(e){ resolve(null); }
+            });
+          }
 
       async function downloadAndUploadPhotos(photoUrls, maxPhotos, progressCallback) {
         var uploaded = [];
@@ -328,15 +362,103 @@
           var extracted = window.CP_Extractors.extract(location.href, document);
           if (!extracted) { setError('Could not read listing'); return; }
 
+          // Show preview/edit modal to allow user to adjust fields and optionally set a folder name
+          openPreviewModal(extracted, btn);
+        } catch (e) {
+          console.error('[CP]', e);
+          setError('Network error');
+        }
+      }
+
+      // ── Preview / edit modal (mobile-first) ─────────────────────────
+      function escapeHtml(str){
+        if(str === null || str === undefined) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      }
+
+      function openPreviewModal(extracted, triggerBtn) {
+        // Remove if existing
+        var existing = document.getElementById('cp-preview-modal');
+        if (existing) existing.remove();
+
+        var modal = document.createElement('div');
+        modal.id = 'cp-preview-modal';
+        modal.innerHTML = `\
+          <style>\
+            #cp-preview-modal { position:fixed; inset:0; z-index:2147483648; display:flex; align-items:flex-end; justify-content:center; }\
+            #cp-preview-modal .cp-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.5); }\
+            #cp-preview-modal .cp-sheet { position:relative; width:100%; max-width:680px; background:#0a0f1e; color:#fff; border-radius:14px 14px 0 0; box-shadow:0 -8px 30px rgba(0,0,0,.5); padding:14px 14px 18px; max-height:88vh; overflow:auto; }\
+            #cp-preview-modal .cp-hd { display:flex; align-items:center; gap:8px; }\
+            #cp-preview-modal .cp-hd h3 { margin:0; font-size:16px; font-weight:700; }\
+            #cp-preview-modal .cp-row { display:flex; gap:8px; margin-top:10px; }\
+            #cp-preview-modal .cp-row .cp-field { flex:1; display:flex; flex-direction:column; }\
+            #cp-preview-modal input, #cp-preview-modal textarea { background:#0f1724; border:1px solid rgba(255,255,255,.06); color:#fff; padding:8px; border-radius:8px; font-size:14px; }\
+            #cp-preview-modal textarea { min-height:84px; resize:vertical; }\
+            #cp-preview-modal .cp-actions { display:flex; gap:8px; margin-top:12px; }\
+            #cp-preview-modal .btn { padding:8px 12px; border-radius:8px; cursor:pointer; border:none }\
+            #cp-preview-modal .btn-primary { background:#6366f1; color:#fff }\
+            #cp-preview-modal .btn-ghost { background:transparent; color:#cbd5e1; border:1px solid rgba(255,255,255,.04) }\
+          </style>\
+          <div class="cp-backdrop"></div>\
+          <div class="cp-sheet" role="dialog" aria-modal="true" aria-label="Preview listing">\
+            <div class="cp-hd"><h3>Preview & Edit</h3><div style="flex:1"></div><button id="cp-preview-close" class="btn btn-ghost">Close</button></div>\
+            <div style="margin-top:8px;font-size:13px;color:#94a3b8">Edit fields before importing. Folder name is optional.</div>\
+            <div class="cp-row">\
+              <div class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">Title</label><input id="cp-prev-title" value="${escapeHtml(extracted.title||'')}" /></div>\
+            </div>\
+            <div class="cp-row">\
+              <div class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">Address</label><input id="cp-prev-address" value="${escapeHtml(extracted.address||'')}" /></div>\
+              <div class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">City</label><input id="cp-prev-city" value="${escapeHtml(extracted.city||'')}" /></div>\
+            </div>\
+            <div class="cp-row">\
+              <div class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">State</label><input id="cp-prev-state" value="${escapeHtml(extracted.state||'')}" /></div>\
+              <div class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">ZIP</label><input id="cp-prev-zip" value="${escapeHtml(extracted.zip||'')}" /></div>\
+            </div>\
+            <div class="cp-row">\
+              <div class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">Monthly Rent</label><input id="cp-prev-rent" value="${escapeHtml(String(extracted.monthly_rent || extracted.rent || ''))}" /></div>\
+              <div class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">Bedrooms</label><input id="cp-prev-beds" value="${escapeHtml(String(extracted.bedrooms || extracted.beds || ''))}" /></div>\
+            </div>\
+            <div style="margin-top:8px" class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">Description</label><textarea id="cp-prev-desc">${escapeHtml(extracted.description||'')}</textarea></div>\
+            <div style="margin-top:8px" class="cp-field"><label style="font-size:12px;color:#94a3b8;margin-bottom:6px">Folder name (optional)</label><input id="cp-prev-folder" placeholder="e.g. Columbus Q3, Fix Descriptions" /></div>\
+            <div class="cp-actions"><button id="cp-prev-cancel" class="btn btn-ghost">Cancel</button><div style="flex:1"></div><button id="cp-prev-confirm" class="btn btn-primary">Import to Pipeline</button></div>\
+          </div>`;
+
+        document.body.appendChild(modal);
+
+        // Wire events
+        modal.querySelector('.cp-backdrop').addEventListener('click', closePreviewModal);
+        modal.querySelector('#cp-preview-close').addEventListener('click', closePreviewModal);
+        modal.querySelector('#cp-prev-cancel').addEventListener('click', closePreviewModal);
+        modal.querySelector('#cp-prev-confirm').addEventListener('click', function () {
+          // Gather edited values and start import
+          var updated = Object.assign({}, extracted);
+          updated.title = document.getElementById('cp-prev-title').value.trim();
+          updated.address = document.getElementById('cp-prev-address').value.trim();
+          updated.city = document.getElementById('cp-prev-city').value.trim();
+          updated.state = document.getElementById('cp-prev-state').value.trim();
+          updated.zip = document.getElementById('cp-prev-zip').value.trim();
+          updated.monthly_rent = document.getElementById('cp-prev-rent').value.trim();
+          updated.bedrooms = document.getElementById('cp-prev-beds').value.trim();
+          updated.description = document.getElementById('cp-prev-desc').value.trim();
+          var folderName = document.getElementById('cp-prev-folder').value.trim();
+          closePreviewModal();
+          // Start the original import flow but include folder_name if provided
+          startImportProcess(updated, triggerBtn, folderName || null);
+        });
+
+        function closePreviewModal() { var m = document.getElementById('cp-preview-modal'); if (m) m.remove(); }
+      }
+
+      // Start import after user confirmed edits in preview modal
+      async function startImportProcess(extracted, triggerBtn, folderName) {
+        var btn = triggerBtn || document.getElementById('cp-save-btn');
+        try {
           // Extract photo URLs
           var photoUrls = extractPhotoUrls(extracted.original_image_urls);
           if (!photoUrls.length && Array.isArray(extracted.photo_urls)) {
-            extracted.photo_urls.forEach(function(u) {
-              if (typeof u === 'string') photoUrls.push(u);
-            });
+            extracted.photo_urls.forEach(function(u) { if (typeof u === 'string') photoUrls.push(u); });
           }
 
-          // Download + upload photos via background worker
           var photoResult = { uploaded: [], failed: 0, total: 0 };
           if (photoUrls.length > 0) {
             btn.textContent = 'Extracting photos…';
@@ -345,7 +467,6 @@
             });
           }
 
-          // Build payload with ImageKit URLs if available
           var finalUrls = photoResult.uploaded.length > 0 ? photoResult.uploaded : photoUrls;
           var payload = {
             source: extracted.source,
@@ -372,13 +493,10 @@
             original_image_urls: JSON.stringify(finalUrls),
             _import: 'browser-extension-v3.1.0',
           };
+          if (folderName) payload.folder_name = folderName;
 
           var url = EDGE_URL + '?secret=' + encodeURIComponent(SECRET);
-          var direct = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
+          var direct = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           var resp = await direct.json();
 
           if (resp && resp.ok) {

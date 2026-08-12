@@ -151,6 +151,23 @@
     return parts.length ? parts.join('; ') : null;
   }
 
+  // Sample a small portion of __NEXT_DATA__ / prop for debugging without
+  // sending huge payloads. Truncate long strings and arrays.
+  function sampleValue(v, depth) {
+    if (depth <= 0) return null;
+    if (v == null) return v;
+    if (typeof v === 'string') return v.length > 200 ? v.slice(0, 200) + '...' : v;
+    if (typeof v === 'number' || typeof v === 'boolean') return v;
+    if (Array.isArray(v)) return v.slice(0, 6).map(i => sampleValue(i, depth - 1));
+    if (typeof v === 'object') {
+      const out = {};
+      const keys = Object.keys(v).slice(0, 12);
+      for (const k of keys) out[k] = sampleValue(v[k], depth - 1);
+      return out;
+    }
+    return null;
+  }
+
   const TYPE_MAP = {
     SINGLE_FAMILY: 'SINGLE_FAMILY', MULTI_FAMILY: 'MULTI_FAMILY', CONDO: 'CONDOS',
     CONDO_TOWNHOME: 'CONDOS', TOWNHOUSE: 'TOWNHOMES', APARTMENT: 'APARTMENT',
@@ -345,6 +362,20 @@
     for (const t of (prop.tags || [])) addA(t);
     for (const f of [...(rf.communityFeatures || []), ...(rf.interiorFeatures || []), ...(rf.exteriorFeatures || []), ...(rf.poolFeatures || [])]) addA(f);
 
+    // Parse Zillow's amenityCategories (structured groups of amenities)
+    try {
+      if (prop.amenityCategories && Array.isArray(prop.amenityCategories)) {
+        for (const cat of prop.amenityCategories) {
+          if (!cat) continue;
+          // cat may be { name: 'Community', amenities: ['Pool','Gym'] } or similar
+          if (Array.isArray(cat.amenities)) {
+            for (const a of cat.amenities) addA(typeof a === 'string' ? a : (a && a.name));
+          }
+          if (cat.name && typeof cat.name === 'string') addA(cat.name);
+        }
+      }
+    } catch (_) {}
+
     // ── attrMap fallback ───────────────────────────────────────
     // Zillow's resoFacts sometimes omits fields that are only present
     // in prop.attrMap (a label→value object). Parse it to fill any
@@ -394,6 +425,17 @@
 
     const secDeposit = safeI(rf.securityDeposit) || safeI(facts['security deposit']) || null;
 
+    // Sample a small original_data excerpt to help debugging missing fields
+    let sampled = null;
+    try {
+      sampled = {
+        zpid: zpid,
+        attrMap: sampleValue(prop.attrMap || prop.facts || {}, 2),
+        amenityCategories: sampleValue(prop.amenityCategories || [], 2),
+        resoFacts: sampleValue(rf || {}, 2),
+      };
+    } catch (_) { sampled = null; }
+
     return basePayload('zillow', zpid, canonicalZillowUrl(url, zpid), {
       title: buildTitle(beds, propType, city, street),
       address: street, city, state, zip, lat, lng,
@@ -434,6 +476,7 @@
       has_basement: !!(rf.basement && rf.basement !== 'None' && rf.basement !== 'false' && rf.basement !== false),
       has_central_air: !!(rf.hasCooling || (rf.cooling && rf.cooling.some(c => c.toLowerCase().includes('central')))),
       original_image_urls: JSON.stringify(collectPhotos(prop)),
+      original_data: sampled ? JSON.stringify(sampled) : null,
       agent_name: (prop.attributionInfo && prop.attributionInfo.agentName)  || null,
       broker_name: (prop.attributionInfo && prop.attributionInfo.brokerName) || null,
     });
