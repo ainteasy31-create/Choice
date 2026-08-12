@@ -28,6 +28,8 @@
 
   // ── SPA navigation handling ─────────────────────────────────
   var lastUrl = location.href;
+  var PHOTO_BATCH_SIZE = 5;
+  var MAX_PHOTOS = 40;
 
   function isSupportedPage(url) {
     return /zillow\.com\/homedetails\//i.test(url) ||
@@ -62,38 +64,104 @@
     document.body.appendChild(btn);
   }
 
-  // Watch for URL changes (SPA navigation)
+  function dispatchNavigation() {
+    window.dispatchEvent(new Event('cp_navigation'));
+  }
+
+  function patchHistoryNavigation() {
+    var originalPush = history.pushState;
+    var originalReplace = history.replaceState;
+
+    history.pushState = function () {
+      var result = originalPush.apply(this, arguments);
+      dispatchNavigation();
+      return result;
+    };
+
+    history.replaceState = function () {
+      var result = originalReplace.apply(this, arguments);
+      dispatchNavigation();
+      return result;
+    };
+  }
+
+  function onLocationChange() {
+    if (location.href === lastUrl) return;
+    lastUrl = location.href;
+    removeButton();
+    setTimeout(injectButton, 250);
+  }
+
   function watchUrlChanges() {
-    setInterval(function () {
-      if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        removeButton();
-        setTimeout(injectButton, 500);
-      }
-    }, 1000);
+    patchHistoryNavigation();
+    window.addEventListener('popstate', onLocationChange);
+    window.addEventListener('cp_navigation', onLocationChange);
+
+    if (document.body) {
+      var observer = new MutationObserver(function () {
+        onLocationChange();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
   }
 
   // ── Photo download + upload helpers (v3.1) ──────────────────
   // Downloads each image via the background service worker (which
   // has host_permissions for Zillow/Realtor CDNs, bypassing CORS)
   // and uploads to ImageKit via the pipeline-photo-upload edge function.
-  async function downloadAndUploadPhotos(photoUrls, maxPhotos) {
+  function dedupePhotoUrls(urls) {
+    var seen = new Set();
+    var unique = [];
+    if (!Array.isArray(urls)) return unique;
+    urls.forEach(function(raw) {
+      if (!raw) return;
+      var url = typeof raw === 'string' ? raw.trim() : (raw.url || '');
+      if (!url) return;
+      if (!/^https?:\/\//i.test(url)) return;
+      if (seen.has(url)) return;
+      seen.add(url);
+      unique.push(url);
+    });
+    return unique;
+  }
+
+  function extractPhotoUrls(raw) {
+    var urls = [];
+    if (!raw) return urls;
+    try {
+      var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        parsed.forEach(function(item) {
+          if (!item) return;
+          if (typeof item === 'string') urls.push(item);
+          else if (typeof item === 'object' && typeof item.url === 'string') urls.push(item.url);
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+    return urls;
+  }
+
+  async function downloadAndUploadPhotos(photoUrls, maxPhotos, progressCallback) {
     var uploaded = [];
     var failed = 0;
-    var limit = Math.min(photoUrls.length, maxPhotos || 30);
-
-    // Process in parallel batches of 3
-    for (var i = 0; i < limit; i += 3) {
-      var batch = photoUrls.slice(i, i + 3);
+    var urls = dedupePhotoUrls(photoUrls);
+    var limit = Math.min(urls.length, maxPhotos || MAX_PHOTOS);
+    var total = limit;
+    for (var i = 0; i < limit; i += PHOTO_BATCH_SIZE) {
+      var batch = urls.slice(i, i + PHOTO_BATCH_SIZE);
+      if (progressCallback) progressCallback(Math.min(i, total), total);
       var results = await Promise.all(batch.map(function(url, batchIndex) {
         return uploadOnePhoto(url, i + batchIndex);
       }));
       for (var j = 0; j < results.length; j++) {
         if (results[j]) uploaded.push(results[j]);
         else failed++;
+        if (progressCallback) progressCallback(Math.min(i + j + 1, total), total);
       }
     }
-    return { uploaded: uploaded, failed: failed };
+    return { uploaded: uploaded, failed: failed, total: total };
   }
 
   // Download a photo via the background worker (bypasses CORS)
@@ -214,23 +282,6 @@
     }
   }
 
-  async function downloadAndUploadPhotos(photoUrls, maxPhotos) {
-    var uploaded = [];
-    var failed = 0;
-    var limit = Math.min(photoUrls.length, maxPhotos || 30);
-    for (var i = 0; i < limit; i += 3) {
-      var batch = photoUrls.slice(i, i + 3);
-      var results = await Promise.all(batch.map(function(url) {
-        return uploadOnePhoto(url, i + batch.indexOf(url));
-      }));
-      for (var j = 0; j < results.length; j++) {
-        if (results[j]) uploaded.push(results[j]);
-        else failed++;
-      }
-    }
-    return { uploaded: uploaded, failed: failed };
-  }
-
   async function handleSave() {
     var btn = document.getElementById('cp-save-btn');
     if (!btn) return;
@@ -246,21 +297,21 @@
       if (!extracted) { setError('Could not read listing'); return; }
 
       // ── Extract photo URLs ──────────────────────────────────
-      var photoUrls = [];
-      try {
-        var raw = extracted.original_image_urls || '[]';
-        var parsed = JSON.parse(raw);
-        photoUrls = Array.isArray(parsed) ? parsed.filter(function(u) { return u && u.startsWith('http'); }) : [];
-      } catch (e) {
-        photoUrls = extracted.photo_urls || [];
+      var photoUrls = extractPhotoUrls(extracted.original_image_urls);
+      if (!photoUrls.length && Array.isArray(extracted.photo_urls)) {
+        extracted.photo_urls.forEach(function(u) {
+          if (typeof u === 'string') photoUrls.push(u);
+        });
       }
 
       // ── Download + upload photos (v3.1) ─────────────────────
-      // Show progress: "Downloading photos (1/12)…"
-      var photoResult = { uploaded: [], failed: 0 };
+      // Show progress: "Importing photos 1/40…"
+      var photoResult = { uploaded: [], failed: 0, total: 0 };
       if (photoUrls.length > 0) {
-        btn.textContent = 'Downloading photos…';
-        photoResult = await downloadAndUploadPhotos(photoUrls, 30);
+        btn.textContent = 'Extracting photos…';
+        photoResult = await downloadAndUploadPhotos(photoUrls, MAX_PHOTOS, function(completed, total) {
+          btn.textContent = 'Importing photos ' + completed + '/' + total + '…';
+        });
       }
 
       // ── Build payload with ImageKit image objects ─────────────
