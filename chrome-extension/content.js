@@ -299,25 +299,33 @@
       }
 
       // Resize/convert images using canvas. Returns a Blob or null on failure.
-      function optimizeImageBlob(blob, maxWidth, quality) {
-        return new Promise(async function(resolve) {
-          try {
-            if (!self.createImageBitmap) return resolve(null);
-            const imgBitmap = await createImageBitmap(blob);
-            const ratio = Math.min(1, maxWidth / imgBitmap.width);
-            const w = Math.round(imgBitmap.width * ratio);
-            const h = Math.round(imgBitmap.height * ratio);
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(imgBitmap, 0, 0, w, h);
-            canvas.toBlob(function(b) { resolve(b); }, 'image/webp', quality);
-          } catch (e) {
-            resolve(null);
+          // Optimize image via Web Worker to keep main thread responsive.
+          const _imageWorker = (function(){
+            try {
+              return new Worker(chrome.runtime.getURL('image-worker.js'));
+            } catch(e){
+              return null;
+            }
+          })();
+
+          function optimizeImageBlob(blob, maxWidth, quality){
+            return new Promise(async function(resolve){
+              if(!_imageWorker || !('createImageBitmap' in self)) return resolve(null);
+              try {
+                const id = Math.random().toString(36).slice(2);
+                const buffer = await blob.arrayBuffer();
+                const onmsg = function(ev){
+                  if(!ev.data || ev.data.id !== id) return;
+                  _imageWorker.removeEventListener('message', onmsg);
+                  if(!ev.data.ok) return resolve(null);
+                  const out = new Blob([ev.data.buffer], { type: ev.data.type });
+                  resolve(out);
+                };
+                _imageWorker.addEventListener('message', onmsg);
+                _imageWorker.postMessage({ id, buffer, maxWidth, quality }, [buffer]);
+              } catch(e){ resolve(null); }
+            });
           }
-        });
-      }
 
       async function downloadAndUploadPhotos(photoUrls, maxPhotos, progressCallback) {
         var uploaded = [];
