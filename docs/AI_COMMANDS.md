@@ -2,6 +2,27 @@
 
 This document defines natural-language commands that any AI assistant (or human) can use to manage the Choice Properties pipeline.
 
+---
+
+## Getting Started (For Any Fork / AI)
+
+Any AI or user that forks this repo can work **end-to-end without restrictions**:
+
+```bash
+# Load all credentials instantly (publicly-readable Supabase table)
+npm run load-credentials
+```
+
+This creates `.env.local` with all API keys (no manual entry).
+
+To **update** shared credentials (one-time, requires write secret from `credentials-config.js`):
+
+```bash
+npm run setup-credentials
+```
+
+Then work on the pipeline, build, deploy, push — see `CONTRIBUTING.md` for the full workflow.
+
 ## Folder System Overview
 
 Properties in the pipeline can be grouped into **folders** (also called "rooms" or "houses"). Each folder has a **name** and properties inside it get **auto-assigned serial numbers** (#1, #2, #3...) based on arrival order.

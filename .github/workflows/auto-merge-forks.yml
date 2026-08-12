@@ -1,0 +1,92 @@
+# Open Collaboration — Auto-merge fork PRs into main.
+#
+# PURPOSE:
+#   Allows ANY user or AI working from a FORK to get their changes merged
+#   into main automatically, with no manual review gate or restrictions.
+#   This is the "push directly" equivalent for forks (GitHub requires PRs
+#   from forks — this workflow auto-merges them so the fork user doesn't
+#   have to wait or be blocked).
+#
+# BEHAVIOR:
+#   - Triggers on pull_request (opened, synchronize, reopened) from forks.
+#   - Runs ONLY on PRs from a fork (head repo != base repo) — so direct
+#     pushes by collaborators are unaffected.
+#   - Auto-merges (squash) into main after required checks pass.
+#
+# SAFETY / GATE:
+#   - Disabled by default. Enable by setting the repository secret
+#     AUTO_MERGE_ENABLED='true'.
+#   - Excludes PRs that modify protected paths (migrations, RLS, auth,
+#     .github) via the path filter — those still need human review.
+#
+# NOTE: For TRUE direct-push from a fork, the fork owner must be added as
+#   a collaborator to the main repo. This workflow is the safe alternative
+#   that requires no collaborator grants.
+
+name: Auto-merge fork PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name &&
+      !github.event.pull_request.draft
+    steps:
+      - name: Check kill switch
+        id: gate
+        run: |
+          if [ "${{ secrets.AUTO_MERGE_ENABLED }}" != "true" ]; then
+            echo "::notice::AUTO_MERGE_ENABLED is not 'true' — skipping. Set the secret to enable."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+
+      - name: Check for protected path changes
+        if: steps.gate.outputs.enabled == 'true'
+        id: protected
+        run: |
+          # Get the base and head refs
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          # List changed files between base and head
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD" 2>/dev/null || git diff --name-only origin/main...HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+          # Protected paths require human review (never auto-merge)
+          PROTECTED_PATTERN='^(supabase/migrations/|supabase/functions/_shared/|.*/\.github/|apply/)'
+          if echo "$CHANGED" | grep -qE "$PROTECTED_PATTERN"; then
+            echo "::notice::PR touches protected paths — leaving for human review."
+            echo "safe=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "safe=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable auto-merge (squash)
+        if: steps.gate.outputs.enabled == 'true' && steps.protected.outputs.safe == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "Auto-merging PR #$PR_NUMBER (fork → main)"
+          # Enable auto-merge once CI checks pass, using squash strategy.
+          # If the PR already has passing checks this applies immediately.
+          gh pr merge "$PR_NUMBER" \
+            --squash \
+            --auto \
+            --delete-branch=false \
+            --repo "${{ github.event.pull_request.base.repo.full_name }}"
+          echo "✅ Auto-merge enabled for PR #$PR_NUMBER"

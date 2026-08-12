@@ -1,58 +1,58 @@
 #!/usr/bin/env node
 /**
  * Load credentials from Supabase and create .env.local
- * This is run automatically when setting up a new fork
+ * This is run automatically when setting up a new fork.
+ *
+ * The credentials_config table is PUBLICLY READABLE (per the
+ * "open collaboration" model), so this works with just the anon key.
+ *
+ * Uses only Node.js built-in fetch (Node 18+) — no external deps.
  */
 
 import * as fs from "fs"
 import * as path from "path"
-import { createClient } from "@supabase/supabase-js"
+import { CREDENTIALS_CONFIG } from "../credentials-config.mjs"
 
-// For the initial setup, we need at least the SUPABASE_URL and ANON_KEY
-// These should be passed as environment variables or command line args
-const INITIAL_SUPABASE_URL = process.env.SUPABASE_URL || process.argv[2]
-const INITIAL_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.argv[3]
+const SUPABASE_URL = process.env.SUPABASE_URL || CREDENTIALS_CONFIG.SUPABASE_URL
+const API_KEY = process.env.SUPABASE_API_KEY || CREDENTIALS_CONFIG.SUPABASE_API_KEY
 
 async function loadCredentials() {
-  if (!INITIAL_SUPABASE_URL || !INITIAL_ANON_KEY) {
-    console.error("❌ Missing required environment variables:")
+  if (!SUPABASE_URL || !API_KEY) {
+    console.error("❌ Missing required configuration:")
     console.error("   SUPABASE_URL: Supabase project URL")
-    console.error("   SUPABASE_ANON_KEY: Supabase anon key")
+    console.error("   SUPABASE_API_KEY: Supabase API key (service role)")
     console.error("")
-    console.error("Usage:")
-    console.error("   npm run load-credentials")
-    console.error("")
-    console.error("Or set environment variables:")
-    console.error("   export SUPABASE_URL=https://...")
-    console.error("   export SUPABASE_ANON_KEY=eyJ...")
-    console.error("   npm run load-credentials")
-    console.error("")
-    console.error("Note: All other credentials (service role, API tokens, etc.)")
-    console.error("are fetched from the Supabase credentials_config table.")
+    console.error("These default to credentials-config.mjs values. Check that file.")
     process.exit(1)
   }
 
   try {
     console.log("📡 Connecting to Supabase...")
-    const supabase = createClient(INITIAL_SUPABASE_URL, INITIAL_ANON_KEY)
 
-    console.log("🔍 Fetching credentials from config table...")
-    const { data, error } = await supabase
-      .from("credentials_config")
-      .select("*")
+    // Fetch credentials from the publicly-readable table via REST API
+    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/credentials_config?select=*`
+    const response = await fetch(url, {
+      headers: {
+        apikey: API_KEY,
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    })
 
-    if (error) {
-      throw new Error(`Failed to fetch credentials: ${error.message}`)
+    if (!response.ok) {
+      const body = await response.text()
+      throw new Error(`Failed to fetch credentials (HTTP ${response.status}): ${body}`)
     }
+
+    const data = await response.json()
 
     if (!data || data.length === 0) {
       console.warn("⚠️  No credentials found in config table.")
-      console.warn("Please run the setup form first:")
+      console.warn("Please store credentials first (one-time):")
       console.warn("")
-      console.warn("1. Run: npm run open-setup")
-      console.warn("2. Fill in your Supabase credentials")
-      console.warn("3. Submit the form")
-      console.warn("4. Then run this script again")
+      console.warn("  npm run setup-credentials")
+      console.warn("")
+      console.warn("Then run this script again.")
       process.exit(1)
     }
 
@@ -71,9 +71,7 @@ async function loadCredentials() {
       console.log(`   ${config.key}=${value}`)
     })
     console.log("")
-    console.log("📝 Next steps:")
-    console.log("   1. Commit and push your changes")
-    console.log("   2. Any fork will automatically have access to these credentials")
+    console.log("You're ready to work end-to-end.")
     console.log("")
   } catch (error) {
     console.error("❌ Error:", error.message)

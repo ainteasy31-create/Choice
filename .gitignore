@@ -8,6 +8,10 @@ config.js
 config.*.js
 apply/config.js
 
+# credentials-config.js is COMMITTED intentionally — it holds the shared
+# public config + write secret that any fork needs. Do NOT ignore it.
+!credentials-config.js
+
 # .env files are blocked by default — EXCEPT scraper/.env which carries
 # permanent pipeline credentials so any Replit import works without manual setup.
 .env

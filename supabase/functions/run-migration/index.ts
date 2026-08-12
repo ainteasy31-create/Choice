@@ -1,5 +1,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
+/**
+ * run-migration — DEPRECATED / SAFETY HARDENED
+ *
+ * Previously this function tried to auto-create the credentials_config table
+ * by calling the `exec_sql` RPC. That RPC (if it exists) allows arbitrary SQL
+ * execution — a catastrophic security risk, so it has been removed.
+ *
+ * Migrations are now applied ONLY via the declarative migration files in
+ * supabase/migrations/ (applied by the supabase-deploy.yml workflow).
+ *
+ * This function now simply VERIFIES that the credentials_config table exists
+ * and is publicly readable — it does NOT execute any DDL.
+ */
 Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")
@@ -8,43 +21,35 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !serviceRoleKey) {
       return new Response(
         JSON.stringify({ error: "Missing environment variables" }),
-        { status: 500 }
+        { status: 500, headers: { "Content-Type": "application/json" } }
       )
     }
 
     const client = createClient(supabaseUrl, serviceRoleKey)
 
-    // Run migration SQL
-    const { error: createError } = await client.rpc("exec_sql", {
-      sql: `CREATE TABLE IF NOT EXISTS public.credentials_config (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        is_secret BOOLEAN DEFAULT false,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT valid_key CHECK (key IN ('SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_API_TOKEN', 'GITHUB_API_TOKEN'))
-      );`,
-    })
+    // Verify the credentials_config table exists by attempting a read.
+    // This is read-only — no DDL, no exec_sql.
+    const { data, error } = await client
+      .from("credentials_config")
+      .select("key")
+      .limit(1)
 
-    // Continue with other statements even if first fails
-    await client.rpc("exec_sql", {
-      sql: `ALTER TABLE public.credentials_config ENABLE ROW LEVEL SECURITY;`,
-    }).catch(() => null)
-
-    await client.rpc("exec_sql", {
-      sql: `CREATE POLICY "Service role only access" ON public.credentials_config
-        FOR ALL
-        USING (auth.role() = 'service_role')
-        WITH CHECK (auth.role() = 'service_role');`,
-    }).catch(() => null)
-
-    await client.rpc("exec_sql", {
-      sql: `CREATE INDEX IF NOT EXISTS idx_credentials_config_key ON public.credentials_config(key);`,
-    }).catch(() => null)
+    if (error) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error.message,
+          hint: "Run the migration: supabase/migrations/20260812170000_credentials_open_read.sql (applied automatically by supabase-deploy.yml)",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      )
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Migration completed",
+        message: "credentials_config table exists and is readable.",
+        tableFound: true,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     )

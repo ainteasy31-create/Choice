@@ -1,29 +1,43 @@
 #!/usr/bin/env node
 /**
  * Direct credential storage bypassing the form
- * Usage: SUPABASE_API_TOKEN="your-token" node setup-direct.mjs
+ * Usage: node setup-direct.mjs
+ *
+ * Reads the shared config from credentials-config.js and stores
+ * credentials via the store-credentials Edge Function.
  */
 
-import fetch from "node-fetch"
+import { CREDENTIALS_CONFIG } from "./credentials-config.mjs"
 
-const supabaseUrl = "https://tlfmwetmhthpyrytrcfo.supabase.co"
-const token = process.env.SUPABASE_API_TOKEN
+const supabaseUrl = CREDENTIALS_CONFIG.SUPABASE_URL
+const apiKey = CREDENTIALS_CONFIG.SUPABASE_API_KEY
+const writeSecret = CREDENTIALS_CONFIG.WRITE_SECRET
 
-if (!token) {
-  console.error("❌ SUPABASE_API_TOKEN environment variable not set")
-  console.error("Usage: SUPABASE_API_TOKEN='your-token' node setup-direct.mjs")
+// Credentials come from env vars (set by the caller) — no placeholders.
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const supabaseApiToken = process.env.SUPABASE_API_TOKEN
+const githubApiToken = process.env.GITHUB_API_TOKEN
+
+if (!serviceRoleKey || !supabaseApiToken || !githubApiToken) {
+  console.error("❌ Missing required environment variables:")
+  console.error("   SUPABASE_SERVICE_ROLE_KEY: Supabase service role key")
+  console.error("   SUPABASE_API_TOKEN: Supabase API token")
+  console.error("   GITHUB_API_TOKEN: GitHub personal access token")
+  console.error("")
+  console.error("Usage:")
+  console.error("   SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_API_TOKEN=... GITHUB_API_TOKEN=... node setup-direct.mjs")
   process.exit(1)
 }
 
 console.log("🔐 Storing credentials directly to Supabase...")
 
-// Sample credentials - replace with actual values
 const credentials = {
-  supabase_url: "https://tlfmwetmhthpyrytrcfo.supabase.co",
-  anon_key: process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  service_role_key: process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  supabase_api_token: token,
-  github_api_token: process.env.GITHUB_API_TOKEN || "ghp_...",
+  supabase_url: supabaseUrl,
+  anon_key: apiKey,
+  service_role_key: serviceRoleKey,
+  supabase_api_token: supabaseApiToken,
+  github_api_token: githubApiToken,
+  write_secret: writeSecret,
 }
 
 try {
@@ -31,7 +45,7 @@ try {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY || credentials.anon_key}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(credentials),
   })

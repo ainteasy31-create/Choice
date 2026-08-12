@@ -7,7 +7,9 @@
     "build": "node generate-config.js",
     "preinstall": "node scripts/enforce-cloudflare-only.js",
     "setup-credentials": "node scripts/open-setup.mjs",
-    "load-credentials": "node scripts/setup-credentials.mjs"
+    "load-credentials": "node scripts/setup-credentials.mjs",
+    "setup-direct": "node setup-direct.mjs",
+    "dev": "node serve.js"
   },
   "engines": {
     "node": ">=18"
