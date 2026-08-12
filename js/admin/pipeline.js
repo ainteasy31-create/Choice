@@ -377,14 +377,14 @@
         
         if(!error && Array.isArray(photos) && photos.length){
           const urls = photos.map(p => p.url).filter(Boolean);
-          return renderGallery(urls, 'on ImageKit');
+          return renderPhotoStatus(l) + renderGallery(urls, 'on ImageKit');
         }
       } catch(err){
         console.warn('[pipeline] property photo query failed; using source photos', err);
       }
     }
     
-    if(!imgs.length) return '<p class="pl-photo-count">No photos from source.</p>';
+    if(!imgs.length) return renderPhotoStatus(l) + '<p class="pl-photo-count">No photos from source.</p>';
 
     // FIX: Zillow/Realtor CDN images block hotlinking from the admin domain.
     // Use the admin session token to proxy non-ImageKit URLs through the
@@ -424,6 +424,30 @@
       ${urls.length > 1 ? `<div class="pl-gallery-thumbs" id="pl-gallery-thumbs">${thumbs}</div>` : ''}
       <div class="pl-photo-count">${urls.length} photo${urls.length!==1?'s':''} ${label}</div>
     </div>`;
+  }
+
+  function renderPhotoStatus(l){
+    const photos = imageUrls(l.original_image_urls);
+    const hasSource = photos.length > 0;
+    const imported = Boolean(l.choice_property_id);
+    const status = l.photo_import_status;
+    const labels = [];
+
+    if (imported) {
+      if (status === 'failed') {
+        labels.push(`<div class="pl-panel-alert pl-panel-alert-warning">Photo transfer to ImageKit failed. <button class="btn btn-sm btn-outline" id="pl-transfer-photos-btn" data-id="${S.esc(l.id)}" data-prop-id="${S.esc(l.choice_property_id)}">Retry transfer</button></div>`);
+      } else if (status === 'pending') {
+        labels.push('<div class="pl-panel-alert pl-panel-alert-info">Photo transfer is pending. It may take a few minutes to complete.</div>');
+      } else {
+        labels.push('<div class="pl-panel-alert pl-panel-alert-success">Photos are stored on ImageKit and ready for the live listing.</div>');
+      }
+    } else if (hasSource) {
+      labels.push(`<div class="pl-panel-alert pl-panel-alert-info">${photos.length} source photo${photos.length!==1?'s':''} available. They will be transferred after publish.</div>`);
+    } else {
+      labels.push('<div class="pl-panel-alert pl-panel-alert-warning">No source photos found. Add at least one photo before publishing.</div>');
+    }
+
+    return labels.join('');
   }
 
   function missingTags(l){
@@ -695,6 +719,7 @@
         panelPhotos(l).then(html => {
           if(photoContainer) photoContainer.innerHTML = html;
           wireGalleryEvents();
+          wirePanelPhotoActions();
         }).catch(err => {
           console.error('[pipeline] photo gallery load failed', err);
           if(photoContainer) {
@@ -748,6 +773,19 @@
         if(Math.abs(dx) > 40) show(idx + (dx < 0 ? 1 : -1));
       }, { passive: true });
     }
+  }
+
+function wirePanelPhotoActions(){
+    const btn = document.getElementById('pl-transfer-photos-btn');
+    if(!btn) return;
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.textContent = 'Retrying…';
+      await doTransferPhotos(btn.dataset.id, btn.dataset.propId);
+      btn.disabled = false;
+      btn.textContent = 'Retry transfer';
+    });
   }
 
   function closePanel(){
