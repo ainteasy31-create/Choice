@@ -55,11 +55,12 @@
           break;
         }
         case 'archive': {
-          const { data, error } = await CP.sb().rpc('pipeline_unarchive', { p_id: action.id });
+          const prevStatus = action.record ? (action.record.status || 'scraped') : 'scraped';
+          const { data, error } = await CP.sb().rpc('pipeline_unarchive', { p_id: action.id, p_status: prevStatus });
           if(error) throw error;
           const rec = action.record;
           if(rec){
-            rec.status = rec.status || 'scraped';
+            rec.status = prevStatus;
             _pageData.push(rec);
             renderList(visibleListings(), false);
             wireCardEvents();
